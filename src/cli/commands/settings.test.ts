@@ -120,7 +120,7 @@ describe("runTeam", () => {
     execute.mockImplementationOnce(async () => ({
       defaultTeam: "dev",
       installed: [
-        { id: "default-solo", agentCount: 1, location: "builtin" },
+        { id: "setup-assistant", agentCount: 1, location: "builtin" },
         { id: "alpha", agentCount: 2, location: "user" },
         { id: "beta", agentCount: 3, location: "project" },
       ],
@@ -130,14 +130,14 @@ describe("runTeam", () => {
     const code = await runTeam({ kind: "team", action: "info" }, platform, homeJieDir, null, consoleMock);
     expect(code).toBe(0);
     expect(consoleMock.print).toHaveBeenCalledWith("defaultTeam: dev");
-    expect(consoleMock.print).toHaveBeenCalledWith("installed: default-solo, alpha, beta");
+    expect(consoleMock.print).toHaveBeenCalledWith("installed: setup-assistant, alpha, beta");
   });
 
   test("prints defaultTeam: unset when none is set", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
       defaultTeam: null,
-      installed: [{ id: "default-solo", agentCount: 1, location: "builtin" }],
+      installed: [{ id: "setup-assistant", agentCount: 1, location: "builtin" }],
       sharedAgents: [],
     }));
     const consoleMock = makeConsoleMock();
@@ -159,7 +159,7 @@ describe("runTeam", () => {
     execute.mockImplementationOnce(async () => ({
       defaultTeam: "alpha",
       installed: [
-        { id: "default-solo", agentCount: 1, location: "builtin" },
+        { id: "setup-assistant", agentCount: 1, location: "builtin" },
         { id: "alpha", agentCount: 2, location: "user" },
       ],
       sharedAgents: [{ id: "explorer", location: "user" }],
@@ -169,7 +169,7 @@ describe("runTeam", () => {
     expect(code).toBe(0);
     expect(consoleMock.print).toHaveBeenCalledWith("Teams:");
     expect(consoleMock.print).toHaveBeenCalledWith(expect.stringMatching(/^\* alpha\s+\[user\]\s+2 agents\s+\(file: .*\)$/));
-    expect(consoleMock.print).toHaveBeenCalledWith(expect.stringMatching(/^  default-solo\s+\[builtin\]\s+1 agent$/));
+    expect(consoleMock.print).toHaveBeenCalledWith(expect.stringMatching(/^  setup-assistant\s+\[builtin\]\s+1 agent$/));
     expect(consoleMock.print).toHaveBeenCalledWith("Shared agents:");
     expect(consoleMock.print).toHaveBeenCalledWith("  explorer  [user]");
   });

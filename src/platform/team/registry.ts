@@ -1,8 +1,8 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { isValidTeamId, loadDefaultSoloTeam, loadTeamFromDir } from "./parser";
+import { isValidTeamId, loadSetupAssistantTeam, loadTeamFromDir } from "./parser";
 import { JiePlatformError } from "../jie-platform-errors";
-import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
+import { BUILTIN_SETUP_ASSISTANT_TEAM_ID, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
 import type { AgentRegistry } from "./agent-registry";
 
 export interface TeamRegistry {
@@ -23,8 +23,8 @@ export class TeamRegistryImpl implements TeamRegistry {
   }
 
   parseTeamManifest(teamId?: string): TeamBlueprint {
-    if (teamId === undefined || teamId === BUILTIN_DEFAULT_SOLO_TEAM_ID) {
-      return loadDefaultSoloTeam();
+    if (teamId === undefined || teamId === BUILTIN_SETUP_ASSISTANT_TEAM_ID) {
+      return loadSetupAssistantTeam();
     }
     if (!isValidTeamId(teamId)) {
       throw new JiePlatformError("INVALID_TEAM_ID", { detail: `invalid team_id: ${teamId}` });
@@ -41,7 +41,7 @@ export class TeamRegistryImpl implements TeamRegistry {
 
   listInstalled(): string[] {
     const ids = new Set<string>();
-    ids.add(BUILTIN_DEFAULT_SOLO_TEAM_ID);
+    ids.add(BUILTIN_SETUP_ASSISTANT_TEAM_ID);
     for (const dir of [this.projectTeamsDir(), this.userTeamsDir]) {
       if (dir === null) continue;
       let entries: string[];
@@ -59,7 +59,7 @@ export class TeamRegistryImpl implements TeamRegistry {
   }
 
   locate(id: string): TeamBlueprintLocation {
-    if (id === BUILTIN_DEFAULT_SOLO_TEAM_ID) return "builtin";
+    if (id === BUILTIN_SETUP_ASSISTANT_TEAM_ID) return "builtin";
     if (this.isProjectTeam(id)) return "project";
     if (this.isUserTeam(id)) return "user";
     return null;
@@ -81,7 +81,7 @@ export class TeamRegistryImpl implements TeamRegistry {
   private parseFromDir(dir: string): TeamBlueprint {
     const blueprint = loadTeamFromDir(dir);
     if (blueprint.roles.length === 0 && blueprint.additionalAgentRefs.length === 0) {
-      return loadDefaultSoloTeam();
+      return loadSetupAssistantTeam();
     }
     if (blueprint.additionalAgentRefs.length === 0) return blueprint;
     const sharedSouls = blueprint.additionalAgentRefs.map((ref) => {

@@ -1,11 +1,11 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type AgentSoul, type TeamBlueprint } from "./types";
+import { BUILTIN_SETUP_ASSISTANT_TEAM_ID, type AgentSoul, type TeamBlueprint } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
 import { isModelAlias, MODEL_ALIASES, parseModelRef, parseModelWithEffort, type EffortLevel } from "../types";
-import DEFAULT_SOLO_TEAM_MD from "./default-solo/TEAM.md" with { type: "text" };
-import DEFAULT_SOLO_GENERAL_MD from "./default-solo/general.md" with { type: "text" };
+import SETUP_ASSISTANT_TEAM_MD from "./setup-assistant/TEAM.md" with { type: "text" };
+import SETUP_ASSISTANT_GENERAL_MD from "./setup-assistant/general.md" with { type: "text" };
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const ROLE_STEM_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -158,13 +158,13 @@ export function loadTeamFromDir(dirPath: string): TeamBlueprint {
   });
 }
 
-export function loadDefaultSoloTeam(): TeamBlueprint {
+export function loadSetupAssistantTeam(): TeamBlueprint {
   return parseTeamFromManifests(
     {
-      "TEAM.md": DEFAULT_SOLO_TEAM_MD,
-      "general.md": DEFAULT_SOLO_GENERAL_MD,
+      "TEAM.md": SETUP_ASSISTANT_TEAM_MD,
+      "general.md": SETUP_ASSISTANT_GENERAL_MD,
     },
-    { teamId: BUILTIN_DEFAULT_SOLO_TEAM_ID },
+    { teamId: BUILTIN_SETUP_ASSISTANT_TEAM_ID },
   );
 }
 

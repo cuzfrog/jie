@@ -163,7 +163,7 @@ describe("SlashCommandSource — /team arguments", () => {
       if (cmd.name === "getTeamInfo") {
         return {
           defaultTeam: "alpha",
-          installed: [{ id: "default-solo", agentCount: 1 }, { id: "alpha", agentCount: 3 }, { id: "beta", agentCount: 2 }],
+          installed: [{ id: "setup-assistant", agentCount: 1 }, { id: "alpha", agentCount: 3 }, { id: "beta", agentCount: 2 }],
           sharedAgents: [],
         };
       }
@@ -176,7 +176,7 @@ describe("SlashCommandSource — /team arguments", () => {
     const suggestions = await slashSource(teamPlatform(), makeStateStore())
       .getSuggestions(["/team "], 0, 6, { signal: signal() });
     expect(suggestions!.items).toEqual([
-      { value: "default-solo", label: "default-solo", description: "1 agent" },
+      { value: "setup-assistant", label: "setup-assistant", description: "1 agent" },
       { value: "alpha", label: "alpha", description: "3 agents (default)" },
       { value: "beta", label: "beta", description: "2 agents" },
     ]);

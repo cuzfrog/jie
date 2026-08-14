@@ -1,4 +1,5 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { BUILTIN_SETUP_ASSISTANT_TEAM_ID } from "../../../platform";
 import { style } from "../themes";
 
 export function hintLines(width: number): string[] {
@@ -38,6 +39,7 @@ const HINTS: ReadonlyArray<readonly [string, string]> = [
   ["←", "team panel"],
   ["esc", "interrupt"],
   ["ctrl+d", "quit"],
+  ["/team " + BUILTIN_SETUP_ASSISTANT_TEAM_ID, "setup & help"],
 ];
 
 const SEPARATOR = " · ";

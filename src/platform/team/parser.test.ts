@@ -3,39 +3,39 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   isValidTeamId,
-  loadDefaultSoloTeam,
+  loadSetupAssistantTeam,
   loadTeamFromDir,
   parseAgentManifest,
   parseTeamFromManifests,
 } from "./parser";
 import type { JiePlatformErrorCode } from "../jie-platform-errors";
 
-describe("loadDefaultSoloTeam", () => {
+describe("loadSetupAssistantTeam", () => {
   test("returns one soul with role 'general' and leaderRole 'general'", () => {
-    const bp = loadDefaultSoloTeam();
+    const bp = loadSetupAssistantTeam();
     expect(bp.leaderRole).toBe("general");
     expect(bp.roles).toHaveLength(1);
     expect(bp.roles[0]?.role).toBe("general");
   });
 
   test("the general soul has tools [bash, read_file, write_file, edit_file, memory_add, memory_search] and empty subscribe", () => {
-    const bp = loadDefaultSoloTeam();
+    const bp = loadSetupAssistantTeam();
     const soul = bp.roles[0]!;
     expect(soul.tools).toEqual(["bash", "read_file", "write_file", "edit_file", "memory_add", "memory_search"]);
     expect(soul.subscribe).toEqual([]);
   });
 
   test("the general soul has a non-empty system_prompt and no model pinned", () => {
-    const bp = loadDefaultSoloTeam();
+    const bp = loadSetupAssistantTeam();
     const soul = bp.roles[0]!;
     expect(soul.systemPrompt.length).toBeGreaterThan(0);
     expect(soul.model).toBe("");
   });
 
-  test("has no team prompt or description", () => {
-    const bp = loadDefaultSoloTeam();
+  test("has no team prompt and a setup-assistant description", () => {
+    const bp = loadSetupAssistantTeam();
     expect(bp.teamPrompt).toBe("");
-    expect(bp.description).toBeUndefined();
+    expect(bp.description).toBe("Jie setup and help");
   });
 });
 
@@ -200,7 +200,7 @@ describe("isValidTeamId", () => {
     expect(isValidTeamId("team")).toBe(true);
     expect(isValidTeamId("team_1")).toBe(true);
     expect(isValidTeamId("team-1")).toBe(true);
-    expect(isValidTeamId("default-solo")).toBe(true);
+    expect(isValidTeamId("setup-assistant")).toBe(true);
     expect(isValidTeamId("ABCxyz0123")).toBe(true);
     expect(isValidTeamId("a".repeat(32))).toBe(true);
   });

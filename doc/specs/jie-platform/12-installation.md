@@ -46,7 +46,7 @@ bun install -g @cuzfrog/jie
 
 ## Runtime Dependencies (Shipped with Jie)
 
-`@cuzfrog/jie` bundles `jie-platform` and `jie-tui` via workspace dependencies; the user does not install them separately. Team manifests are plain `.md` files placed at the standard paths described in `10-configuration.md` "Team Selection". The platform ships the built-in default-solo team; richer manifests are user-installed at `~/.jie/teams/<id>/` or `.jie/teams/<id>/` by hand. The built-in default-solo team is always available as a last-resort fallback (see `default-solo-team.md`).
+`@cuzfrog/jie` bundles `jie-platform` and `jie-tui` via workspace dependencies; the user does not install them separately. Team manifests are plain `.md` files placed at the standard paths described in `10-configuration.md` "Team Selection". The platform ships the built-in setup-assistant team; richer manifests are user-installed at `~/.jie/teams/<id>/` or `.jie/teams/<id>/` by hand. The built-in setup-assistant team is always available as a last-resort fallback (see `setup-assistant-team.md`).
 
 External tool dependencies (linters, formatters, test runners) are **not** installed by Jie. Agents invoke them via the `bash` tool; they must be present in the workspace's `node_modules` or system `PATH`.
 
@@ -57,7 +57,7 @@ The platform assumes no model or provider. With no model configured (no soul-lev
 ```bash
 jie login --provider <id> --api-key <key>  # one-time: writes ~/.jie/auth.json
 jie model <provider>/<modelId>             # one-time: sets the global default model → ~/.jie/settings.json
-jie                                        # now runs, falling back to the default-solo team
+jie                                        # now runs, falling back to the setup-assistant team
 ```
 
 Credentials and model persist across runs; nothing else needs configuring to get a runnable agent. See `10-configuration.md` for settings/schema/team-resolution rules and `09-deployment.md` for the process/startup model.

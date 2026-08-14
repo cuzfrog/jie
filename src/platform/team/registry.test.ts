@@ -39,14 +39,14 @@ describe("TeamRegistryImpl", () => {
   });
 
   describe("parseTeamManifest", () => {
-    test("parseTeamManifest('default-solo') returns the built-in default-solo team", () => {
+    test("parseTeamManifest('setup-assistant') returns the built-in setup-assistant team", () => {
       const r = createRegistry(homeJieDir, projectJieDir);
-      const team = r.parseTeamManifest("default-solo");
+      const team = r.parseTeamManifest("setup-assistant");
       expect(team.leaderRole).toBe("general");
       expect(team.roles).toHaveLength(1);
     });
 
-    test("parseTeamManifest(undefined) returns the built-in default-solo team (fallback)", () => {
+    test("parseTeamManifest(undefined) returns the built-in setup-assistant team (fallback)", () => {
       const r = createRegistry(homeJieDir, projectJieDir);
       const team = r.parseTeamManifest();
       expect(team.leaderRole).toBe("general");
@@ -99,12 +99,12 @@ describe("TeamRegistryImpl", () => {
   });
 
   describe("listInstalled", () => {
-    test("includes 'default-solo' when nothing is installed", () => {
+    test("includes 'setup-assistant' when nothing is installed", () => {
       const r = createRegistry(homeJieDir, projectJieDir);
-      expect(r.listInstalled()).toEqual(["default-solo"]);
+      expect(r.listInstalled()).toEqual(["setup-assistant"]);
     });
 
-    test("merges project and user teams, sorts, dedupes, includes 'default-solo'", () => {
+    test("merges project and user teams, sorts, dedupes, includes 'setup-assistant'", () => {
       const projJie = join(workspace, ".jie");
       const projectTeams = join(projJie, "teams");
       const userTeams = join(homeJieDir, "teams");
@@ -114,7 +114,7 @@ describe("TeamRegistryImpl", () => {
       writeTeam(userTeams, "shared", "user-shared-leader");
       const r = createRegistry(homeJieDir, projJie);
       const list = r.listInstalled();
-      expect(list).toEqual(["alpha", "beta", "default-solo", "shared"]);
+      expect(list).toEqual(["alpha", "beta", "setup-assistant", "shared"]);
     });
 
     test("skips hidden (dot-prefixed) entries", () => {
@@ -162,9 +162,9 @@ describe("TeamRegistryImpl", () => {
         expected: "user",
       },
       {
-        name: "default-solo team (shipped with the platform)",
+        name: "setup-assistant team (shipped with the platform)",
         setup: (): string | null => null,
-        teamId: "default-solo",
+        teamId: "setup-assistant",
         expected: "builtin",
       },
       {

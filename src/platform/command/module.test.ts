@@ -5,7 +5,7 @@ import type { EventManager } from "../event";
 import type { LlmService } from "../llm";
 import type { GitService, GitSnapshot } from "../services";
 import type { KanbanStore } from "../storage";
-import type { TeamManager } from "../team";
+import type { AgentRegistry, TeamManager } from "../team";
 import type { QuestionBroker } from "../tools";
 import { registerCommandModule } from "./module";
 
@@ -55,6 +55,12 @@ const teamManager = vi.mocked<TeamManager>({
   resetAgent: vi.fn(),
 });
 
+const agentRegistry = vi.mocked<AgentRegistry>({
+  resolve: vi.fn(),
+  listInstalled: vi.fn(),
+  locate: vi.fn(),
+});
+
 const gitService = vi.mocked<GitService>({
   getSnapshot: vi.fn(),
 });
@@ -88,6 +94,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     settingsStore: asValue(settingsStore),
     modelRegistry: asValue(modelRegistry),
     teamManager: asValue(teamManager),
+    agentRegistry: asValue(agentRegistry),
     gitService: asValue(gitService),
     eventManager: asValue(eventManager),
     kanbanStore: asValue(kanbanStore),

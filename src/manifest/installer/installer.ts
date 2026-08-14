@@ -5,7 +5,7 @@ import { parseNpmSpec, parseManifestSource, type ManifestSource } from "./source
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const AGENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-const RESERVED_TEAM_IDS = new Set(["add", "list", "remove", "default-solo"]);
+const RESERVED_TEAM_IDS = new Set(["add", "list", "remove", "default-solo", "setup-assistant"]);
 const NPM_REGISTRY = "https://registry.npmjs.org";
 
 export interface ManifestProvenance {

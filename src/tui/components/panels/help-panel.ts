@@ -1,4 +1,5 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { BUILTIN_SETUP_ASSISTANT_TEAM_ID } from "../../../platform";
 import type { CommandCatalog, CommandMeta } from "../../command";
 import { type StateStore, type TuiState } from "../../state";
 import { type TuiComponent } from "../..";
@@ -9,6 +10,7 @@ import { style } from "../themes";
 const HINT = "Type /help to close.";
 const COMMANDS_HEADING = "Commands";
 const SHORTCUTS_HEADING = "Shortcuts";
+const SETUP_HEADING = "Setup & help";
 const COLUMN_GAP = 4;
 
 export class HelpPanel extends Panel implements TuiComponent {
@@ -31,8 +33,8 @@ export class HelpPanel extends Panel implements TuiComponent {
     return state.helpPanelVisible;
   }
 
-  protected override body(_state: TuiState, inner: number): string[] {
-    return helpLines(inner, this.commandCatalog.metadata);
+  protected override body(state: TuiState, inner: number): string[] {
+    return helpLines(inner, this.commandCatalog.metadata, state.installedTeams);
   }
 
   protected override hint(_state: TuiState, width: number): string | null {
@@ -40,9 +42,9 @@ export class HelpPanel extends Panel implements TuiComponent {
   }
 }
 
-function helpLines(width: number, metadata: ReadonlyArray<CommandMeta>): string[] {
+function helpLines(width: number, metadata: ReadonlyArray<CommandMeta>, installedTeams: TuiState["installedTeams"]): string[] {
   const w = Math.max(1, width);
-  return joinSections([commandSection(w, metadata), shortcutsSection(w)], w);
+  return joinSections([commandSection(w, metadata), setupSection(w, installedTeams), shortcutsSection(w)], w);
 }
 
 function joinSections(sections: ReadonlyArray<ReadonlyArray<string>>, width: number): string[] {
@@ -72,6 +74,14 @@ function commandSection(width: number, metadata: ReadonlyArray<CommandMeta>): st
 
 function shortcutsSection(width: number): string[] {
   return [style("text")(SHORTCUTS_HEADING), ...hintLines(width)];
+}
+
+function setupSection(width: number, installedTeams: TuiState["installedTeams"]): string[] {
+  if (installedTeams === null || installedTeams.length < 2) return [];
+  const hasSetupAssistant = installedTeams.some((team) => team.id === BUILTIN_SETUP_ASSISTANT_TEAM_ID);
+  if (!hasSetupAssistant) return [];
+  const switchText = `  ${style("accent")(`/team ${BUILTIN_SETUP_ASSISTANT_TEAM_ID}`)}${style("muted")("  switch to the setup assistant")}`;
+  return [style("text")(SETUP_HEADING), truncateToWidth(switchText, width)];
 }
 
 interface CommandCell {

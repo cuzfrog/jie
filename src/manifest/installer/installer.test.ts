@@ -307,7 +307,7 @@ describe("createManifestInstaller", () => {
 
     test("rejects a reserved id", () => {
       const jieDir = freshDir("jie-home-");
-      expect(() => createManifestInstaller(deps).remove("default-solo", jieDir)).toThrow(/reserved team id: default-solo/);
+      expect(() => createManifestInstaller(deps).remove("setup-assistant", jieDir)).toThrow(/reserved team id: setup-assistant/);
     });
   });
 
