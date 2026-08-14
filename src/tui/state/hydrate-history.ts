@@ -2,7 +2,6 @@ import { isDiffDetails, type AgentMessage, type UserIngressMessage } from "../..
 import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { MessageCard, MessageTurn } from "./state";
 
-const USER_INGRESS_PREFIX = "[user]: ";
 const TRUNCATION_BYTES = 4 * 1024;
 const TRUNCATION_MARKER = "...[%d chars truncated]...";
 const TRUNCATION_MARKER_LENGTH = 25;
@@ -49,8 +48,7 @@ export function hydrateHistory(messages: ReadonlyArray<AgentMessage>, startSeq: 
 function userPromptText(message: UserIngressMessage): string {
   if (message.displayText !== undefined) return message.displayText;
   const content = message.content;
-  const raw = typeof content === "string" ? content : content.filter(isTextContent).map((part) => part.text).join("");
-  return raw.startsWith(USER_INGRESS_PREFIX) ? raw.slice(USER_INGRESS_PREFIX.length) : raw;
+  return typeof content === "string" ? content : content.filter(isTextContent).map((part) => part.text).join("");
 }
 
 function appendAssistant(turn: MessageTurn, message: AssistantMessage): void {

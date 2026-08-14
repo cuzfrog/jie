@@ -61,6 +61,13 @@ describe("adaptToolToAgent.prepareArguments", () => {
     const adapted = adaptToolToAgent(tool, executionContext);
     expect(() => adapted.prepareArguments!({ x: 5 })).toThrow("argument does not match schema");
   });
+
+  test("rejects an empty object with a truncation hint", () => {
+    const adapted = adaptToolToAgent(makeTool({}), executionContext);
+    expect(() => adapted.prepareArguments!({})).toThrow(
+      "Tool stub: arguments are empty; the response was likely truncated by the output token limit. Re-issue with complete arguments or split the request into smaller pieces.",
+    );
+  });
 });
 
 describe("adaptToolToAgent.execute", () => {

@@ -42,11 +42,11 @@ beforeEach(() => {
 });
 
 describe("PromptQueue — ingress", () => {
-  test("ingestUserPrompt dispatches a [user]: prefixed message carrying the raw text as displayText", async () => {
+  test("ingestUserPrompt dispatches a bare-content message carrying the raw text as displayText", async () => {
     makeQueue().ingestUserPrompt("hello", "hello");
     await flush();
     expect(dispatcher.prompt).toHaveBeenCalledTimes(1);
-    expect(dispatcher.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: hello", displayText: "hello" });
+    expect(dispatcher.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "hello", displayText: "hello" });
   });
 
   test("ingestPeerNotification dispatches a [<source> on '<topic>']: prefixed message without displayText", async () => {
@@ -67,7 +67,7 @@ describe("PromptQueue — ingress", () => {
     expect(queue.isEmpty()).toBe(false);
   });
 
-  test("queue snapshots carry the raw user text without the synthetic prefix", () => {
+  test("queue snapshots carry the raw user text", () => {
     dispatcher.isStreaming.mockReturnValue(true);
     const queue = makeQueue();
     queue.ingestUserPrompt("hello", "hello");
@@ -113,8 +113,8 @@ describe("PromptQueue — dispatch", () => {
     await queue.dispatchNext();
     await queue.dispatchNext();
     expect(dispatcher.prompt.mock.calls.map((call) => (call[0] as { content: string }).content)).toEqual([
-      "[user]: first",
-      "[user]: second",
+      "first",
+      "second",
     ]);
   });
 
@@ -142,7 +142,7 @@ describe("PromptQueue — follow-up drain", () => {
     queue.drainForFollowUp(false);
     expect(dispatcher.followUp).toHaveBeenCalledTimes(1);
     const message = dispatcher.followUp.mock.calls[0]![0];
-    expect(message).toMatchObject({ role: "user", content: "[user]: first", displayText: "first" });
+    expect(message).toMatchObject({ role: "user", content: "first", displayText: "first" });
     expect(lastSnapshot()).toEqual([]);
   });
 
@@ -243,7 +243,7 @@ describe("PromptQueue — requeue", () => {
     dispatcher.isStreaming.mockReturnValue(false);
     await queue.settle();
     expect(dispatcher.prompt).toHaveBeenCalledTimes(1);
-    expect(dispatcher.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: hello", displayText: "hello" });
+    expect(dispatcher.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "hello", displayText: "hello" });
   });
 
   test("requeuing while idle drains the restored entry immediately", async () => {

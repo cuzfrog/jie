@@ -233,7 +233,7 @@ describe("teamLoadReducer", () => {
 });
 
 function user(prompt: string): AgentMessage {
-  return { role: "user", content: `[user]: ${prompt}`, timestamp: 0 };
+  return { role: "user", content: prompt, timestamp: 0 };
 }
 function assistantText(text: string): AgentMessage {
   return {

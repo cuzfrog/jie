@@ -1,7 +1,7 @@
 import { Value } from "typebox/value";
 import type { TSchema } from "typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { ExecutionContext, Tool, ToolResultDetails } from "../tools/types";
+import type { ExecutionContext, Tool, ToolResultDetails } from "../tools";
 
 export function adaptToolToAgent(
   tool: Tool,
@@ -15,6 +15,11 @@ export function adaptToolToAgent(
     prepareArguments(raw: unknown) {
       const prepared = tool.prepareArguments ? tool.prepareArguments(raw) : raw;
       if (!Value.Check(tool.parameters, prepared)) {
+        if (isEmptyObject(prepared)) {
+          throw new Error(
+            `Tool ${tool.name}: arguments are empty; the response was likely truncated by the output token limit. Re-issue with complete arguments or split the request into smaller pieces.`,
+          );
+        }
         throw new Error(
           `Tool ${tool.name}: argument does not match schema`,
         );
@@ -48,4 +53,8 @@ export function adaptToolToAgent(
     },
     executionMode: "sequential",
   };
+}
+
+function isEmptyObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && Object.keys(value).length === 0;
 }

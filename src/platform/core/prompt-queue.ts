@@ -54,7 +54,7 @@ export class PromptQueueImpl implements PromptQueue {
   }
 
   ingestUserPrompt(prompt: string, userText: string): void {
-    const message: UserIngressMessage = { role: "user", content: `[user]: ${prompt}`, timestamp: Date.now(), displayText: userText };
+    const message: UserIngressMessage = { role: "user", content: prompt, timestamp: Date.now(), displayText: userText };
     this.ingest(message, userText);
   }
 
