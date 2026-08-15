@@ -32,7 +32,7 @@ type EventDefinitions = {
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null }>;
-  "agent.compacted": EventDef<AgentSender, { summary: string; tokens_before: number; summarized_prompts: number }>;
+  "agent.compacted": EventDef<AgentSender, { summary: string; tokens_before: number; tokens_after: number; summarized_prompts: number }>;
   "agent.compaction.start": EventDef<AgentSender, null>;
   "agent.compaction.end": EventDef<AgentSender, null>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
@@ -90,8 +90,8 @@ export const Events = {
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max", contextWindow: number | null): EventEnvelope<"agent.model.assigned"> =>
     createEvent("agent.model.assigned", sender, { provider, model, effort, contextWindow }),
-  agentCompacted: (sender: AgentSender, summary: string, tokens_before: number, summarized_prompts: number): EventEnvelope<"agent.compacted"> =>
-    createEvent("agent.compacted", sender, { summary, tokens_before, summarized_prompts }),
+  agentCompacted: (sender: AgentSender, summary: string, tokens_before: number, tokens_after: number, summarized_prompts: number): EventEnvelope<"agent.compacted"> =>
+    createEvent("agent.compacted", sender, { summary, tokens_before, tokens_after, summarized_prompts }),
   agentCompactionStart: (sender: AgentSender): EventEnvelope<"agent.compaction.start"> =>
     createEvent("agent.compaction.start", sender),
   agentCompactionEnd: (sender: AgentSender): EventEnvelope<"agent.compaction.end"> =>

@@ -615,18 +615,18 @@ describe("reduceCompacted", () => {
     state = reduce(state, Events.agentUsage(AGENT_SENDER, {
       input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 99999,
     }));
-    const compacted = reduce(state, Events.agentCompacted(AGENT_SENDER, "the summary", 500, 2));
+    const compacted = reduce(state, Events.agentCompacted(AGENT_SENDER, "the summary", 500, 2500, 2));
     const agent = compacted.agents.get("my-team:general-1");
     expect(agent?.compactionMarker).toEqual({ turnsBefore: 2, summary: "the summary", tokensBefore: 500 });
     expect(agent?.history.map((turn) => turn.userPrompt)).toEqual(["one", "two"]);
     expect(agent?.currentTurn?.userPrompt).toBe("three");
     expect(compacted.nextEntrySeq).toBe(3);
     expect(agent?.lastReportedTotalTokens).toBeNull();
-    expect(agent?.contextTokensUsed).not.toBe(99999);
+    expect(agent?.contextTokensUsed).toBe(2500);
   });
 
   test("clamps to keep at least one turn when summarized_prompts exceeds the known turns", () => {
-    const compacted = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "s", 1, 10));
+    const compacted = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "s", 1, 100, 10));
     const agent = compacted.agents.get("my-team:general-1");
     expect(agent?.compactionMarker).toEqual({ turnsBefore: 2, summary: "s", tokensBefore: 1 });
     expect(agent?.history.map((turn) => turn.userPrompt)).toEqual(["one", "two"]);
@@ -634,7 +634,7 @@ describe("reduceCompacted", () => {
   });
 
   test("without any turns only the marker is recorded", () => {
-    const compacted = reduce(loadedState(), Events.agentCompacted(AGENT_SENDER, "s", 1, 0));
+    const compacted = reduce(loadedState(), Events.agentCompacted(AGENT_SENDER, "s", 1, 100, 0));
     const agent = compacted.agents.get("my-team:general-1");
     expect(agent?.compactionMarker).toEqual({ turnsBefore: 0, summary: "s", tokensBefore: 1 });
     expect(agent?.history).toEqual([]);
@@ -645,7 +645,7 @@ describe("reduceCompacted", () => {
   test("rejects compaction events from a foreign team", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
-    expect(reduce(state, Events.agentCompacted(foreign, "s", 1, 0))).toBe(state);
+    expect(reduce(state, Events.agentCompacted(foreign, "s", 1, 100, 0))).toBe(state);
   });
 
   test("sets compactionInProgress true on agent.compaction.start and false on agent.compaction.end", () => {
@@ -659,15 +659,15 @@ describe("reduceCompacted", () => {
   test("agent.compacted also clears compactionInProgress", () => {
     let state = loadedState();
     state = reduce(state, Events.agentCompactionStart(AGENT_SENDER));
-    state = reduce(state, Events.agentCompacted(AGENT_SENDER, "s", 1, 0));
+    state = reduce(state, Events.agentCompacted(AGENT_SENDER, "s", 1, 100, 0));
     expect(state.agents.get("my-team:general-1")?.compactionInProgress).toBe(false);
   });
 
   test("a later compaction advances the marker and keeps all earlier turns", () => {
-    let state = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "first summary", 500, 1));
+    let state = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "first summary", 500, 100, 1));
     state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "four"));
     state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
-    const compacted = reduce(state, Events.agentCompacted(AGENT_SENDER, "second summary", 700, 2));
+    const compacted = reduce(state, Events.agentCompacted(AGENT_SENDER, "second summary", 700, 100, 2));
     const agent = compacted.agents.get("my-team:general-1");
     expect(agent?.compactionMarker).toEqual({ turnsBefore: 3, summary: "second summary", tokensBefore: 700 });
     expect(agent?.history.map((turn) => turn.userPrompt)).toEqual(["one", "two", "three"]);
@@ -676,8 +676,8 @@ describe("reduceCompacted", () => {
   });
 
   test("a re-compaction with no new summarized prompts updates the marker in place", () => {
-    let state = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "first summary", 500, 1));
-    const compacted = reduce(state, Events.agentCompacted(AGENT_SENDER, "second summary", 700, 0));
+    let state = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "first summary", 500, 100, 1));
+    const compacted = reduce(state, Events.agentCompacted(AGENT_SENDER, "second summary", 700, 100, 0));
     const agent = compacted.agents.get("my-team:general-1");
     expect(agent?.compactionMarker).toEqual({ turnsBefore: 1, summary: "second summary", tokensBefore: 700 });
     expect(agent?.history.map((turn) => turn.userPrompt)).toEqual(["one", "two"]);

@@ -34,6 +34,7 @@ export interface CompactionResult {
 
 export interface Compactor {
   needsCompaction(messages: ReadonlyArray<AgentMessage>, contextWindow: number): boolean;
+  contextTokens(messages: ReadonlyArray<AgentMessage>): number;
   compact(input: CompactionInput): Promise<CompactionResult | null>;
   fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>, contextWindow?: number): ReadonlyArray<AgentMessage>;
 }
@@ -60,8 +61,11 @@ export class CompactorImpl implements Compactor {
   needsCompaction(messages: ReadonlyArray<AgentMessage>, contextWindow: number): boolean {
     const settings = resolveSettings(this.getSettings?.());
     if (!settings.enabled) return false;
-    const tokens = contextTokensSince(messages, lastSummaryTimestamp(messages));
-    return shouldCompact(tokens, contextWindow, settings);
+    return shouldCompact(this.contextTokens(messages), contextWindow, settings);
+  }
+
+  contextTokens(messages: ReadonlyArray<AgentMessage>): number {
+    return contextTokensSince(messages, lastSummaryTimestamp(messages));
   }
 
   async compact(input: CompactionInput): Promise<CompactionResult | null> {

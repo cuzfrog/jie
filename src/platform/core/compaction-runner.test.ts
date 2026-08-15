@@ -16,6 +16,7 @@ const eventManager = vi.mocked<EventManager>({
 
 const compactor = vi.mocked<Compactor>({
   needsCompaction: vi.fn(() => true),
+  contextTokens: vi.fn(() => 0),
   compact: vi.fn(async () => null),
   fitToWindow: vi.fn((messages) => messages),
 });
@@ -136,19 +137,25 @@ describe("CompactionRunner — applying the result", () => {
     expect(ends[0]!.sender).toEqual(sender);
   });
 
-  test("a successful run publishes agent.compacted with the summary and prefix counts", async () => {
+  test("a successful run publishes agent.compacted with the summary and token counts", async () => {
     messages = [makeUserMessage("m1"), makeUserMessage("m2"), makeUserMessage("m3"), makeUserMessage("m4")];
+    const retained = messages[3]!;
     compactor.compact.mockResolvedValueOnce({
       summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
       firstKeptIndex: 3,
       tokensBefore: 500,
       summarizedPrefix: messages.slice(0, 3),
     });
+    compactor.contextTokens.mockReturnValueOnce(123);
     await makeRunner().ensure(model);
     const compacted = envelopes("agent.compacted");
     expect(compacted).toHaveLength(1);
     expect(compacted[0]!.sender).toEqual(sender);
-    expect(compacted[0]!.payload).toEqual({ summary: "the summary", tokens_before: 500, summarized_prompts: 3 });
+    expect(compacted[0]!.payload).toEqual({ summary: "the summary", tokens_before: 500, tokens_after: 123, summarized_prompts: 3 });
+    const contextTokensCall = compactor.contextTokens.mock.calls[compactor.contextTokens.mock.calls.length - 1]![0]!;
+    expect(contextTokensCall).toHaveLength(2);
+    expect(contextTokensCall[0]).toMatchObject({ role: "compactionSummary", summary: "the summary", tokensBefore: 500 });
+    expect(contextTokensCall[1]).toEqual(retained);
   });
 
   test("a successful run hands the summarized prefix to the distiller", async () => {

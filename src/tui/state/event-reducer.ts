@@ -144,12 +144,11 @@ function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
   const previous = agent.compactionMarker?.turnsBefore ?? 0;
   const turns = agent.currentTurn === null ? [...agent.history] : [...agent.history, agent.currentTurn];
   const turnsBefore = Math.min(previous + event.payload.summarized_prompts, Math.max(turns.length - 1, 0));
-  const survivingHistory = agent.history.slice(turnsBefore);
   const next: AgentUiState = {
     ...agent,
     compactionMarker: { turnsBefore, summary: event.payload.summary, tokensBefore: event.payload.tokens_before },
     compactionInProgress: false,
-    contextTokensUsed: estimateContextTokens(survivingHistory, agent.currentTurn),
+    contextTokensUsed: event.payload.tokens_after,
     lastReportedTotalTokens: null,
     uploadTokens: 0,
     downloadTokens: 0,

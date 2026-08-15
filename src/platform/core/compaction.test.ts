@@ -379,6 +379,23 @@ describe("CompactorImpl.compact", () => {
   });
 });
 
+describe("CompactorImpl.contextTokens", () => {
+  test("estimates from message content when the only usage predates the last summary", () => {
+    const staleUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages = [summaryMsg("old summary", 5000), userMsg(BIG), assistantMsg("ok", 1000, staleUsage)];
+    expect(compactor.contextTokens(messages)).toBeLessThan(1_000_000);
+    expect(compactor.contextTokens(messages)).toBe(3 + 25_000 + 1);
+  });
+
+  test("uses provider usage when it was recorded after the last summary", () => {
+    const freshUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages = [summaryMsg("old summary", 1000), userMsg(BIG), assistantMsg(BIG, 6000, freshUsage)];
+    expect(compactor.contextTokens(messages)).toBeGreaterThan(1_000_000);
+  });
+});
+
 describe("CompactorImpl.needsCompaction", () => {
   test("returns false below the threshold", () => {
     const compactor = makeCompactor(makeTranscriptStore());
