@@ -22,6 +22,7 @@ interface ModelControllerDeps {
   readonly soulPinsEffort: boolean;
   readonly resolveModel: (provider: string, modelId: string) => Model<Api> | undefined;
   readonly agentState: AgentModelState;
+  readonly targetContextWindowSize?: number;
 }
 
 export class ModelControllerImpl implements ModelController {
@@ -31,6 +32,7 @@ export class ModelControllerImpl implements ModelController {
   private readonly resolveModel: (provider: string, modelId: string) => Model<Api> | undefined;
   private readonly agentState: AgentModelState;
   private readonly soulPinsEffort: boolean;
+  private readonly targetContextWindowSize: number | undefined;
   private currentModelInfo: ModelInfo | null;
 
   constructor(initialModel: Model<Api> | undefined, effort: EffortLevel, deps: ModelControllerDeps) {
@@ -40,8 +42,9 @@ export class ModelControllerImpl implements ModelController {
     this.soulPinsEffort = deps.soulPinsEffort;
     this.resolveModel = deps.resolveModel;
     this.agentState = deps.agentState;
+    this.targetContextWindowSize = deps.targetContextWindowSize;
     this.agentState.setThinkingLevel(effortToThinkingLevel(effort));
-    this.currentModelInfo = resolveModelInfo(initialModel, this.agentState.getThinkingLevel());
+    this.currentModelInfo = resolveModelInfo(initialModel, this.agentState.getThinkingLevel(), this.targetContextWindowSize);
     if (initialModel !== undefined) {
       this.agentState.setModel(initialModel);
       this.publishAssigned();
@@ -66,7 +69,8 @@ export class ModelControllerImpl implements ModelController {
     if (resolved === undefined) return;
     this.agentState.setModel(resolved);
     const effort = this.currentModelInfo === null ? effortOfThinkingLevel(this.agentState.getThinkingLevel()) : this.currentModelInfo.effort;
-    this.currentModelInfo = { provider: resolved.provider, id: resolved.id, effort, contextWindow: resolved.contextWindow };
+    const contextWindow = resolveContextWindow(resolved.contextWindow, this.targetContextWindowSize);
+    this.currentModelInfo = { provider: resolved.provider, id: resolved.id, effort, contextWindow };
     this.publishAssigned();
   }
 
@@ -87,7 +91,12 @@ function effortToThinkingLevel(effort: EffortLevel): ThinkingLevel {
   return effort === "max" ? "xhigh" : effort;
 }
 
-function resolveModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): ModelInfo | null {
+function resolveModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel, targetContextWindowSize?: number): ModelInfo | null {
   if (model === undefined) return null;
-  return { provider: model.provider, id: model.id, effort: effortOfThinkingLevel(thinkingLevel), contextWindow: model.contextWindow };
+  return { provider: model.provider, id: model.id, effort: effortOfThinkingLevel(thinkingLevel), contextWindow: resolveContextWindow(model.contextWindow, targetContextWindowSize) };
+}
+
+function resolveContextWindow(modelContextWindow: number, targetContextWindowSize?: number): number {
+  if (targetContextWindowSize === undefined) return modelContextWindow;
+  return Math.min(targetContextWindowSize, modelContextWindow);
 }

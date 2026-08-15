@@ -26,8 +26,16 @@ const agentState = {
 
 const resolveModel = vi.fn((_provider: string, _modelId: string): Model<Api> | undefined => undefined);
 
-function makeController(initialModel: Model<Api> | undefined, effort: EffortLevel, soulPinsModel = false, soulPinsEffort = false): ModelController {
-  return new ModelControllerImpl(initialModel, effort, { eventManager, sender, soulPinsModel, soulPinsEffort, resolveModel, agentState });
+function makeController(
+  initialModel: Model<Api> | undefined,
+  effort: EffortLevel,
+  soulPinsModel = false,
+  soulPinsEffort = false,
+  targetContextWindowSize?: number,
+): ModelController {
+  return new ModelControllerImpl(initialModel, effort, {
+    eventManager, sender, soulPinsModel, soulPinsEffort, resolveModel, agentState, targetContextWindowSize,
+  });
 }
 
 function makeModel(provider: string, id: string): Model<Api> {
@@ -66,6 +74,7 @@ describe("ModelController — initial assignment", () => {
     expect(assigned).toHaveLength(1);
     expect(assigned[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
     expect(controller.modelInfo).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
+    expect(controller.modelInfo!.contextWindow).toBe(200000);
   });
 
   test("publishes with effort 'off' when the effort param is 'off'", () => {
@@ -167,5 +176,45 @@ describe("ModelController — applyModelUpdate", () => {
     expect(resolveModel).toHaveBeenCalledWith("lm-studio", "no-such-model");
     expect(model).toBe(initial);
     expect(envelopes("agent.model.assigned")).toHaveLength(1);
+  });
+});
+
+describe("ModelController — target context window", () => {
+  test("publishes the target context window when the soul pins a smaller target", () => {
+    const controller = makeController(makeModel("anthropic", "claude-sonnet-4"), "off", false, false, 60_000);
+    const assigned = envelopes("agent.model.assigned");
+    expect(assigned).toHaveLength(1);
+    expect(assigned[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "off", contextWindow: 60_000 });
+    expect(controller.modelInfo).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 60_000 });
+  });
+
+  test("publishes the model window when the target is larger", () => {
+    const controller = makeController(makeModel("anthropic", "claude-sonnet-4"), "off", false, false, 300_000);
+    const assigned = envelopes("agent.model.assigned");
+    expect(assigned).toHaveLength(1);
+    expect(assigned[0]!.payload.contextWindow).toBe(200_000);
+    expect(controller.modelInfo!.contextWindow).toBe(200_000);
+  });
+
+  test("publishes the model window when no target is set", () => {
+    const controller = makeController(makeModel("anthropic", "claude-sonnet-4"), "off");
+    expect(controller.modelInfo!.contextWindow).toBe(200_000);
+  });
+
+  test("applies the effective window on model update", () => {
+    const smallTarget = makeController(makeModel("anthropic", "claude-sonnet-4"), "off", false, false, 60_000);
+    const model128 = makeModel("anthropic", "claude-sonnet-4-128k");
+    model128.contextWindow = 128_000;
+    resolveModel.mockReturnValue(model128);
+    smallTarget.applyModelUpdate("anthropic", "claude-sonnet-4-128k");
+    const all = envelopes("agent.model.assigned");
+    expect(all.at(-1)!.payload.contextWindow).toBe(60_000);
+    expect(smallTarget.modelInfo!.contextWindow).toBe(60_000);
+
+    const largeTarget = makeController(makeModel("anthropic", "claude-sonnet-4"), "off", false, false, 300_000);
+    resolveModel.mockReturnValue(model128);
+    largeTarget.applyModelUpdate("anthropic", "claude-sonnet-4-128k");
+    expect(envelopes("agent.model.assigned").at(-1)!.payload.contextWindow).toBe(128_000);
+    expect(largeTarget.modelInfo!.contextWindow).toBe(128_000);
   });
 });

@@ -27,6 +27,7 @@ interface CompactionRunnerDeps {
   readonly teamId: string;
   readonly conversation: CompactionConversation;
   readonly memoryManager: MemoryManager;
+  readonly getOverheadTokens: () => number;
 }
 
 export class CompactionRunnerImpl implements CompactionRunner {
@@ -38,6 +39,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
   private readonly teamId: string;
   private readonly conversation: CompactionConversation;
   private readonly memoryManager: MemoryManager;
+  private readonly getOverheadTokens: () => number;
   private readonly distillationController = new AbortController();
   private distillationPromise: Promise<void> | null = null;
   private promise: Promise<CompactionOutcome | null> | null = null;
@@ -53,6 +55,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
     this.teamId = deps.teamId;
     this.conversation = deps.conversation;
     this.memoryManager = deps.memoryManager;
+    this.getOverheadTokens = deps.getOverheadTokens;
   }
 
   ensure(model: Model<Api>, contextWindow?: number): Promise<CompactionOutcome | null> {
@@ -73,7 +76,8 @@ export class CompactionRunnerImpl implements CompactionRunner {
   private async run(model: Model<Api>, contextWindow?: number): Promise<CompactionOutcome | null> {
     const window = contextWindow ?? model.contextWindow;
     const messages = this.conversation.getMessages();
-    if (!this.compactor.needsCompaction(messages, window)) return null;
+    const overheadTokens = this.getOverheadTokens();
+    if (!this.compactor.needsCompaction(messages, window, overheadTokens)) return null;
     const controller = new AbortController();
     this.controller = controller;
     this.eventManager.publish(Events.agentCompactionStart(this.sender));
@@ -86,6 +90,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
         sessionId: this.sessionId,
         teamId: this.teamId,
         signal: controller.signal,
+        overheadTokens,
       });
       if (result === null || this.aborted) return null;
       const currentMessages = this.conversation.getMessages();
@@ -93,7 +98,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
       const compacted = [result.summaryMessage, ...currentMessages.slice(result.firstKeptIndex)];
       this.conversation.setMessages(compacted);
       const summarizedPrompts = summarizedMessages.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
-      const tokensAfter = this.compactor.contextTokens(compacted);
+      const tokensAfter = this.compactor.contextTokens(compacted, overheadTokens);
       this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, tokensAfter, summarizedPrompts));
       if (this.distillationPromise === null) {
         this.distillationPromise = this.memoryManager.distill({

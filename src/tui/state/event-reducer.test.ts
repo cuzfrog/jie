@@ -640,7 +640,7 @@ describe("reduceCompacted", () => {
     expect(agent?.history.map((turn) => turn.userPrompt)).toEqual(["one", "two"]);
     expect(agent?.currentTurn?.userPrompt).toBe("three");
     expect(compacted.nextEntrySeq).toBe(3);
-    expect(agent?.lastReportedTotalTokens).toBeNull();
+    expect(agent?.lastReportedTotalTokens).toBe(2500);
     expect(agent?.contextTokensUsed).toBe(2500);
   });
 

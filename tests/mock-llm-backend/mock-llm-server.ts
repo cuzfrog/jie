@@ -5,6 +5,7 @@ import {
   type ChatCompletionRequestBody,
   type Expectation,
   type MatchRule,
+  estimateRequestTokens,
   lastUserText,
   renderSseStream,
 } from "./expectations.ts";
@@ -93,6 +94,18 @@ export class MockLlmServerImpl implements MockLlmServer {
           type: "mock_no_match",
           param: null,
           code: null,
+        },
+      });
+    }
+
+    const limit = picked.expectation.contextLimitTokens;
+    if (limit !== undefined && estimateRequestTokens(body) > limit) {
+      return sendJson(req, 400, {
+        error: {
+          message: `This model's maximum context length is ${limit} tokens. Your request was estimated at more than ${limit} tokens.`,
+          type: "invalid_request_error",
+          param: "messages",
+          code: "context_length_exceeded",
         },
       });
     }

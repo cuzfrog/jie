@@ -9,8 +9,10 @@ import {
   lastUserText,
   selectExpectation,
   renderSseStream,
+  estimateRequestTokens,
   type ChatCompletionRequestBody,
   type Expectation,
+  type ResponseChunk,
 } from "./expectations.ts";
 
 function req(overrides: Partial<ChatCompletionRequestBody> = {}): ChatCompletionRequestBody {
@@ -30,6 +32,15 @@ function finish(reason: "stop" | "length" | "tool_calls") {
 }
 function toolCall(id: string, name: string, args: ReadonlyArray<string>) {
   return { kind: "tool_call", id, name, argumentsChunks: args } as const;
+}
+function usage(promptTokens: number, completionTokens?: number, cacheReadTokens?: number, cacheWriteTokens?: number): ResponseChunk {
+  return {
+    kind: "usage",
+    promptTokens,
+    ...(completionTokens === undefined ? {} : { completionTokens }),
+    ...(cacheReadTokens === undefined ? {} : { cacheReadTokens }),
+    ...(cacheWriteTokens === undefined ? {} : { cacheWriteTokens }),
+  } satisfies ResponseChunk;
 }
 
 const expectChunks = (() => {
@@ -271,5 +282,60 @@ describe("renderSseStream", () => {
     expect(performance.now() - started).toBeGreaterThanOrEqual(8);
     expect(decoded).toContain('"content":"slow"');
     expect(decoded.endsWith("data: [DONE]\n\n")).toBe(true);
+  });
+
+  test("renders a usage chunk with OpenAI field names and an empty choices array", () => {
+    const chunks = expectChunks(
+      renderStatic({ match: {}, responseChunks: [text("ok"), finish("stop"), usage(100, 20)] }, req()),
+    );
+    const usageChunk = chunks.find((c) => c.includes('"usage"'));
+    expect(usageChunk).toBeDefined();
+    expect(usageChunk).toContain('"choices":[]');
+    expect(usageChunk).toContain('"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}');
+  });
+
+  test("renders cache details in prompt_tokens_details", () => {
+    const chunks = expectChunks(
+      renderStatic({ match: {}, responseChunks: [text("ok"), finish("stop"), usage(100, 10, 5, 2)] }, req()),
+    );
+    const usageChunk = chunks.find((c) => c.includes('"usage"'));
+    expect(usageChunk).toBeDefined();
+    expect(usageChunk).toContain('"prompt_tokens_details":{"cached_tokens":5,"cache_write_tokens":2}');
+  });
+
+  test("emits the usage chunk before [DONE]", () => {
+    const bytes = renderStatic({ match: {}, responseChunks: [text("ok"), finish("stop"), usage(100, 20)] }, req());
+    const decoded = new TextDecoder().decode(bytes);
+    const dataBlocks = decoded
+      .trim()
+      .split("\n\n")
+      .filter((block) => block.startsWith("data: "));
+    expect(dataBlocks.length).toBeGreaterThanOrEqual(2);
+    expect(dataBlocks[dataBlocks.length - 2]).toContain('"usage":');
+    expect(dataBlocks[dataBlocks.length - 2]).toContain('"prompt_tokens":100');
+    expect(dataBlocks[dataBlocks.length - 1]).toBe("data: [DONE]");
+  });
+});
+
+describe("estimateRequestTokens", () => {
+  test("estimates messages and tools with char/4", () => {
+    const tools = [{ type: "function", function: { name: "bash" } }] as const;
+    const body = req({
+      messages: [
+        { role: "user", content: "List files" },
+        { role: "system", content: "sys" },
+      ],
+      tools,
+    });
+    const totalChars = "List files".length + "user".length + "sys".length + "system".length;
+    const expected = Math.ceil((totalChars + JSON.stringify(tools).length) / 4);
+    expect(estimateRequestTokens(body)).toBe(expected);
+  });
+
+  test("estimates array content by summing text parts", () => {
+    const body = req({
+      messages: [{ role: "user", content: [{ type: "image" }, { type: "text", text: "hello" }] }],
+    });
+    expect(estimateRequestTokens(body)).toBe(Math.ceil(("user".length + "hello".length) / 4));
   });
 });

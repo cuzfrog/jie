@@ -91,14 +91,16 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const turn = agent.currentTurn;
   if (turn !== null && !turnIsPopulated(turn) && turn.userPrompt === "") {
     const currentTurn = { ...turn, userPrompt: prompt };
-    const contextTokensUsed = estimateContextTokens(contextHistory(agent), currentTurn);
+    const priorTokens = agent.lastReportedTotalTokens ?? estimateContextTokens(contextHistory(agent), null);
+    const contextTokensUsed = priorTokens + estimateContextTokens([], currentTurn);
     const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
     return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention });
   }
   const completed = turn === null ? contextHistory(agent) : [...contextHistory(agent), turn];
   const history = turn === null ? agent.history : [...agent.history, turn];
   const currentTurn = freshTurn(prompt, seq);
-  const contextTokensUsed = estimateContextTokens(completed, currentTurn);
+  const priorTokens = agent.lastReportedTotalTokens ?? estimateContextTokens(completed, null);
+  const contextTokensUsed = priorTokens + estimateContextTokens([], currentTurn);
   const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
   return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention, nextEntrySeq: seq + 1 });
 }
@@ -156,7 +158,7 @@ function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
     compactionMarker: { turnsBefore, summary: event.payload.summary, tokensBefore: event.payload.tokens_before },
     compactionInProgress: false,
     contextTokensUsed: event.payload.tokens_after,
-    lastReportedTotalTokens: null,
+    lastReportedTotalTokens: event.payload.tokens_after,
     uploadTokens: 0,
     downloadTokens: 0,
   };
