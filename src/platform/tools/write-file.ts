@@ -5,6 +5,7 @@ import { isErrnoException } from "..";
 import type { ExecutionContext, Tool, ToolResult, WriteFileResultDetails } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
+import { expandMentionPath } from "./mention-path";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -45,7 +46,8 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
         throw new JiePlatformError("FILE_TOO_LARGE", { detail: `${input.content.length}` });
       }
 
-      const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      const path = expandMentionPath(input.path, dependencies.workspaceRoot);
+      const { realPath, relativePath } = resolveWithinWorkspace(path, dependencies.workspaceRoot);
       const globs = executionContext.toolArgs.get("write_file");
       if (globs !== undefined && !globs.some((pattern) => new Bun.Glob(pattern).match(relativePath))) {
         throw new JiePlatformError("WRITE_PATH_DENIED", {

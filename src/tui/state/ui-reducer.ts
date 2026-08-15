@@ -16,6 +16,10 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return { ...state, thinkingExpanded: !state.thinkingExpanded };
     case ActionTypes.TOGGLE_TOOL_CARDS:
       return { ...state, toolCardsExpanded: !state.toolCardsExpanded };
+    case ActionTypes.SET_THINKING_EXPANDED:
+      return { ...state, thinkingExpanded: action.payload.expanded };
+    case ActionTypes.SET_TOOL_CARDS_EXPANDED:
+      return { ...state, toolCardsExpanded: action.payload.expanded };
     case ActionTypes.SWITCH_CYCLE_AGENT:
       return reduceTeamCursor(state, action.payload.direction);
     case ActionTypes.TOGGLE_TEAM_PANEL:

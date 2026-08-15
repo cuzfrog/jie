@@ -21,6 +21,8 @@ no-new-exports:
   - ls.test.ts
   - ls.ts
   - memory.test.ts
+  - mention-path.test.ts
+  - mention-path.ts
   - memory.ts
   - module.test.ts
   - module.ts

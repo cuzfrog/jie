@@ -21,6 +21,8 @@ export function makeAgentUiState(agentId: AgentId, overrides: Partial<AgentUiSta
     lastStopReason: null,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,
+    uploadTokens: 0,
+    downloadTokens: 0,
     ...overrides,
   };
 }

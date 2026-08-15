@@ -5,8 +5,6 @@ no-new-exports:
   - completion-source.ts
   - file-mention-source.ts
   - file-mention-source.test.ts
-  - list-files.ts
-  - list-files.test.ts
   - path-completion-source.ts
   - path-completion-source.test.ts
   - skill-source.ts

@@ -1,6 +1,8 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
 import { style } from "../themes";
 
+const MAX_DIFF_ROWS = 15;
+
 export class DiffView implements Component {
   private readonly diff: string;
 
@@ -11,7 +13,7 @@ export class DiffView implements Component {
   render(width: number): string[] {
     const w = Math.max(1, width);
     if (this.diff === "") return [style("muted")("(no textual diff)")];
-    const lines = numberDiffLines(parseDiff(this.diff));
+    const lines = capDiffLines(numberDiffLines(parseDiff(this.diff)));
     const numberWidth = lines.reduce((max, line) => line.number === null ? max : Math.max(max, String(line.number).length), 0);
     return lines.map((line) => truncateToWidth(renderLine(line, numberWidth), w));
   }
@@ -27,6 +29,14 @@ interface DiffLine {
 
 interface NumberedDiffLine extends DiffLine {
   readonly number: number | null;
+}
+
+function capDiffLines(lines: NumberedDiffLine[]): NumberedDiffLine[] {
+  if (lines.length <= MAX_DIFF_ROWS) return lines;
+  const shown = lines.slice(0, MAX_DIFF_ROWS - 1);
+  const omitted = lines.length - shown.length;
+  shown.push({ kind: "meta", prefix: "", text: `... ${omitted} more lines`, number: null });
+  return shown;
 }
 
 function renderLine(line: NumberedDiffLine, numberWidth: number): string {

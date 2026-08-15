@@ -1,3 +1,4 @@
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import { TuiState, type StateStore } from "../../state";
 import { type TuiComponent } from "../..";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "../themes";
@@ -11,11 +12,14 @@ type WorkingMode = ReturnType<typeof TuiState.workingKind> | "interrupted";
 export class WorkingSpinnerImpl implements TuiComponent {
   private readonly stateStore: StateStore;
   private mode: WorkingMode = "none";
+  private startedAt: number | null = null;
 
   constructor(stateStore: StateStore) { this.stateStore = stateStore; }
 
   update(): boolean {
     const mode = workingMode(this.stateStore.getState());
+    if (mode === "none") this.startedAt = null;
+    else if (this.startedAt === null) this.startedAt = Date.now();
     if (mode === this.mode) return false;
     this.mode = mode;
     return true;
@@ -24,10 +28,13 @@ export class WorkingSpinnerImpl implements TuiComponent {
   render(_width: number): string[] {
     const mode = workingMode(this.stateStore.getState());
     if (mode === "none") return [];
+    if (mode !== "interrupted" && this.startedAt === null) this.startedAt = Date.now();
     if (mode === "interrupted") return ["", style("muted")(INTERRUPTED_LABEL)];
     const label = mode === "team" ? TEAM_WORKING_LABEL : WORKING_LABEL;
+    const elapsed = this.startedAt !== null ? ` (${(Math.max(0, Date.now() - this.startedAt) / 1000).toFixed(1)}s)` : "";
     const intervalMs = mode === "team" ? TEAM_SPINNER_INTERVAL_MS : SPINNER_INTERVAL_MS;
-    return ["", `${style("accent")(spinnerFrame(Date.now(), intervalMs))} ${style("muted")(label)}`];
+    const statusLine = `${style("accent")(spinnerFrame(Date.now(), intervalMs))} ${style("muted")(label + elapsed)}`;
+    return ["", truncateToWidth(statusLine, Math.max(1, _width), "", false)];
   }
 
   invalidate(): void {}

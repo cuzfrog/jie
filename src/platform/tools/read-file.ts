@@ -2,6 +2,7 @@ import { readFileSync, statSync } from "node:fs";
 import { Type } from "typebox";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
+import { expandMentionPath } from "./mention-path";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 
 const DEFAULT_LINE_CAP = 2000;
@@ -59,7 +60,8 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
       input: ReadFileInput,
       executionContext: ExecutionContext,
     ): Promise<ToolResult> {
-      const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      const path = expandMentionPath(input.path, dependencies.workspaceRoot);
+      const { realPath, relativePath } = resolveWithinWorkspace(path, dependencies.workspaceRoot);
       const globs = executionContext.toolArgs.get("read_file");
       if (globs !== undefined && !globs.some((pattern) => new Bun.Glob(pattern).match(relativePath))) {
         throw new JiePlatformError("READ_PATH_DENIED", {

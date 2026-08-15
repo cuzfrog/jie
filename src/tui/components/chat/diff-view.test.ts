@@ -1,4 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { style } from "../themes";
 import { DiffView } from "./diff-view";
 
 describe("DiffView", () => {
@@ -46,5 +47,12 @@ describe("DiffView", () => {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     }
+  });
+
+  test("caps long diffs at 15 rows and reports the omitted count", () => {
+    const body = Array.from({ length: 20 }, (_, i) => `+line ${i}`).join("\n");
+    const lines = new DiffView(`@@ -1,20 +1,20 @@\n${body}`).render(80);
+    expect(lines.length).toBe(15);
+    expect(lines[14]).toBe(style("muted")("... 7 more lines"));
   });
 });

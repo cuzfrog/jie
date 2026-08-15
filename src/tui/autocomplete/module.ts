@@ -1,7 +1,7 @@
 import { asFunction, type AwilixContainer } from "awilix";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { CommandCatalog, CommandResolver } from "../command";
-import { scanFiles } from "./list-files";
+import { scanFiles } from "../../utils";
 import type { StateStore } from "../state";
 import type { TuiCradle } from "../container";
 import { FileMentionSource } from "./file-mention-source";

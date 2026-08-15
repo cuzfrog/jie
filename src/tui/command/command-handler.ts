@@ -60,6 +60,9 @@ export class CommandHandlerImpl implements CommandHandler {
       case "ui":
         this.dispatchUiAction(resolved.action);
         return;
+      case "set":
+        this.dispatchSetAction(resolved.key, resolved.value);
+        return;
       case "reply":
         this.stateStore.dispatch(Actions.setTransientMessage(resolved.text));
         return;
@@ -93,6 +96,14 @@ export class CommandHandlerImpl implements CommandHandler {
         this.stateStore.dispatch(Actions.cycleKanbanView());
         return;
     }
+  }
+
+  private dispatchSetAction(key: "thinkingExpanded" | "toolCardsExpanded", value: boolean): void {
+    if (key === "thinkingExpanded") {
+      this.stateStore.dispatch(Actions.setThinkingExpanded(value));
+      return;
+    }
+    this.stateStore.dispatch(Actions.setToolCardsExpanded(value));
   }
 
   private handleCommandResult(command: Command, result: CommandResult<CommandName>): void {

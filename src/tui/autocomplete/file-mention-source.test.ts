@@ -1,5 +1,5 @@
 import { FileMentionSource } from "./file-mention-source";
-import type { ScannedFile } from "./list-files";
+import type { ScannedFile } from "../../utils";
 
 const CWD = "/proj";
 
@@ -130,5 +130,25 @@ describe("FileMentionSource", () => {
       { signal: signal() },
     );
     expect(suggestions!.items.map((item) => item.label)).toEqual(["a.ts", "b.ts", "c.ts"]);
+  });
+
+  test("a trailing space after an exact @ mention returns null", async () => {
+    const suggestions = await new FileMentionSource(CWD, files("file1.md")).getSuggestions(
+      ["@file1.md "],
+      0,
+      11,
+      { signal: signal() },
+    );
+    expect(suggestions).toBeNull();
+  });
+
+  test("a trailing space after an exact @@ mention returns null", async () => {
+    const suggestions = await new FileMentionSource(CWD, files(".env")).getSuggestions(
+      ["@@.env "],
+      0,
+      7,
+      { signal: signal() },
+    );
+    expect(suggestions).toBeNull();
   });
 });

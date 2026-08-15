@@ -84,13 +84,13 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (turn !== null && !turnIsPopulated(turn) && turn.userPrompt === "") {
     const currentTurn = { ...turn, userPrompt: prompt };
     const contextTokensUsed = estimateContextTokens(agent.history, currentTurn);
-    const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed };
+    const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
     return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId });
   }
   const history = turn === null ? agent.history : [...agent.history, turn];
   const currentTurn = freshTurn(prompt, seq);
   const contextTokensUsed = estimateContextTokens(history, currentTurn);
-  const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed };
+  const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
   return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, nextEntrySeq: seq + 1 });
 }
 
@@ -100,7 +100,7 @@ function reduceTurnContinue(state: TuiState, event: AnyEventEnvelope): TuiState 
   if (event.type !== "agent.turn.continue") return state;
   const { agentId, agent } = resolved;
   const interruptedAgentId = state.interruptedAgentId === agentId ? null : state.interruptedAgentId;
-  const next: AgentUiState = { ...agent, status: "busy" };
+  const next: AgentUiState = { ...agent, status: "busy", uploadTokens: 0, downloadTokens: 0 };
   return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId });
 }
 
@@ -120,7 +120,13 @@ function reduceUsage(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   if (event.type !== "agent.usage") return state;
   const { agentId, agent } = resolved;
-  return withAgent(state, agentId, { ...agent, contextTokensUsed: event.payload.totalTokens, lastReportedTotalTokens: event.payload.totalTokens });
+  return withAgent(state, agentId, {
+    ...agent,
+    contextTokensUsed: event.payload.totalTokens,
+    lastReportedTotalTokens: event.payload.totalTokens,
+    uploadTokens: event.payload.input,
+    downloadTokens: event.payload.output,
+  });
 }
 
 function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -142,6 +148,8 @@ function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
     compactionInProgress: false,
     contextTokensUsed: estimateContextTokens(history, currentTurn),
     lastReportedTotalTokens: null,
+    uploadTokens: 0,
+    downloadTokens: 0,
   };
   return withAgent(state, agentId, next, { nextEntrySeq: markerSeq + 1 + survivors.length });
 }

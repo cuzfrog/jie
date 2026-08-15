@@ -19,6 +19,7 @@ export type UiAction = "clearState" | "showHelp" | "stop" | "cycleKanbanView";
 
 export type ResolvedCommand =
   | { readonly kind: "ui"; readonly action: UiAction }
+  | { readonly kind: "set"; readonly key: "thinkingExpanded" | "toolCardsExpanded"; readonly value: boolean }
   | { readonly kind: "reply"; readonly text: string }
   | { readonly kind: "platform"; readonly slashName: string; readonly command: Command; readonly transient?: string }
   | { readonly kind: "error"; readonly text: string };

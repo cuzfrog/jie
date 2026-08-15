@@ -14,6 +14,10 @@ function diffDetails(diff: string | null): ToolResultDetails {
   return { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 2, diff };
 }
 
+function writeDiffDetails(diff: string | null): ToolResultDetails {
+  return { kind: "diff", path: "a.txt", bytesWritten: 12, createdAt: "2024-01-01T00:00:00Z", diff };
+}
+
 const bashDetails: ToolResultDetails = { exitCode: 0, truncated: { stdout: false, stderr: false } };
 
 describe("ToolCard", () => {
@@ -105,6 +109,38 @@ describe("ToolCard", () => {
   test("collapsed: a null diff detail renders the header alone", () => {
     const view = new ToolCard(card({ details: diffDetails(null) }), stateStore);
     expect(view.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m"]);
+  });
+
+  test("write_file header shows diff row counts", () => {
+    const view = new ToolCard(card({
+      name: "write_file",
+      input: JSON.stringify({ path: "a.txt", content: "one\ntwo" }),
+      details: writeDiffDetails("@@ -0,0 +1,2 @@\n+one\n+two"),
+    }), stateStore);
+    const header = view.render(80)[0]!;
+    expect(header).toContain("+2");
+  });
+
+  test("write_file header falls back to bytes when diff is null", () => {
+    const view = new ToolCard(card({
+      name: "write_file",
+      input: JSON.stringify({ path: "a.txt", content: "x" }),
+      details: writeDiffDetails(null),
+    }), stateStore);
+    const header = view.render(80)[0]!;
+    expect(header).toContain("12 bytes");
+  });
+
+  test("edit_file header shows replacement count and diff row counts", () => {
+    const view = new ToolCard(card({
+      name: "edit_file",
+      input: JSON.stringify({ path: "a.txt", edits: [{ old_string: "a", new_string: "b" }] }),
+      details: { kind: "diff", path: "a.txt", replacementsCount: 2, beforeBytes: 4, afterBytes: 4, diff: "@@ -1,2 +1,2 @@\n-a\n+A\n-b\n+B" },
+    }), stateStore);
+    const header = view.render(80)[0]!;
+    expect(header).toContain("2 replacements");
+    expect(header).toContain("+2");
+    expect(header).toContain("-2");
   });
 
   test("expanded: a diff detail renders input, output and a numbered diff section", () => {

@@ -76,13 +76,15 @@ describe("SlashCommandSource — slash commands", () => {
   test("bare '/' lists every command with its argument hint and description", async () => {
     const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(17);
+    expect(suggestions!.items).toHaveLength(18);
     const team = suggestions!.items.find((item) => item.value === "team");
     expect(team!.description).toBe("<teamId> — switch the active team");
     const help = suggestions!.items.find((item) => item.value === "help");
     expect(help!.description).toBe("show this help");
     const modelAlias = suggestions!.items.find((item) => item.value === "model-alias");
     expect(modelAlias!.description).toBe("[<alias> <provider/modelId>] — set or list model aliases");
+    const setting = suggestions!.items.find((item) => item.value === "setting");
+    expect(setting!.description).toBe("<diff-block-expand|thinking-block-expand> <on|off> — configure display settings");
   });
 });
 

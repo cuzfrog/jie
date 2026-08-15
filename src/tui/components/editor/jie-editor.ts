@@ -71,6 +71,11 @@ export class JieEditor extends Editor {
     this.commandCatalog = commandRegistry;
     const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanban.edit !== null);
     tracking.onSuggestions = (suggestions): void => {
+      if (suggestions === null) {
+        this.popupFilteredOut = null;
+        this.ghost = null;
+        return;
+      }
       this.popupFilteredOut = suggestions.filteredOut ?? null;
       this.resetGhost(suggestions.items, suggestions.prefix);
     };
@@ -116,6 +121,13 @@ export class JieEditor extends Editor {
       return;
     }
     if (this.tryBrowseNavigation(data)) return;
+    if (this.canCommitMentionOnSpace(data)) {
+      super.handleInput("\t");
+      this.ghost = null;
+      this.popupFilteredOut = null;
+      this.syncCursorAtStart();
+      return;
+    }
     const navigating = this.isShowingAutocomplete() && this.ghost !== null && (matchesKey(data, "up") || matchesKey(data, "down"));
     super.handleInput(data);
     if (navigating) this.moveGhost(matchesKey(data, "down") ? 1 : -1);
@@ -181,6 +193,13 @@ export class JieEditor extends Editor {
     const atStart = cursor.line === 0 && cursor.col === 0;
     if (this.stateStore.getState().editorCursorAtStart === atStart) return;
     this.stateStore.dispatch(Actions.setEditorCursorAtStart(atStart));
+  }
+
+  private canCommitMentionOnSpace(data: string): boolean {
+    if (!matchesKey(data, "space") || matchesKey(data, "shift+space")) return false;
+    if (this.ghost === null || !this.isShowingAutocomplete()) return false;
+    const selected = this.ghost.items[this.ghost.index];
+    return selected !== undefined && selected.value === this.ghost.prefix;
   }
 
   private tryBrowseNavigation(data: string): boolean {
@@ -356,7 +375,7 @@ interface BrowseEntry {
 
 class GhostTrackingProvider implements AutocompleteProvider {
   readonly triggerCharacters: string[] | undefined;
-  onSuggestions: ((suggestions: JieSuggestions) => void) | null = null;
+  onSuggestions: ((suggestions: JieSuggestions | null) => void) | null = null;
   private readonly inner: JieAutocompleteProvider;
   private readonly isEditing: () => boolean;
 
@@ -374,7 +393,7 @@ class GhostTrackingProvider implements AutocompleteProvider {
   ): Promise<JieSuggestions | null> {
     if (this.isEditing()) return Promise.resolve(null);
     return Promise.resolve(this.inner.getSuggestions(lines, cursorLine, cursorCol, options)).then((result) => {
-      if (result !== null && this.onSuggestions !== null) this.onSuggestions(result);
+      if (this.onSuggestions !== null) this.onSuggestions(result);
       return result;
     });
   }

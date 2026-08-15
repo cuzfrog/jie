@@ -91,7 +91,7 @@ describe("WorkingSpinnerImpl.render", () => {
     expect(new WorkingSpinnerImpl(stateStore).render(80)).toEqual([]);
   });
 
-  test("renders the focused spinner with a frame and label", () => {
+  test("renders the focused spinner with a frame, label and elapsed time", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
@@ -99,10 +99,10 @@ describe("WorkingSpinnerImpl.render", () => {
     vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinnerImpl(stateStore);
     spinner.update();
-    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking…\x1b[39m"]);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.0s)\x1b[39m"]);
   });
 
-  test("renders the team spinner with a slower frame interval", () => {
+  test("renders the team spinner with a slower frame interval and elapsed time", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
       agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy" })]]),
@@ -110,7 +110,19 @@ describe("WorkingSpinnerImpl.render", () => {
     vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinnerImpl(stateStore);
     spinner.update();
-    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mTeam working…\x1b[39m"]);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mTeam working… (0.0s)\x1b[39m"]);
+  });
+
+  test("shows the elapsed time since the working state began", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+    }));
+    const spy = vi.spyOn(Date, "now").mockReturnValue(0);
+    const spinner = new WorkingSpinnerImpl(stateStore);
+    spinner.update();
+    spy.mockReturnValue(800);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.8s)\x1b[39m"]);
   });
 
   test("renders the interrupted label", () => {
@@ -126,7 +138,7 @@ describe("WorkingSpinnerImpl.render", () => {
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
-    expect(new WorkingSpinnerImpl(stateStore).render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking…\x1b[39m"]);
+    expect(new WorkingSpinnerImpl(stateStore).render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.0s)\x1b[39m"]);
   });
 
   test("never renders a line wider than the given width", () => {

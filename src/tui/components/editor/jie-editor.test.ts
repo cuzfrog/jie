@@ -925,6 +925,30 @@ describe("JieEditor — autocomplete ghost text", () => {
     const stripped = editor.render(80).map(stripAnsi);
     expect(stripped.some((line) => line.includes("  (1/6)"))).toBe(true);
   });
+
+  test("tab commits an exact file mention and adds a trailing space", async () => {
+    const { editor } = bootEditor(exactMentionProvider());
+    for (const ch of "@f") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    editor.handleInput("\t");
+    expect(editor.getText()).toBe("@file1.md ");
+    expect(editor.isShowingAutocomplete()).toBe(false);
+  });
+
+  test("a space after an exact file mention commits and closes the popup", async () => {
+    const provider = exactMentionProvider();
+    const { editor } = bootEditor(provider);
+    for (const ch of "@file1.md") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    await sleep(30);
+    editor.handleInput(" ");
+    await sleep(10);
+    expect(editor.getText()).toBe("@file1.md ");
+    expect(editor.isShowingAutocomplete()).toBe(false);
+    const lastCall = provider.getSuggestions.mock.calls.at(-1);
+    const lastLine = (lastCall?.[0] as string[] | undefined)?.[0];
+    expect(lastLine).toBe("@file1.md");
+  });
 });
 
 function fileGhostProvider(
@@ -951,6 +975,29 @@ function fileGhostProvider(
       return { lines: next, cursorLine, cursorCol: before.length + inserted.length };
     }),
   };
+}
+
+function exactMentionProvider() {
+  const item = { value: "@file1.md", label: "file1.md" };
+  const getSuggestions = vi.fn<JieAutocompleteProvider["getSuggestions"]>(
+    (lines: string[], cursorLine: number, cursorCol: number) => {
+      const text = (lines[cursorLine] ?? "").slice(0, cursorCol);
+      if (text.endsWith(" ")) return new Promise<null>(() => undefined);
+      return Promise.resolve<JieSuggestions | null>({ items: [item], prefix: text });
+    },
+  );
+  const applyCompletion = vi.fn<JieAutocompleteProvider["applyCompletion"]>(
+    (lines: string[], cursorLine: number, cursorCol: number, selected: { value: string }, completionPrefix: string) => {
+      const line = lines[cursorLine] ?? "";
+      const before = line.slice(0, cursorCol - completionPrefix.length);
+      const after = line.slice(cursorCol);
+      const inserted = `${selected.value} `;
+      const next = [...lines];
+      next[cursorLine] = before + inserted + after;
+      return { lines: next, cursorLine, cursorCol: before.length + inserted.length };
+    },
+  );
+  return { triggerCharacters: ["@"], getSuggestions, applyCompletion };
 }
 
 async function untilAutocomplete(editor: Editor): Promise<void> {

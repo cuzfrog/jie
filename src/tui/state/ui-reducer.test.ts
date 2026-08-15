@@ -58,6 +58,24 @@ describe("toggleToolCards", () => {
   });
 });
 
+describe("setThinkingExpanded", () => {
+  test("sets thinkingExpanded to the provided value", () => {
+    const on = reduceUiAction(INITIAL_TUI_STATE, Actions.setThinkingExpanded(true));
+    expect(on.thinkingExpanded).toBe(true);
+    const off = reduceUiAction(on, Actions.setThinkingExpanded(false));
+    expect(off.thinkingExpanded).toBe(false);
+  });
+});
+
+describe("setToolCardsExpanded", () => {
+  test("sets toolCardsExpanded to the provided value", () => {
+    const on = reduceUiAction(INITIAL_TUI_STATE, Actions.setToolCardsExpanded(true));
+    expect(on.toolCardsExpanded).toBe(true);
+    const off = reduceUiAction(on, Actions.setToolCardsExpanded(false));
+    expect(off.toolCardsExpanded).toBe(false);
+  });
+});
+
 describe("team strip cursor", () => {
   function twoAgent(): TuiState {
     return loadedTeam([
