@@ -1,6 +1,6 @@
 import type { KanbanCard } from "../../../platform";
 import { PositionalSlashCommand } from "../positional-slash-command";
-import { completeItems, hasPrefix, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
+import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
 
 const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review|handoff|toggle>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
 
@@ -68,7 +68,7 @@ export class KanbanCommand extends PositionalSlashCommand {
     const targetStatus = subcommand === "complete" ? "completed" : subcommand === "review" ? "in_review" : null;
     const hasTodos = subcommand === "toggle" ? (card: KanbanCard) => card.todos !== undefined && card.todos.length > 0 : () => true;
     const cards = context.state.kanban.board.filter((card) =>
-      hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus) && hasTodos(card),
+      card.id.toLowerCase().includes(rest.toLowerCase()) && (targetStatus === null || card.status !== targetStatus) && hasTodos(card),
     );
     const items: ReadonlyArray<SlashCompletionItem> = cards.map((card) => ({
       value: card.id,

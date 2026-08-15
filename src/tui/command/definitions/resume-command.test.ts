@@ -66,6 +66,23 @@ describe("ResumeCommand", () => {
     });
   });
 
+  test("complete filters sessions by a substring of the session id or name", async () => {
+    const { platform, execute } = makePlatform();
+    const sessions: ReadonlyArray<SessionSummary> = [
+      { sessionId: "abc-123-xyz", name: "First", messageCount: 1, lastActivity: new Date().toISOString() },
+      { sessionId: "def-456-uvw", name: "Second", messageCount: 2, lastActivity: new Date().toISOString() },
+    ];
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "listSessions") return sessions;
+      return null;
+    });
+    const context = { state: teamState(), platform };
+    const result = await command.complete("123", context);
+    expect(result).toEqual({
+      items: [{ value: "abc-123-xyz", label: "First", description: expect.stringContaining("1 msg") }],
+    });
+  });
+
   test("complete with no team loaded returns null", async () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };

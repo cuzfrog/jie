@@ -180,7 +180,7 @@ describe("KanbanCommand", () => {
     });
   });
 
-  test("complete filters subcommands by prefix", async () => {
+  test("complete filters subcommands by substring", async () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     const result = await command.complete("c", context);
@@ -222,6 +222,23 @@ describe("KanbanCommand", () => {
       items: [
         { value: "review #2", label: "#2", description: "second task" },
         { value: "review #3", label: "#3", description: "third task" },
+      ],
+    });
+  });
+
+  test("complete remove filters cards by a substring of the card id", async () => {
+    const { platform } = makePlatform();
+    const board: ReadonlyArray<KanbanCard> = [
+      { id: "#12", content: "twelve", status: "pending" },
+      { id: "#21", content: "twenty-one", status: "pending" },
+      { id: "#33", content: "thirty-three", status: "pending" },
+    ];
+    const context = { state: makeTuiState({ kanbanBoard: board }), platform };
+    const result = await command.complete("remove 1", context);
+    expect(result).toEqual({
+      items: [
+        { value: "remove #12", label: "#12", description: "twelve" },
+        { value: "remove #21", label: "#21", description: "twenty-one" },
       ],
     });
   });

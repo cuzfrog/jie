@@ -83,10 +83,10 @@ describe("ModelAliasCommand", () => {
     });
   });
 
-  test("complete returns alias names", () => {
+  test("complete filters alias names by substring", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
-    expect(command.complete("l", context)).toEqual({
+    expect(command.complete("arg", context)).toEqual({
       items: [
         { value: "large", label: "large" },
       ],

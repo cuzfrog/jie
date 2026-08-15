@@ -130,7 +130,7 @@ describe("ModelFilterCommand", () => {
     });
   });
 
-  test("complete filters actions by prefix", async () => {
+  test("complete filters actions by substring", async () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
     const result = await command.complete("r", context);

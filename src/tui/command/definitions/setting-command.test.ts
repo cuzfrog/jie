@@ -78,7 +78,7 @@ describe("SettingCommand", () => {
     });
   });
 
-  test("complete filters setting names by prefix", () => {
+  test("complete filters setting names by substring", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
     expect(command.complete("thin", context)).toEqual({
@@ -97,7 +97,7 @@ describe("SettingCommand", () => {
     });
   });
 
-  test("complete filters values by prefix", () => {
+  test("complete filters values by substring", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
     expect(command.complete("thinking-block-expand of", context)).toEqual({

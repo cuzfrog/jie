@@ -1,5 +1,5 @@
 import { PositionalSlashCommand } from "../positional-slash-command";
-import { completeItems, hasPrefix, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
+import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
 
 const META = { name: "resume", description: "resume a session of the loaded team", argumentHint: "<sessionId>", arguments: [{ name: "sessionId" }] } as const;
 
@@ -25,7 +25,10 @@ export class ResumeCommand extends PositionalSlashCommand {
       label: session.name ?? session.sessionId,
       description: `${session.messageCount} msg · ${relativeAge(session.lastActivity)}`,
     }));
-    return completeItems(items, argumentText.trim(), (item, prefix) => hasPrefix(item.value, prefix) || hasPrefix(item.label, prefix));
+    return completeItems(items, argumentText.trim(), (item, prefix) => {
+      const needle = prefix.toLowerCase();
+      return item.value.toLowerCase().includes(needle) || item.label.toLowerCase().includes(needle);
+    });
   }
 }
 

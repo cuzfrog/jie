@@ -71,10 +71,10 @@ describe("NotificationCommand", () => {
     });
   });
 
-  test("complete filters values by prefix", async () => {
+  test("complete filters values by substring", async () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
-    const result = await command.complete("sound e", context);
+    const result = await command.complete("sound n", context);
     expect(result).toEqual({
       items: [{ value: "sound enable", label: "enable" }],
     });
