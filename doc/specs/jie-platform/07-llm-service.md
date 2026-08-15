@@ -20,7 +20,7 @@ interface LlmService {
 }
 ```
 
-The `Model` is data the caller supplies — the service owns no model selection policy. Credentials are the service's job: it resolves the provider's API key at call time via `ModelRegistry.getApiKey` ("Credentials Resolution" in `10-configuration.md`) and never accepts a key from callers.
+The `Model` is data the caller supplies — the service owns no model selection policy. Credentials are the service's job: it resolves the provider's auth at call time via `ModelRegistry.getAuth` ("Credentials Resolution" in `10-configuration.md`) and never accepts a key from callers.
 
 ## Behavior
 

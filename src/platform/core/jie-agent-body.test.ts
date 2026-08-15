@@ -11,7 +11,8 @@ import {
   type PrepareNextTurnContext,
   type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, AssistantMessageEventStream, AuthResult, Context, Model } from "@earendil-works/pi-ai";
+import type { StreamFn } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
@@ -259,7 +260,8 @@ interface MakeBodyOverrides {
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
   compactor?: Compactor;
-  getApiKey?: (provider: string) => string | undefined;
+  getAuth?: (provider: string) => Promise<AuthResult | undefined>;
+  streamFn?: StreamFn;
   logDir?: string | null;
 }
 
@@ -356,7 +358,8 @@ function makeHarness(): Harness {
       systemContextBlock: overrides.systemContextBlock ?? "",
       hookRunner,
       cwd: "/work",
-      getApiKey: overrides.getApiKey ?? (() => undefined),
+      getAuth: overrides.getAuth ?? (() => Promise.resolve(undefined)),
+      streamFn: overrides.streamFn,
       resolveModel,
       createAgent: overrides.factory ?? cap.factory,
       compactor: overrides.compactor ?? noopCompactor,
@@ -537,6 +540,61 @@ describe("JieAgentBody — agent configuration", () => {
     h.makeBody();
     expect(h.cap.capturedOptions?.followUpMode).toBe("one-at-a-time");
     expect(h.cap.capturedOptions?.steeringMode).toBe("one-at-a-time");
+  });
+});
+
+describe("JieAgentBody — auth resolution", () => {
+  function makeStream(): AssistantMessageEventStream {
+    return undefined as unknown as AssistantMessageEventStream;
+  }
+
+  test("merges resolved auth apiKey and headers into stream options", async () => {
+    const h = makeHarness();
+    const mockStreamFn = vi.fn<StreamFn>(() => makeStream());
+    const getAuth = vi.fn(async () => ({ auth: { apiKey: "key", headers: { Authorization: "Bearer key" } } }));
+    h.makeBody({ getAuth, streamFn: mockStreamFn });
+    const model = makeModel("proxy", "claude");
+    const context: Context = { systemPrompt: "", messages: [], tools: [] };
+    await h.cap.capturedOptions?.streamFn(model, context, {});
+    expect(getAuth).toHaveBeenCalledWith("proxy");
+    expect(mockStreamFn).toHaveBeenCalledWith(model, context, { apiKey: "key", headers: { Authorization: "Bearer key" } });
+  });
+
+  test("passes options through unchanged when auth is unresolved", async () => {
+    const h = makeHarness();
+    const mockStreamFn = vi.fn<StreamFn>(() => makeStream());
+    h.makeBody({ getAuth: async () => undefined, streamFn: mockStreamFn });
+    const model = makeModel("proxy", "claude");
+    const context: Context = { systemPrompt: "", messages: [], tools: [] };
+    await h.cap.capturedOptions?.streamFn(model, context, { apiKey: "explicit" });
+    expect(mockStreamFn).toHaveBeenCalledWith(model, context, { apiKey: "explicit" });
+  });
+
+  test("explicit options win over resolved auth", async () => {
+    const h = makeHarness();
+    const mockStreamFn = vi.fn<StreamFn>(() => makeStream());
+    const getAuth = vi.fn(async () => ({ auth: { apiKey: "resolved", headers: { Authorization: "Bearer resolved", "x-provider": "v" } } }));
+    h.makeBody({ getAuth, streamFn: mockStreamFn });
+    const model = makeModel("proxy", "claude");
+    const context: Context = { systemPrompt: "", messages: [], tools: [] };
+    await h.cap.capturedOptions?.streamFn(model, context, { apiKey: "explicit", headers: { Authorization: "Bearer explicit" } });
+    expect(mockStreamFn).toHaveBeenCalledWith(model, context, {
+      apiKey: "explicit",
+      headers: { Authorization: "Bearer explicit", "x-provider": "v" },
+    });
+  });
+
+  test("encodes auth resolution failure as a stream error", async () => {
+    const h = makeHarness();
+    const mockStreamFn = vi.fn<StreamFn>(() => makeStream());
+    h.makeBody({ getAuth: async () => Promise.reject(new Error("token refresh failed")), streamFn: mockStreamFn });
+    const model = makeModel("proxy", "claude");
+    const context: Context = { systemPrompt: "", messages: [], tools: [] };
+    const stream = await h.cap.capturedOptions?.streamFn(model, context, {});
+    expect(mockStreamFn).not.toHaveBeenCalled();
+    const message = await stream?.result();
+    expect(message?.stopReason).toBe("error");
+    expect(message?.errorMessage).toContain("token refresh failed");
   });
 });
 

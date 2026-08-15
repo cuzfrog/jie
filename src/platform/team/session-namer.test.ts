@@ -124,7 +124,7 @@ function makeSessionNamer() {
     listProviders: vi.fn(),
     resolve: vi.fn(),
     listModels: vi.fn(),
-    getApiKey: vi.fn(),
+    getAuth: vi.fn(() => Promise.resolve(undefined)),
     reload: vi.fn(),
   });
   const namer = new SessionNamerImpl(eventManager, llmService, teamManager, transcriptStore, modelRegistry);

@@ -11,7 +11,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   listProviders: vi.fn(),
   resolve: vi.fn(),
   listModels: vi.fn(),
-  getApiKey: vi.fn(),
+  getAuth: vi.fn(() => Promise.resolve(undefined)),
   reload: vi.fn(),
 });
 const settingsStore = vi.mocked<SettingsStore>({

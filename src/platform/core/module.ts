@@ -23,7 +23,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
         systemContextBlock: cradle.loadSystemContextBlock(),
         hookRunner: cradle.hookRunner,
         cwd: cradle.cwd,
-        getApiKey: (provider) => cradle.modelRegistry.getApiKey(provider),
+        getAuth: (provider) => cradle.modelRegistry.getAuth(provider),
         resolveModel: (provider, modelId) => cradle.modelRegistry.resolve(provider, modelId),
         compactor: cradle.compactor,
         memoryManager: cradle.memoryManager,

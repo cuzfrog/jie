@@ -1,4 +1,4 @@
-import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, AuthResult, Model } from "@earendil-works/pi-ai";
 import { LlmServiceImpl, type LlmService, type LlmTaskInput } from "./llm-service";
 import type { ModelRegistry } from "../config";
 
@@ -7,7 +7,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   listProviders: vi.fn(),
   resolve: vi.fn(),
   listModels: vi.fn(),
-  getApiKey: vi.fn(() => "key-1"),
+  getAuth: vi.fn(),
   reload: vi.fn(),
 });
 
@@ -49,27 +49,31 @@ function makeInput(overrides: Partial<LlmTaskInput> = {}): LlmTaskInput {
   };
 }
 
-const call = vi.fn(async (_input: LlmTaskInput, _apiKey: string | undefined, _signal: AbortSignal | undefined): Promise<AssistantMessage> => makeResponse("ok"));
+const call = vi.fn(
+  async (_input: LlmTaskInput, _auth: AuthResult | undefined, _signal: AbortSignal | undefined): Promise<AssistantMessage> => makeResponse("ok"),
+);
 
 function makeService(): LlmService {
   return new LlmServiceImpl(modelRegistry, call);
 }
 
 beforeEach(() => {
-  modelRegistry.getApiKey.mockReturnValue("key-1");
-  call.mockImplementation(async (_input: LlmTaskInput, _apiKey: string | undefined, _signal: AbortSignal | undefined): Promise<AssistantMessage> => makeResponse("ok"));
+  modelRegistry.getAuth.mockResolvedValue({ auth: { apiKey: "key-1" } });
+  call.mockImplementation(
+    async (_input: LlmTaskInput, _auth: AuthResult | undefined, _signal: AbortSignal | undefined): Promise<AssistantMessage> => makeResponse("ok"),
+  );
 });
 
 describe("LlmServiceImpl.complete", () => {
-  test("resolves the api key and returns the content text", async () => {
+  test("resolves auth and passes it to the call", async () => {
     const service = makeService();
     const input = makeInput();
     const result = await service.complete(input);
     expect(result).toBe("ok");
-    expect(modelRegistry.getApiKey).toHaveBeenCalledWith("e2e");
+    expect(modelRegistry.getAuth).toHaveBeenCalledWith("e2e");
     expect(call).toHaveBeenCalledTimes(1);
     expect(call.mock.calls[0]![0]).toBe(input);
-    expect(call.mock.calls[0]![1]).toBe("key-1");
+    expect(call.mock.calls[0]![1]).toEqual({ auth: { apiKey: "key-1" } });
     expect(call.mock.calls[0]![2]).toBe(undefined);
   });
 
@@ -80,10 +84,16 @@ describe("LlmServiceImpl.complete", () => {
     expect(call.mock.calls[0]![2]).toBe(controller.signal);
   });
 
-  test("passes an absent api key through unchanged", async () => {
-    modelRegistry.getApiKey.mockReturnValue(undefined);
+  test("passes unresolved auth through unchanged", async () => {
+    modelRegistry.getAuth.mockResolvedValue(undefined);
     await makeService().complete(makeInput());
     expect(call.mock.calls[0]![1]).toBe(undefined);
+  });
+
+  test("passes resolved auth headers through to the call", async () => {
+    modelRegistry.getAuth.mockResolvedValue({ auth: { apiKey: "key-1", headers: { Authorization: "Bearer key-1" } } });
+    await makeService().complete(makeInput());
+    expect(call.mock.calls[0]![1]).toEqual({ auth: { apiKey: "key-1", headers: { Authorization: "Bearer key-1" } } });
   });
 
   test("throws with the provider error message on an error stop reason", async () => {

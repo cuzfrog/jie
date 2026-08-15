@@ -65,8 +65,6 @@ const JiePlatformErrorMessages = {
   SUBSCRIBE_REJECTS_PLATFORM_TOPIC: "subscribe cannot target a platform topic",
   TOOL_SPEC_UNRESOLVED: "Tool spec resolved no tools",
 
-  OAUTH_NOT_SUPPORTED: "OAuth credentials are not supported in v1",
-
   UNKNOWN_SESSION: "Unknown session_id",
   INVALID_SESSION_NAME: "Invalid session name",
 

@@ -2,30 +2,36 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiModelRegistry } from "./model-registry";
-import type { AuthStore } from "./auth-store";
-import { JiePlatformError } from "../jie-platform-errors";
+import { AuthStoreImpl } from "./auth-store";
 
-const authStore = vi.mocked<AuthStore>({
-  load: vi.fn(),
-  setProvider: vi.fn(),
-  removeProvider: vi.fn(),
-  clear: vi.fn(),
-});
+const ANTHROPIC_ENV_VARS = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_OAUTH_TOKEN"] as const;
 
 describe("PiModelRegistry", () => {
   let cwd: string;
   let homeDir: string;
   let homeJieDir: string;
   let projectJieDir: string | null;
+  let authStore: AuthStoreImpl;
+  let savedEnv: Record<string, string | undefined>;
 
   beforeEach(() => {
     cwd = mkdtempSync(join(tmpdir(), "jie-reg-cwd-"));
     homeDir = mkdtempSync(join(tmpdir(), "jie-reg-home-"));
     homeJieDir = join(homeDir, ".jie");
     projectJieDir = null;
+    authStore = new AuthStoreImpl(homeJieDir);
+    savedEnv = {};
+    for (const name of ANTHROPIC_ENV_VARS) {
+      savedEnv[name] = process.env[name];
+      delete process.env[name];
+    }
   });
 
   afterEach(() => {
+    for (const name of ANTHROPIC_ENV_VARS) {
+      if (savedEnv[name] === undefined) delete process.env[name];
+      else process.env[name] = savedEnv[name];
+    }
     rmSync(cwd, { recursive: true, force: true });
     rmSync(homeDir, { recursive: true, force: true });
   });
@@ -38,42 +44,32 @@ describe("PiModelRegistry", () => {
     expect(providers).toContain("openai");
   });
 
-  test("empty registry: getApiKey returns undefined for built-in when auth.json has no entry", () => {
-    authStore.load.mockReturnValueOnce({});
+  test("built-in without credentials: getAuth returns undefined", async () => {
     const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
-    expect(reg.getApiKey("anthropic")).toBeUndefined();
+    await expect(reg.getAuth("anthropic")).resolves.toBeUndefined();
   });
 
-  test("built-in + auth.json api_key: getApiKey returns the auth.json key", () => {
-    authStore.load.mockReturnValueOnce({ anthropic: { type: "api_key", key: "sk-from-auth" } });
+  test("built-in + auth.json api_key: getAuth resolves the stored key", async () => {
+    authStore.setProvider("anthropic", "sk-from-auth");
     const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
-    expect(reg.getApiKey("anthropic")).toBe("sk-from-auth");
+    const auth = await reg.getAuth("anthropic");
+    expect(auth?.auth.apiKey).toBe("sk-from-auth");
   });
 
-  test("built-in + auth.json oauth: getApiKey throws JiePlatformError code 'oauth_not_supported'", () => {
-    authStore.load.mockReturnValueOnce({
-      anthropic: {
-        type: "oauth",
-        access: "access-token",
-        refresh: "refresh-token",
-        expires: 0,
-      },
-    });
+  test("built-in + auth.json oauth: getAuth resolves the OAuth token", async () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(homeJieDir, "auth.json"),
+      JSON.stringify({
+        anthropic: { type: "oauth", access: "sk-ant-oat-test", refresh: "refresh-token", expires: Date.now() + 3600_000 },
+      }),
+    );
     const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
-    let caught: unknown;
-    try {
-      reg.getApiKey("anthropic");
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect(caught).toMatchObject({
-      code: "OAUTH_NOT_SUPPORTED",
-      message: expect.stringContaining("anthropic"),
-    });
+    const auth = await reg.getAuth("anthropic");
+    expect(auth?.auth.apiKey).toBe("sk-ant-oat-test");
   });
 
-  test("auth.json takes precedence over models.json for a built-in provider override", () => {
+  test("auth.json takes precedence over models.json for a built-in provider override", async () => {
     mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
       join(homeJieDir, "models.json"),
@@ -86,9 +82,28 @@ describe("PiModelRegistry", () => {
         },
       }),
     );
-    authStore.load.mockReturnValueOnce({ anthropic: { type: "api_key", key: "sk-from-auth" } });
+    authStore.setProvider("anthropic", "sk-from-auth");
     const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
-    expect(reg.getApiKey("anthropic")).toBe("sk-from-auth");
+    const auth = await reg.getAuth("anthropic");
+    expect(auth?.auth.apiKey).toBe("sk-from-auth");
+  });
+
+  test("built-in override with a models.json apiKey: getAuth resolves the configured key", async () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(homeJieDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          anthropic: {
+            baseUrl: "https://my-proxy.example.com",
+            apiKey: "sk-from-models",
+          },
+        },
+      }),
+    );
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+    const auth = await reg.getAuth("anthropic");
+    expect(auth?.auth.apiKey).toBe("sk-from-models");
   });
 
   test("custom provider: resolve() returns the registered Model", () => {
@@ -114,7 +129,7 @@ describe("PiModelRegistry", () => {
     expect(model?.baseUrl).toBe("http://localhost:1234/v1");
   });
 
-  test("custom provider with no auth.json entry: getApiKey returns the models.json key", () => {
+  test("custom provider with no auth.json entry: getAuth resolves the models.json key", async () => {
     mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
       join(homeJieDir, "models.json"),
@@ -129,12 +144,33 @@ describe("PiModelRegistry", () => {
         },
       }),
     );
-    authStore.load.mockReturnValueOnce({});
     const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
-    expect(reg.getApiKey("lm-studio")).toBe("my-key");
+    const auth = await reg.getAuth("lm-studio");
+    expect(auth?.auth.apiKey).toBe("my-key");
   });
 
-  test("custom provider with empty apiKey in models.json: getApiKey returns undefined", () => {
+  test("custom provider with a stored credential: auth.json wins over models.json", async () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(homeJieDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          "lm-studio": {
+            baseUrl: "http://localhost:1234/v1",
+            api: "openai-completions",
+            apiKey: "my-key",
+            models: [],
+          },
+        },
+      }),
+    );
+    authStore.setProvider("lm-studio", "stored-key");
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+    const auth = await reg.getAuth("lm-studio");
+    expect(auth?.auth.apiKey).toBe("stored-key");
+  });
+
+  test("custom provider with empty apiKey in models.json: getAuth returns undefined", async () => {
     mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
       join(homeJieDir, "models.json"),
@@ -149,9 +185,8 @@ describe("PiModelRegistry", () => {
         },
       }),
     );
-    authStore.load.mockReturnValueOnce({});
     const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
-    expect(reg.getApiKey("lm-studio")).toBeUndefined();
+    await expect(reg.getAuth("lm-studio")).resolves.toBeUndefined();
   });
 
   test("built-in provider: resolve() returns pi-ai's model", () => {
@@ -188,6 +223,11 @@ describe("PiModelRegistry", () => {
   test("unknown provider: resolve() returns undefined", () => {
     const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     expect(reg.resolve("not-a-real-provider", "any-model")).toBeUndefined();
+  });
+
+  test("unknown provider: getAuth returns undefined", async () => {
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+    await expect(reg.getAuth("not-a-real-provider")).resolves.toBeUndefined();
   });
 
   test("providers() lists custom before built-in", () => {
@@ -247,7 +287,7 @@ describe("PiModelRegistry", () => {
     expect(providers[0]).toEqual({ id: "lm-studio", configured: true, envKeys: [] });
   });
 
-  test("reload picks up a provider added to models.json after construction", () => {
+  test("reload picks up a provider added to models.json after construction", async () => {
     mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(join(homeJieDir, "models.json"), JSON.stringify({ providers: {} }));
     const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
@@ -268,9 +308,11 @@ describe("PiModelRegistry", () => {
     reg.reload();
     expect(reg.providers()).toContain("lm-studio");
     expect(reg.resolve("lm-studio", "qwen3.5-2b")?.baseUrl).toBe("http://localhost:1234/v1");
+    const auth = await reg.getAuth("lm-studio");
+    expect(auth?.auth.apiKey).toBe("x");
   });
 
-  test("reload drops a provider removed from models.json", () => {
+  test("reload drops a provider removed from models.json", async () => {
     mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
       join(homeJieDir, "models.json"),
@@ -286,6 +328,7 @@ describe("PiModelRegistry", () => {
     reg.reload();
     expect(reg.providers()).not.toContain("lm-studio");
     expect(reg.resolve("lm-studio", "m1")).toBeUndefined();
+    await expect(reg.getAuth("lm-studio")).resolves.toBeUndefined();
   });
 
   test("reload without a models.json falls back to built-ins only", () => {

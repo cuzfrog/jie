@@ -1,5 +1,5 @@
-import { Agent, convertToLlm, estimateTokens, type AgentEvent, type AgentLoopTurnUpdate, type AgentMessage, type AgentTool, type PrepareNextTurnContext } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import { Agent, convertToLlm, estimateTokens, type AgentEvent, type AgentLoopTurnUpdate, type AgentMessage, type AgentTool, type PrepareNextTurnContext, type StreamFn } from "@earendil-works/pi-agent-core";
+import { lazyStream, type Api, type AuthResult, type Model, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { MemoryManager } from "../memory";
 import type { ArtifactStore, TranscriptStore } from "../storage";
@@ -32,8 +32,9 @@ interface AgentBodyDeps {
   readonly systemContextBlock: string;
   readonly hookRunner: HookRunner;
   readonly cwd: string;
-  getApiKey(provider: string): Promise<string | undefined> | string | undefined;
+  getAuth(provider: string): Promise<AuthResult | undefined>;
   resolveModel(provider: string, modelId: string): Model<Api> | undefined;
+  readonly streamFn?: StreamFn;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
   readonly compactor: Compactor;
   readonly memoryManager: MemoryManager;
@@ -163,10 +164,10 @@ export class JieAgentBody implements AgentBody {
       sender: this.sender,
     });
     const createAgent = deps.createAgent ?? defaultAgentFactory;
+    const streamFn = deps.streamFn ?? streamSimple;
     this.agent = createAgent({
       sessionId: this.sessionId,
-      getApiKey: deps.getApiKey,
-      streamFn: streamSimple,
+      streamFn: withResolvedAuth(streamFn, (provider) => deps.getAuth(provider)),
       convertToLlm,
       transformContext: async (messages: AgentMessage[]) => {
         const stripped = stripThinkingDurations(messages);
@@ -475,6 +476,31 @@ function stripThinkingDurations(messages: AgentMessage[]): AgentMessage[] {
     if (!changed) return message;
     return { ...message, content };
   });
+}
+
+function withResolvedAuth(streamFn: StreamFn, getAuth: (provider: string) => Promise<AuthResult | undefined>): StreamFn {
+  return async (model, context, options) => {
+    let auth: AuthResult | undefined;
+    try {
+      auth = await getAuth(model.provider);
+    } catch (error) {
+      return lazyStream(model, async () => {
+        throw error;
+      });
+    }
+    return streamFn(model, context, applyResolvedAuth(options, auth));
+  };
+}
+
+function applyResolvedAuth(options: SimpleStreamOptions | undefined, auth: AuthResult | undefined): SimpleStreamOptions | undefined {
+  if (auth === undefined) return options;
+  const { apiKey, headers } = auth.auth;
+  if (apiKey === undefined && headers === undefined) return options;
+  return {
+    ...options,
+    apiKey: options?.apiKey ?? apiKey,
+    headers: headers === undefined ? options?.headers : { ...headers, ...(options?.headers ?? {}) },
+  };
 }
 
 function adaptAllTools(

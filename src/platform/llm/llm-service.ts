@@ -1,4 +1,4 @@
-import { contentText, retryAssistantCall, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
+import { contentText, retryAssistantCall, uuidv7, type Api, type AssistantMessage, type AuthResult, type Model } from "@earendil-works/pi-ai";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import type { ModelRegistry } from "../config";
 
@@ -14,7 +14,7 @@ export interface LlmService {
   complete(input: LlmTaskInput): Promise<string>;
 }
 
-type LlmCallFn = (input: LlmTaskInput, apiKey: string | undefined, signal: AbortSignal | undefined) => Promise<AssistantMessage>;
+type LlmCallFn = (input: LlmTaskInput, auth: AuthResult | undefined, signal: AbortSignal | undefined) => Promise<AssistantMessage>;
 
 export class LlmServiceImpl implements LlmService {
   private readonly modelRegistry: ModelRegistry;
@@ -26,13 +26,13 @@ export class LlmServiceImpl implements LlmService {
   }
 
   async complete(input: LlmTaskInput): Promise<string> {
-    const apiKey = this.modelRegistry.getApiKey(input.model.provider);
-    const response = await this.call(input, apiKey, input.signal);
+    const auth = await this.modelRegistry.getAuth(input.model.provider);
+    const response = await this.call(input, auth, input.signal);
     return responseToText(response);
   }
 }
 
-function callCompleteSimple(input: LlmTaskInput, apiKey: string | undefined, signal: AbortSignal | undefined): Promise<AssistantMessage> {
+function callCompleteSimple(input: LlmTaskInput, auth: AuthResult | undefined, signal: AbortSignal | undefined): Promise<AssistantMessage> {
   return retryAssistantCall(async (): Promise<AssistantMessage> => {
     return completeSimple(
       input.model,
@@ -42,7 +42,8 @@ function callCompleteSimple(input: LlmTaskInput, apiKey: string | undefined, sig
       },
       {
         maxTokens: input.maxTokens,
-        apiKey,
+        apiKey: auth?.auth.apiKey,
+        headers: auth?.auth.headers,
         signal,
         cacheRetention: "none",
         sessionId: uuidv7(),
