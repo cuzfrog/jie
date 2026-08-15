@@ -1,37 +1,39 @@
-import { formatQueueIndicator } from "./queue-indicator";
+import { QueueIndicatorImpl } from "./queue-indicator";
+
+const queueIndicator = new QueueIndicatorImpl();
 
 function entry(text: string): { text: string; source: "user" | "peer" } {
   return { text, source: "user" };
 }
 
-describe("formatQueueIndicator", () => {
+describe("QueueIndicatorImpl", () => {
   test("returns null for empty or null queue", () => {
-    expect(formatQueueIndicator(null)).toBeNull();
-    expect(formatQueueIndicator([])).toBeNull();
+    expect(queueIndicator.format(null)).toBeNull();
+    expect(queueIndicator.format([])).toBeNull();
   });
 
   test("singular form for one prompt", () => {
-    expect(formatQueueIndicator([entry("hi")])).toBe("1 prompt queued  > hi");
+    expect(queueIndicator.format([entry("hi")])).toBe("1 prompt queued  > hi");
   });
 
   test("plural form for multiple prompts", () => {
-    expect(formatQueueIndicator([entry("a"), entry("b")])).toBe("2 prompts queued  > a");
+    expect(queueIndicator.format([entry("a"), entry("b")])).toBe("2 prompts queued  > a");
   });
 
   test("flattens newlines so the indicator stays on one line", () => {
-    expect(formatQueueIndicator([entry("first\nsecond\r\nthird")])).toBe("1 prompt queued  > first second third");
+    expect(queueIndicator.format([entry("first\nsecond\r\nthird")])).toBe("1 prompt queued  > first second third");
   });
 
   test("truncates long previews", () => {
     const long = "x".repeat(200);
-    const out = formatQueueIndicator([entry(long)]);
+    const out = queueIndicator.format([entry(long)]);
     expect(out).not.toBeNull();
     expect(out?.endsWith("…")).toBe(true);
   });
 
   test("preview slice is exactly QUEUE_PREVIEW_MAX_CHARS wide", () => {
     const long = "x".repeat(200);
-    const out = formatQueueIndicator([entry(long)]);
+    const out = queueIndicator.format([entry(long)]);
     expect(out).not.toBeNull();
     const previewStart = out!.indexOf("> ") + 2;
     const previewEnd = out!.length - 1;
@@ -43,7 +45,7 @@ describe("formatQueueIndicator", () => {
   test("does not split a surrogate pair at the cap boundary", () => {
     const filler = "x".repeat(39);
     const text = `${filler}\u{1F434}tail`;
-    const out = formatQueueIndicator([entry(text)]);
+    const out = queueIndicator.format([entry(text)]);
     expect(out).not.toBeNull();
     expect(out).toContain("\u{1F434}");
     const codeUnits = out!.split("").filter((ch) => ch !== " " && ch !== ">").join("");

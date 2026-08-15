@@ -3,12 +3,13 @@ import { TuiState, type AgentUiState, type StateStore } from "../../state";
 import { type TuiComponent } from "../..";
 import { type ModelSegment, type TokenUsage } from "../elements";
 import { style } from "../themes";
-import { formatQueueIndicator } from "./queue-indicator";
+import { type QueueIndicator } from "./queue-indicator";
 
 export class Footer implements TuiComponent {
   private readonly stateStore: StateStore;
   private readonly tokenUsage: TokenUsage;
   private readonly modelSegment: ModelSegment;
+  private readonly queueIndicator: QueueIndicator;
   private focused: AgentUiState | null = null;
   private gitBranch: string | null = null;
   private gitDirty = false;
@@ -19,10 +20,11 @@ export class Footer implements TuiComponent {
   private kanbanView: TuiState["kanban"]["view"] = "hidden";
   private editorCursorAtStart = false;
 
-  constructor(stateStore: StateStore, tokenUsage: TokenUsage, modelSegment: ModelSegment) {
+  constructor(stateStore: StateStore, tokenUsage: TokenUsage, modelSegment: ModelSegment, queueIndicator: QueueIndicator) {
     this.stateStore = stateStore;
     this.tokenUsage = tokenUsage;
     this.modelSegment = modelSegment;
+    this.queueIndicator = queueIndicator;
   }
 
   update(): boolean {
@@ -61,7 +63,7 @@ export class Footer implements TuiComponent {
     const identityLine = rightAligned(identity, teamAgent, w);
     if (state.helpPanelVisible || (state.teamId !== null && (state.teamPanelVisible || state.kanban.view === "panel"))) return [identityLine];
     const stats: string[] = [this.tokenUsage.format(focused)];
-    const queue = formatQueueIndicator(focused === null ? null : focused.queue);
+    const queue = this.queueIndicator.format(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));
     if (focused !== null && focused.compactionInProgress) stats.push(style("warning")("Compacting..."));
     stats.push(footerHelpInfo(state));

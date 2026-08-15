@@ -1,13 +1,19 @@
 import { singleLine } from "../elements";
 
-export function formatQueueIndicator(queue: ReadonlyArray<{ readonly text: string }> | null | undefined): string | null {
-  if (queue === undefined || queue === null || queue.length === 0) return null;
-  const next = singleLine(queue[0]?.text ?? "");
-  const preview = truncateCodePoints(next, QUEUE_PREVIEW_MAX_CHARS);
-  const truncated = next.length > preview.length;
-  const shown = truncated ? `${preview}…` : preview;
-  const suffix = queue.length === 1 ? "prompt" : "prompts";
-  return `${queue.length} ${suffix} queued  > ${shown}`;
+export interface QueueIndicator {
+  format(queue: ReadonlyArray<{ readonly text: string }> | null | undefined): string | null;
+}
+
+export class QueueIndicatorImpl implements QueueIndicator {
+  format(queue: ReadonlyArray<{ readonly text: string }> | null | undefined): string | null {
+    if (queue === undefined || queue === null || queue.length === 0) return null;
+    const next = singleLine(queue[0]?.text ?? "");
+    const preview = truncateCodePoints(next, QUEUE_PREVIEW_MAX_CHARS);
+    const truncated = next.length > preview.length;
+    const shown = truncated ? `${preview}…` : preview;
+    const suffix = queue.length === 1 ? "prompt" : "prompts";
+    return `${queue.length} ${suffix} queued  > ${shown}`;
+  }
 }
 
 const QUEUE_PREVIEW_MAX_CHARS = 40;
