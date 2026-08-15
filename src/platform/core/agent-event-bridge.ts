@@ -8,6 +8,10 @@ import type { UserIngressMessage } from "../types";
 import type { PromptQueue } from "./prompt-queue";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 
+const TRUNCATION_MESSAGE = "Response truncated: the model spent the entire maxTokens budget before producing output (stopReason: length). Consider raising maxTokens for this model.";
+const TRUNCATION_CONTINUATION_PROMPT = "Your previous response was cut off by the output token limit before producing any answer. Do not re-reason at length; answer concisely now.";
+const MAX_LENGTH_CONTINUATIONS = 1;
+
 export interface AgentEventBridge {
   handleEvent(event: PiAgentEvent): void;
 }
@@ -32,6 +36,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
   private readonly onRunEnd: () => void;
   private readonly stream: StreamPublisher;
   private turnStartPending = false;
+  private lengthContinuations = 0;
 
   constructor(deps: AgentEventBridgeDeps) {
     this.eventManager = deps.eventManager;
@@ -60,6 +65,12 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
         this.eventManager.publish(Events.agentIdle(this.sender, final.stopReason));
         if (final.isError && final.errorMessage !== null) {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
+        } else if (isBudgetTruncated(final.message, final.stopReason)) {
+          this.eventManager.publish(Events.systemError({ kind: "system" }, TRUNCATION_MESSAGE));
+          if (this.lengthContinuations < MAX_LENGTH_CONTINUATIONS) {
+            this.lengthContinuations += 1;
+            this.promptQueue.steer({ role: "user", content: TRUNCATION_CONTINUATION_PROMPT, timestamp: Date.now() });
+          }
         }
         void this.hookRunner.stop({ identity: this.hookIdentity });
         this.promptQueue.publishQueueUpdate();
@@ -113,6 +124,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       this.eventManager.publish(Events.agentTurnContinue(this.sender));
       return;
     }
+    if (isUserIngressMessage(message)) this.lengthContinuations = 0;
     this.promptQueue.consumeChained(message);
     this.eventManager.publish(Events.agentTurnStart(this.sender, userDisplayText(message)));
   }
@@ -127,7 +139,7 @@ function isUserIngressMessage(message: AgentMessage): message is UserIngressMess
   return message.role === "user" && "displayText" in message;
 }
 
-function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {
+function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null; message: AssistantMessage | undefined } {
   const candidates: AgentMessage[] = event.type === "agent_end" ? event.messages : [event.message];
   let lastAssistant: AssistantMessage | undefined;
   for (let i = candidates.length - 1; i >= 0; i -= 1) {
@@ -139,7 +151,21 @@ function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }>
   }
   const stopReason: StopReason = lastAssistant?.stopReason ?? "stop";
   const isError = stopReason === "error" || stopReason === "aborted";
-  return { stopReason, isError, errorMessage: lastAssistant?.errorMessage ?? null };
+  return { stopReason, isError, errorMessage: lastAssistant?.errorMessage ?? null, message: lastAssistant };
+}
+
+function isBudgetTruncated(assistant: AssistantMessage | undefined, stopReason: StopReason): boolean {
+  if (stopReason !== "length" || assistant === undefined) return false;
+  if (hasToolCall(assistant.content)) return false;
+  return !hasMeaningfulText(assistant.content);
+}
+
+function hasToolCall(content: AssistantMessage["content"]): boolean {
+  return content.some((part) => part.type === "toolCall");
+}
+
+function hasMeaningfulText(content: AssistantMessage["content"]): boolean {
+  return content.some((part) => part.type === "text" && part.text.trim() !== "");
 }
 
 function withThinkingDurations(message: AssistantMessage, thinkingDurations: readonly number[]): AssistantMessage {

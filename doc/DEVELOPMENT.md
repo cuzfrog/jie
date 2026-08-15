@@ -16,6 +16,7 @@ The first interactive `jie` run offers to install the bundled manifest into `~/.
 
 ## Local LLM setup (optional)
 For manual exploration with a real backend, configure `.jie/models.json` and run `jie -p "..."`.
+Reasoning models count reasoning tokens against `maxTokens`; use `maxTokens >= 8192` for reasoning models or turns may end truncated with no output.
 
 ## Run tests
 

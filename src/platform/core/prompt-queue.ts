@@ -7,6 +7,7 @@ const DEQUEUED_PROMPT_CAP = 32;
 export interface PromptDispatcher {
   prompt(message: AgentMessage): void;
   followUp(message: AgentMessage): void;
+  steer(message: AgentMessage): void;
   isStreaming(): boolean;
 }
 
@@ -21,6 +22,7 @@ export interface PromptQueue {
   drainForFollowUp(isError: boolean): void;
   consumeChained(message: AgentMessage): void;
   publishQueueUpdate(): void;
+  steer(message: AgentMessage): void;
   isEmpty(): boolean;
   stop(): void;
 }
@@ -127,6 +129,10 @@ export class PromptQueueImpl implements PromptQueue {
       this.chained.splice(index, 1);
       this.publishQueueUpdate();
     }
+  }
+
+  steer(message: AgentMessage): void {
+    this.dispatcher.steer(message);
   }
 
   publishQueueUpdate(): void {

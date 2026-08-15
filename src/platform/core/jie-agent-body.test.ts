@@ -277,6 +277,7 @@ interface Harness {
   state: FakeAgentState;
   prompt: ReturnType<typeof vi.fn>;
   followUp: ReturnType<typeof vi.fn>;
+  steer: ReturnType<typeof vi.fn>;
   abort: ReturnType<typeof vi.fn>;
   continue: ReturnType<typeof vi.fn>;
   hasQueuedMessages: ReturnType<typeof vi.fn>;
@@ -388,6 +389,7 @@ function makeHarness(): Harness {
     state: cap.fake.state,
     prompt: cap.fake.prompt,
     followUp: cap.fake.followUp,
+    steer: cap.fake.steer,
     abort: cap.fake.abort,
     continue: cap.fake.continue,
     hasQueuedMessages: cap.fake.hasQueuedMessages,
@@ -1291,6 +1293,25 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     await body.start();
     expect(idleEvents).toHaveLength(0);
     expect(turnStartEvents).toHaveLength(0);
+    body.stop();
+  });
+
+  test("the prompt queue dispatcher routes steer to agent.steer and the run continues when the agent has queued messages", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.hasQueuedMessages.mockReturnValue(true);
+    h.fireEvent({
+      type: "agent_end",
+      messages: [makeAssistantMessage({ stopReason: "length", content: [] })],
+    });
+    expect(h.steer).toHaveBeenCalledTimes(1);
+    expect(h.steer.mock.calls[0]![0]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("cut off"),
+    });
+    h.settleIdle();
+    await flush();
+    expect(h.continue).toHaveBeenCalledTimes(1);
     body.stop();
   });
 

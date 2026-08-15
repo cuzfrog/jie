@@ -96,6 +96,7 @@ export class JieAgentBody implements AgentBody {
       dispatcher: {
         prompt: (message) => void this.agent.prompt(message),
         followUp: (message) => this.agent.followUp(message),
+        steer: (message) => this.agent.steer(message),
         isStreaming: () => this.agent.state.isStreaming,
       },
       eventManager: deps.eventManager,
