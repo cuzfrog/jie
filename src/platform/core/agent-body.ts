@@ -27,6 +27,7 @@ export interface AgentBody {
   readonly identity: AgentInfo;
   restore(): Promise<ReadonlyArray<AgentMessage>>;
   messages(): ReadonlyArray<AgentMessage>;
+  displayMessages(): ReadonlyArray<AgentMessage>;
   start(): Promise<void>;
   stop(): void;
   compact(): Promise<void>;

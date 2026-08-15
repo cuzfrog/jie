@@ -333,7 +333,7 @@ export class TeamManagerImpl implements TeamManager {
         detail: `team '${id}' has no agent marked as leader`,
       });
     }
-    const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: b.messages() }));
+    const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: b.displayMessages() }));
     const sessionId = this.sessionIds.get(id) ?? null;
     const sessionName = sessionId === null ? null : this.transcriptStore.sessionName(sessionId);
     const kanbanCards = sessionId === null ? [] : this.kanbanStore.load(id, sessionId);

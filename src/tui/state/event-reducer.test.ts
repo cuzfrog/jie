@@ -303,9 +303,9 @@ describe("reduceTurnStart", () => {
   test("opens an empty turn so stream chunks after a prompt-less turn.start are captured", () => {
     const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, null));
     const agent = state.agents.get("my-team:general-1");
-    expect(agent?.currentTurn).toEqual({ userPrompt: "", cards: [], blocks: [], streamId: null, seq: 0 });
+    expect(agent?.currentTurn).toEqual({ userPrompt: "", entries: [], streamId: null, seq: 0 });
     const state2 = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "hello"));
-    expect(state2.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([{ kind: "text", text: "hello" }]);
+    expect(state2.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([{ kind: "text", text: "hello" }]);
   });
 
   test("creates the turn with the event's prompt", () => {
@@ -353,9 +353,9 @@ describe("reduceTurnStart", () => {
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.history.map((turn) => turn.userPrompt)).toEqual(["P1", "P2"]);
     expect(agent?.currentTurn?.userPrompt).toBe("P3");
-    expect(agent?.history[0]?.blocks).toEqual([{ kind: "text", text: "resp1" }]);
-    expect(agent?.history[1]?.blocks).toEqual([{ kind: "text", text: "resp2" }]);
-    expect(agent?.currentTurn?.blocks).toEqual([{ kind: "text", text: "resp3" }]);
+    expect(agent?.history[0]?.entries).toEqual([{ kind: "text", text: "resp1" }]);
+    expect(agent?.history[1]?.entries).toEqual([{ kind: "text", text: "resp2" }]);
+    expect(agent?.currentTurn?.entries).toEqual([{ kind: "text", text: "resp3" }]);
   });
 
   test("rotating a populated turn on the next turn.start assigns the following seq", () => {
@@ -380,14 +380,19 @@ describe("reduceTurnStart", () => {
     expect(agent?.currentTurn?.userPrompt).toBe("do work");
     expect(agent?.currentTurn?.seq).toBe(0);
     expect(state.nextEntrySeq).toBe(1);
-    expect(agent?.currentTurn?.blocks).toEqual([{ kind: "thinking", text: "ponder", durationMs: 300 }]);
-    expect(agent?.currentTurn?.cards.length).toBe(1);
+    expect(agent?.currentTurn?.entries).toEqual([
+      { kind: "thinking", text: "ponder", durationMs: 300 },
+      { kind: "toolResult", callId: "c1", name: "bash", input: "ls", inputTruncated: false, output: "out", outputTruncated: false, durationMs: 10, error: null, details: null },
+    ]);
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 0, "thinking", "more"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 2, 1, [500]));
     agent = state.agents.get("my-team:general-1");
-    expect(agent?.currentTurn?.blocks.length).toBe(2);
-    expect(agent?.currentTurn?.blocks[0]?.durationMs).toBe(300);
-    expect(agent?.currentTurn?.blocks[1]?.durationMs).toBe(500);
+    expect(agent?.currentTurn?.entries.length).toBe(3);
+    const thinkingEntries = agent?.currentTurn?.entries.filter((e) => e.kind === "thinking");
+    expect(thinkingEntries).toEqual([
+      { kind: "thinking", text: "ponder", durationMs: 300 },
+      { kind: "thinking", text: "more", durationMs: 500 },
+    ]);
   });
 
   test("a turn.continue clears the error banner and the interrupted marker", () => {
@@ -405,9 +410,11 @@ describe("reduceTurnStart", () => {
   test("records tool calls after a prompt-less turn.start", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, null));
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
-    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.entries[0];
     expect(card?.kind).toBe("toolCall");
-    expect(card?.name).toBe("bash");
+    if (card?.kind === "toolCall") {
+      expect(card.name).toBe("bash");
+    }
   });
 
   test("rejects events from a foreign team (cross-team guard)", () => {
@@ -450,7 +457,7 @@ describe("reduceIdle", () => {
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.status).toBe("idle");
     expect(agent?.history.length).toBe(0);
-    expect(agent?.currentTurn?.blocks).toEqual([{ kind: "text", text: "answer" }]);
+    expect(agent?.currentTurn?.entries).toEqual([{ kind: "text", text: "answer" }]);
   });
 
   test("rejects idle events from a foreign team", () => {
@@ -703,7 +710,7 @@ describe("reduceStreamChunk", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "Hello "));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "world"));
     const agent = state.agents.get("my-team:general-1");
-    expect(agent?.currentTurn?.blocks).toEqual([
+    expect(agent?.currentTurn?.entries).toEqual([
       { kind: "text", text: "Hello world" },
     ]);
   });
@@ -714,8 +721,8 @@ describe("reduceStreamChunk", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "world"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 3, "thinking", "I think"));
     const agent = state.agents.get("my-team:general-1");
-    expect(agent?.currentTurn?.blocks.length).toBe(2);
-    expect(agent?.currentTurn?.blocks[1]).toEqual({ kind: "thinking", text: "I think" });
+    expect(agent?.currentTurn?.entries.length).toBe(2);
+    expect(agent?.currentTurn?.entries[1]).toEqual({ kind: "thinking", text: "I think" });
   });
 
   test("opens a new block when stream_id changes", () => {
@@ -724,8 +731,9 @@ describe("reduceStreamChunk", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "turn"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 1, "text", "second"));
     const agent = state.agents.get("my-team:general-1");
-    expect(agent?.currentTurn?.blocks.length).toBe(2);
-    expect(agent?.currentTurn?.blocks[1]?.text).toBe("second");
+    expect(agent?.currentTurn?.entries.length).toBe(2);
+    const second = agent?.currentTurn?.entries[1];
+    expect(second?.kind === "text" ? second.text : null).toBe("second");
   });
 
   test("rejects events from a foreign team", () => {
@@ -742,7 +750,7 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "ponder"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 2, [350]));
-    expect(state.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
       { kind: "thinking", text: "ponder", durationMs: 350 },
       { kind: "text", text: "answer" },
     ]);
@@ -754,7 +762,7 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "mid"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, [100, 250]));
-    const blocks = state.agents.get("my-team:general-1")?.currentTurn?.blocks;
+    const blocks = state.agents.get("my-team:general-1")?.currentTurn?.entries;
     expect(blocks?.[0]).toEqual({ kind: "thinking", text: "a", durationMs: 100 });
     expect(blocks?.[2]).toEqual({ kind: "thinking", text: "b", durationMs: 250 });
   });
@@ -763,7 +771,7 @@ describe("reduceStreamEnd", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "a"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, [100, 250]));
-    expect(state.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
       { kind: "thinking", text: "a", durationMs: 100 },
     ]);
   });
@@ -774,7 +782,7 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "mid"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, [100]));
-    expect(state.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
       { kind: "thinking", text: "a", durationMs: 100 },
       { kind: "text", text: "mid" },
       { kind: "thinking", text: "b" },
@@ -810,8 +818,8 @@ describe("reduceToolCall + reduceToolResult", () => {
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
     state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 12, null));
     const agent = state.agents.get("my-team:general-1");
-    expect(agent?.currentTurn?.cards.length).toBe(1);
-    const card = agent?.currentTurn?.cards[0];
+    expect(agent?.currentTurn?.entries.length).toBe(1);
+    const card = agent?.currentTurn?.entries[0];
     expect(card?.kind).toBe("toolResult");
     if (card?.kind === "toolResult") {
       expect(card.callId).toBe("c1");
@@ -822,12 +830,26 @@ describe("reduceToolCall + reduceToolResult", () => {
     }
   });
 
+  test("a duplicate tool.call with the same call id is ignored", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 12, null));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.currentTurn?.entries.length).toBe(1);
+    const card = agent?.currentTurn?.entries[0];
+    if (card?.kind === "toolResult") {
+      expect(card.input).toBe("ls");
+      expect(card.output).toBe("out");
+    }
+  });
+
   test("unwraps the platform result envelope so the card shows the tool content text", () => {
     let state = promptedState();
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
     const envelope = JSON.stringify({ content: "exit_code: 0", details: { exitCode: 0 }, terminate: false });
     state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", envelope, 9, null));
-    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.entries[0];
     if (card?.kind === "toolResult") {
       expect(card.output).toBe("exit_code: 0");
     }
@@ -837,7 +859,7 @@ describe("reduceToolCall + reduceToolResult", () => {
     let state = promptedState();
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
     state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "not json at all", 9, null));
-    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.entries[0];
     if (card?.kind === "toolResult") {
       expect(card.output).toBe("not json at all");
     }
@@ -845,17 +867,17 @@ describe("reduceToolCall + reduceToolResult", () => {
 
   test("a tool.result with no matching tool.call is rejected (no phantom card)", () => {
     let state = promptedState();
-    const before = state.agents.get("my-team:general-1")?.currentTurn?.cards.length ?? 0;
+    const before = state.agents.get("my-team:general-1")?.currentTurn?.entries.length ?? 0;
     const after = reduce(state, Events.agentToolResult(TOOL_SENDER, "c2", "bash", "out", 5, null));
     expect(after).toBe(state);
-    expect(after.agents.get("my-team:general-1")?.currentTurn?.cards.length).toBe(before);
+    expect(after.agents.get("my-team:general-1")?.currentTurn?.entries.length).toBe(before);
   });
 
   test("an error result carries the error message and nulls the output", () => {
     let state = promptedState();
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
     state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", null, 5, "boom"));
-    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.entries[0];
     if (card?.kind === "toolResult") {
       expect(card.output).toBeNull();
       expect(card.error).toBe("boom");
@@ -866,7 +888,7 @@ describe("reduceToolCall + reduceToolResult", () => {
     let state = promptedState();
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "read_file", "/tmp/missing.txt"));
     state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "read_file", null, 18, "ENOENT", null));
-    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.entries[0];
     if (card?.kind === "toolResult") {
       expect(card.input).toBe("/tmp/missing.txt");
       expect(card.inputTruncated).toBe(false);
@@ -886,7 +908,7 @@ describe("reduceToolCall + reduceToolResult", () => {
     let state = promptedState();
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "edit", "{}"));
     state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "edit", "ok", 5, null, DIFF_DETAILS));
-    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.entries[0];
     if (card?.kind === "toolResult") {
       expect(card.details).toBe(DIFF_DETAILS);
     }
@@ -896,7 +918,7 @@ describe("reduceToolCall + reduceToolResult", () => {
     let state = promptedState();
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
     state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null));
-    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.entries[0];
     if (card?.kind === "toolResult") {
       expect(card.details).toBeNull();
     }
@@ -913,7 +935,7 @@ describe("reduceToolCall + reduceToolResult", () => {
     const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "write_kanban", "Updated kanban: 3 cards, 1 in progress", 5, null, { kind: "kanban", cards }));
     expect(state2.kanban.board).toEqual(cards);
     expect(state2.kanban.cursor).toBe("#1");
-    const card = state2.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    const card = state2.agents.get("my-team:general-1")?.currentTurn?.entries[0];
     expect(card?.kind).toBe("toolResult");
     if (card?.kind === "toolResult") {
       expect(card.output).toBe("Updated kanban: 3 cards, 1 in progress");
@@ -930,7 +952,7 @@ describe("reduceToolCall + reduceToolResult", () => {
     ] as const;
     const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "write_kanban", "ok", 5, null, { kind: "kanban", cards }));
     expect(state2.kanban.board).toEqual(cards);
-    expect(state2.agents.get("my-team:general-1")?.currentTurn?.cards).toEqual([]);
+    expect(state2.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([]);
   });
 
   test("an update_kanban tool result updates the board the same way", () => {

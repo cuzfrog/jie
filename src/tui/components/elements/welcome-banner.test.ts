@@ -217,7 +217,7 @@ function stateWithHistory(): TuiState {
 }
 
 function makeTurn(): MessageTurn {
-  return { userPrompt: "q", cards: [], blocks: [], streamId: 1, seq: 0 };
+  return { userPrompt: "q", entries: [], streamId: 1, seq: 0 };
 }
 
 function stripAnsi(text: string): string {

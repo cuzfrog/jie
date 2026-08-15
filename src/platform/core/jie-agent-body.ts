@@ -63,6 +63,7 @@ export class JieAgentBody implements AgentBody {
   private readonly resolvedSkills: ReadonlyArray<Skill>;
   private readonly cleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
+  private compactedPrefix: AgentMessage[] = [];
   private started = false;
   private stopped = false;
   private loopLogger: AgentLoopLogger | null = null;
@@ -107,7 +108,13 @@ export class JieAgentBody implements AgentBody {
       conversation: {
         getMessages: () => this.agent.state.messages,
         setMessages: (messages) => {
+          const old = this.agent.state.messages;
           this.agent.state.messages = [...messages];
+          if (messages.length === 0) return;
+          const removedCount = old.length - (messages.length - 1);
+          if (removedCount > 0) {
+            this.compactedPrefix.push(...old.slice(0, removedCount));
+          }
         },
       },
       memoryManager: this.memoryManager,
@@ -230,9 +237,16 @@ export class JieAgentBody implements AgentBody {
       this.sessionId,
       this.teamId,
     );
+    const displayMessages = await this.transcriptStore.restoreDisplay(
+      this.agentKey,
+      this.sessionId,
+      this.teamId,
+    );
     if (messages.length > 0) {
       this.agent.state.messages = [...messages];
     }
+    const compactedCount = displayMessages.length - messages.length;
+    this.compactedPrefix = compactedCount > 0 ? displayMessages.slice(0, compactedCount) : [];
     this.restored = messages;
     this.loadMemoryBlock();
     return messages;
@@ -257,6 +271,10 @@ export class JieAgentBody implements AgentBody {
 
   messages(): ReadonlyArray<AgentMessage> {
     return [...this.agent.state.messages];
+  }
+
+  displayMessages(): ReadonlyArray<AgentMessage> {
+    return [...this.compactedPrefix, ...this.agent.state.messages];
   }
 
   async start(): Promise<void> {

@@ -28,7 +28,7 @@ describe("Scenario 3 — switch teams", () => {
     await sendLine(harness.stdin, "/team my-team-1");
     await waitForTeam(harness, "my-team-1");
     await submitAndWaitForAgentIdle(harness, "go", "my-team-1:general-1");
-    expect(harness.stateStore.getState().agents.get("my-team-1:general-1")?.currentTurn?.blocks.some((b) => b.text.includes("3"))).toBe(true);
+    expect(harness.stateStore.getState().agents.get("my-team-1:general-1")?.currentTurn?.entries.some((e) => (e.kind === "text" || e.kind === "thinking") && e.text.includes("3"))).toBe(true);
 
     await sendLine(harness.stdin, "/team my-team-2");
     await waitForTeam(harness, "my-team-2");
@@ -39,14 +39,14 @@ describe("Scenario 3 — switch teams", () => {
     expect(state.agents.size).toBe(1);
     expect(state.agents.has("my-team-1:general-1")).toBe(false);
     expect(state.agents.has("my-team-2:general-1")).toBe(true);
-    expect(state.agents.get("my-team-2:general-1")?.currentTurn?.blocks.some((b) => b.text.includes("story"))).toBe(true);
+    expect(state.agents.get("my-team-2:general-1")?.currentTurn?.entries.some((e) => (e.kind === "text" || e.kind === "thinking") && e.text.includes("story"))).toBe(true);
   });
 
   test("swap back to first team re-hydrates its conversation from the live agents", async () => {
     await sendLine(harness.stdin, "/team my-team-1");
     await waitForTeam(harness, "my-team-1");
     await submitAndWaitForAgentIdle(harness, "go", "my-team-1:general-1");
-    expect(harness.stateStore.getState().agents.get("my-team-1:general-1")?.currentTurn?.blocks.some((b) => b.text.includes("3"))).toBe(true);
+    expect(harness.stateStore.getState().agents.get("my-team-1:general-1")?.currentTurn?.entries.some((e) => (e.kind === "text" || e.kind === "thinking") && e.text.includes("3"))).toBe(true);
 
     await sendLine(harness.stdin, "/team my-team-2");
     await waitForTeam(harness, "my-team-2");
@@ -56,6 +56,6 @@ describe("Scenario 3 — switch teams", () => {
     await waitForTeam(harness, "my-team-1");
     const agent = harness.stateStore.getState().agents.get("my-team-1:general-1");
     expect(agent).toBeDefined();
-    expect(agent?.currentTurn?.blocks.some((b) => b.text.includes("3"))).toBe(true);
+    expect(agent?.currentTurn?.entries.some((e) => (e.kind === "text" || e.kind === "thinking") && e.text.includes("3"))).toBe(true);
   });
 });

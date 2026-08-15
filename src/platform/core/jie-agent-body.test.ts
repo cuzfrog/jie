@@ -222,16 +222,19 @@ function makeFakeTranscriptStore(): {
   transcriptStore: TranscriptStore;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
+  restoreDisplay: ReturnType<typeof vi.fn>;
 } {
   const persisted: AgentMessage[] = [];
   const persist = vi.fn(async (message: AgentMessage) => {
     persisted.push(message);
   });
   const restore = vi.fn(async () => persisted.slice());
+  const restoreDisplay = vi.fn(async () => persisted.slice());
   const transcriptStore = vi.mocked<TranscriptStore>({
     persist,
     compact: vi.fn(),
     restore,
+    restoreDisplay,
     hasSession: vi.fn(() => false),
     listSessions: vi.fn(() => []),
     listAgentKeys: vi.fn(() => []),
@@ -239,7 +242,7 @@ function makeFakeTranscriptStore(): {
     sessionName: vi.fn(() => null),
     renameSession: vi.fn(),
   });
-  return { transcriptStore, persisted, restore };
+  return { transcriptStore, persisted, restore, restoreDisplay };
 }
 
 interface MakeBodyOverrides {
@@ -265,8 +268,10 @@ interface Harness {
   skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
   hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
   memoryManager: ReturnType<typeof vi.mocked<MemoryManager>>;
+  transcriptStore: TranscriptStore;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
+  restoreDisplay: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
   state: FakeAgentState;
   prompt: ReturnType<typeof vi.fn>;
@@ -300,7 +305,7 @@ function makeFakeEventManager(): EventManager {
 
 function makeHarness(): Harness {
   const events: EventManager = makeFakeEventManager();
-  const { transcriptStore, persisted, restore } = makeFakeTranscriptStore();
+  const { transcriptStore, persisted, restore, restoreDisplay } = makeFakeTranscriptStore();
   const cap = makeFakeAgentFactory();
   const resolveModel = vi.fn<(provider: string, modelId: string) => Model<Api> | undefined>(() => undefined);
   const toolRegistry = vi.mocked<ToolRegistry>({
@@ -374,8 +379,10 @@ function makeHarness(): Harness {
     hookRunner,
     memoryManager,
     agentDispatcher,
+    transcriptStore,
     persisted,
     restore,
+    restoreDisplay,
     cap,
     state: cap.fake.state,
     prompt: cap.fake.prompt,
@@ -1040,6 +1047,56 @@ describe("JieAgentBody — messages()", () => {
     h.state.messages.push(makeAssistantMessage());
     expect(before).toHaveLength(0);
     expect(body.messages()).toHaveLength(1);
+    body.stop();
+  });
+});
+
+describe("JieAgentBody — displayMessages()", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  function makeUserMessage(content: string): AgentMessage {
+    return { role: "user", content, timestamp: 0 };
+  }
+
+  test("returns an empty array before restore", () => {
+    const body = h.makeBody();
+    expect(body.displayMessages()).toEqual([]);
+    body.stop();
+  });
+
+  test("matches messages when restoreDisplay has no extra rows", async () => {
+    const body = h.makeBody();
+    h.persisted.push(makeUserMessage("m1"), makeAssistantMessage({ content: [{ type: "text", text: "reply" }] }));
+    await body.restore();
+    expect(body.displayMessages()).toEqual(body.messages());
+    body.stop();
+  });
+
+  test("includes the compacted prefix returned by restoreDisplay", async () => {
+    const body = h.makeBody();
+    const m1 = makeUserMessage("compacted");
+    const m2 = makeAssistantMessage({ content: [{ type: "text", text: "reply" }] });
+    const m3 = makeUserMessage("tail");
+    h.restore.mockResolvedValue([m2, m3]);
+    h.restoreDisplay.mockResolvedValue([m1, m2, m3]);
+    await body.restore();
+    expect(body.messages()).toEqual([m2, m3]);
+    expect(body.displayMessages()).toEqual([m1, m2, m3]);
+    body.stop();
+  });
+
+  test("returns the snapshot as a new array, not the internal state", async () => {
+    const body = h.makeBody();
+    h.persisted.push(makeUserMessage("m1"));
+    await body.restore();
+    const first = body.displayMessages();
+    h.state.messages.push(makeAssistantMessage({ content: [{ type: "text", text: "extra" }] }));
+    expect(first).toHaveLength(1);
+    expect(body.displayMessages()).toHaveLength(2);
     body.stop();
   });
 });
@@ -1937,6 +1994,23 @@ describe("JieAgentBody — compaction", () => {
     await flush();
     expect(compact).toHaveBeenCalledTimes(1);
     expect(h.state.messages).toEqual([summary, second, third]);
+    body.stop();
+  });
+
+  test("compaction rewrite appends removed messages to the compacted prefix for display", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    const first = makeUserMessage("m1");
+    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
+    const third = makeUserMessage("m3");
+    h.state.messages = [first, second, third];
+    const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
+    compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500, summarizedPrefix: [first] });
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(body.displayMessages()).toEqual([first, summary, second, third]);
     body.stop();
   });
 

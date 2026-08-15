@@ -263,8 +263,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     expect(agent?.history).toEqual([]);
     expect(agent?.currentTurn).toEqual({
       userPrompt: "hello",
-      cards: [],
-      blocks: [{ kind: "text", text: "world" }],
+      entries: [{ kind: "text", text: "world" }],
       streamId: null,
       seq: 0,
     });
@@ -294,7 +293,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     ]));
     const existing = seeded.agents.get("my-team:general-1");
     if (existing === undefined) throw new Error("seed missing");
-    const streamingTurn = { userPrompt: "live", cards: [], blocks: [{ kind: "text" as const, text: "streaming…" }], streamId: 1, seq: 0 };
+    const streamingTurn = { userPrompt: "live", entries: [{ kind: "text" as const, text: "streaming…" }], streamId: 1, seq: 0 };
     const liveAgents = new Map(seeded.agents);
     liveAgents.set("my-team:general-1", { ...existing, currentTurn: streamingTurn });
     const withLive: TuiState = { ...seeded, agents: liveAgents };
@@ -350,6 +349,22 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     expect(agent?.compactionMarker).toEqual({ turnsBefore: 0, summary: "the summary", tokensBefore: 500 });
     expect(agent?.currentTurn?.seq).toBe(0);
     expect(state.nextEntrySeq).toBe(1);
+  });
+
+  test("compacted turns before a summary place the marker mid-chat", () => {
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const state = teamLoadReducer(INITIAL_TUI_STATE, {
+      ...info,
+      history: [{
+        agentKey: "general-1",
+        messages: [user("first"), assistantText("a1"), compactionSummary("the summary", 500), user("kept"), assistantText("a2")],
+      }],
+    });
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.compactionMarker).toEqual({ turnsBefore: 1, summary: "the summary", tokensBefore: 500 });
+    expect(agent?.history).toHaveLength(1);
+    expect(agent?.history[0]?.userPrompt).toBe("first");
+    expect(agent?.currentTurn?.userPrompt).toBe("kept");
   });
 
   test("a fresh agent starts without a compaction marker", () => {

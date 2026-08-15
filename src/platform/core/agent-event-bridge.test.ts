@@ -34,6 +34,7 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   }),
   compact: vi.fn(),
   restore: vi.fn(async () => []),
+  restoreDisplay: vi.fn(async () => []),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
   listAgentKeys: vi.fn(() => []),

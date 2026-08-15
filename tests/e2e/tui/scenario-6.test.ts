@@ -8,6 +8,7 @@ import {
   waitForAgentQueueNonEmpty,
   waitForTeam,
   sendLine,
+  cardsOfTurns,
   type TuiHarness,
 } from "./harness";
 import expectations from "./scenario-6.llm.ts";
@@ -50,7 +51,7 @@ describe("Scenario 6 — queued prompts from agent", () => {
       ...(manager!.history),
       ...(manager!.currentTurn !== null ? [manager!.currentTurn] : []),
     ];
-    const allManagerCards = allManagerTurns.flatMap((t) => t.cards);
+    const allManagerCards = cardsOfTurns(allManagerTurns);
     const notifyCards = allManagerCards.filter((c) => c.name === "notify");
     expect(notifyCards.length).toBe(5);
     expect(notifyCards.every((c) => c.kind === "toolResult" && c.error === null)).toBe(true);
@@ -70,6 +71,6 @@ describe("Scenario 6 — queued prompts from agent", () => {
     expect(worker!.queue.length).toBe(0);
     const workerTurns = [...worker!.history, ...(worker!.currentTurn !== null ? [worker!.currentTurn] : [])];
     expect(workerTurns.length).toBe(5);
-    expect(worker!.currentTurn?.blocks.some((b) => b.text.includes("task 5"))).toBe(true);
+    expect(worker!.currentTurn?.entries.some((e) => (e.kind === "text" || e.kind === "thinking") && e.text.includes("task 5"))).toBe(true);
   });
 });

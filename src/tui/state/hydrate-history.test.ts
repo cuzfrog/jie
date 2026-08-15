@@ -1,6 +1,7 @@
 import type { AgentMessage, ToolResultDetails, UserIngressMessage } from "../../platform";
 import type { Usage } from "@earendil-works/pi-ai";
 import { hydrateHistory } from "./hydrate-history";
+import type { MessageBlock, MessageCard, MessageTurn } from "./state";
 
 function user(prompt: string): AgentMessage {
   return { role: "user", content: prompt, timestamp: 0 };
@@ -53,8 +54,7 @@ describe("hydrateHistory", () => {
     expect(result.history).toEqual([]);
     expect(result.currentTurn).toEqual({
       userPrompt: "hello",
-      cards: [],
-      blocks: [{ kind: "text", text: "world" }],
+      entries: [{ kind: "text", text: "world" }],
       streamId: null,
       seq: 0,
     });
@@ -84,17 +84,17 @@ describe("hydrateHistory", () => {
     ], 5);
     expect(result.history).toHaveLength(1);
     expect(result.history[0]?.userPrompt).toBe("first");
-    expect(result.history[0]?.blocks).toEqual([{ kind: "text", text: "a1" }]);
+    expect(result.history[0]?.entries).toEqual([{ kind: "text", text: "a1" }]);
     expect(result.history[0]?.seq).toBe(5);
     expect(result.currentTurn?.userPrompt).toBe("second");
-    expect(result.currentTurn?.blocks).toEqual([{ kind: "text", text: "a2" }]);
+    expect(result.currentTurn?.entries).toEqual([{ kind: "text", text: "a2" }]);
     expect(result.currentTurn?.seq).toBe(6);
     expect(result.nextSeq).toBe(7);
   });
 
   test("thinking and text become ordered blocks", () => {
     const result = hydrateHistory([user("q"), assistantThinkingThenText("hm", "ans", 250)], 0);
-    expect(result.currentTurn?.blocks).toEqual([
+    expect(result.currentTurn?.entries).toEqual([
       { kind: "thinking", text: "hm", durationMs: 250 },
       { kind: "text", text: "ans" },
     ]);
@@ -102,7 +102,7 @@ describe("hydrateHistory", () => {
 
   test("thinking without a duration defaults to 0ms", () => {
     const result = hydrateHistory([user("q"), assistantThinkingThenText("hm", "ans")], 0);
-    expect(result.currentTurn?.blocks).toEqual([
+    expect(result.currentTurn?.entries).toEqual([
       { kind: "thinking", text: "hm", durationMs: 0 },
       { kind: "text", text: "ans" },
     ]);
@@ -115,7 +115,7 @@ describe("hydrateHistory", () => {
       api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
     };
     const result = hydrateHistory([user("q"), message], 0);
-    expect(result.currentTurn?.blocks).toEqual([
+    expect(result.currentTurn?.entries).toEqual([
       { kind: "thinking", text: "", durationMs: 1000 },
       { kind: "text", text: "ans" },
     ]);
@@ -128,7 +128,7 @@ describe("hydrateHistory", () => {
       api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
     };
     const result = hydrateHistory([user("q"), message], 0);
-    expect(result.currentTurn?.blocks).toEqual([{ kind: "text", text: "ans" }]);
+    expect(result.currentTurn?.entries).toEqual([{ kind: "text", text: "ans" }]);
   });
 
   test("adjacent thinking parts merge and sum their durations", () => {
@@ -142,7 +142,7 @@ describe("hydrateHistory", () => {
       api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
     };
     const result = hydrateHistory([user("q"), message], 0);
-    expect(result.currentTurn?.blocks).toEqual([
+    expect(result.currentTurn?.entries).toEqual([
       { kind: "thinking", text: "ab", durationMs: 300 },
       { kind: "text", text: "ans" },
     ]);
@@ -152,7 +152,7 @@ describe("hydrateHistory", () => {
     const result = hydrateHistory([
       user("run"), assistantToolCall("c1", "bash", { cmd: "ls" }), toolResult("c1", "bash", "file.txt"),
     ], 0);
-    expect(result.currentTurn?.cards).toEqual([{
+    expect(result.currentTurn?.entries).toEqual([{
       kind: "toolResult",
       callId: "c1",
       name: "bash",
@@ -171,7 +171,7 @@ describe("hydrateHistory", () => {
     const result = hydrateHistory([
       user("run"), assistantToolCall("c1", "edit", {}), toolResult("c1", "edit", "ok", false, details),
     ], 0);
-    expect(result.currentTurn?.cards[0]?.details).toEqual(details);
+    expect(firstCard(result.currentTurn)?.details).toEqual(details);
   });
 
   test("non-diff details are dropped at the persisted-message seam", () => {
@@ -179,7 +179,7 @@ describe("hydrateHistory", () => {
     const result = hydrateHistory([
       user("run"), assistantToolCall("c1", "write_kanban", {}), toolResult("c1", "write_kanban", "ok", false, kanban),
     ], 0);
-    expect(result.currentTurn?.cards[0]?.details).toBeNull();
+    expect(firstCard(result.currentTurn)?.details).toBeNull();
   });
 
   test("malformed details are dropped at the persisted-message seam", () => {
@@ -187,14 +187,14 @@ describe("hydrateHistory", () => {
       role: "toolResult", toolCallId: "c1", toolName: "bash", content: [{ type: "text", text: "ok" }], isError: false, details: "garbage", timestamp: 0,
     };
     const result = hydrateHistory([user("run"), assistantToolCall("c1", "bash", {}), message], 0);
-    expect(result.currentTurn?.cards[0]?.details).toBeNull();
+    expect(firstCard(result.currentTurn)?.details).toBeNull();
   });
 
   test("tool error sets error and nulls output", () => {
     const result = hydrateHistory([
       user("run"), assistantToolCall("c1", "bash", {}), toolResult("c1", "bash", "boom", true),
     ], 0);
-    const card = result.currentTurn?.cards[0];
+    const card = firstCard(result.currentTurn);
     expect(card?.error).toBe("boom");
     expect(card?.output).toBeNull();
   });
@@ -205,7 +205,7 @@ describe("hydrateHistory", () => {
     const result = hydrateHistory([
       user("run"), assistantToolCall("c1", "bash", { cmd: longInput }), toolResult("c1", "bash", longOutput),
     ], 0);
-    const card = result.currentTurn?.cards[0];
+    const card = firstCard(result.currentTurn);
     expect(card?.inputTruncated).toBe(true);
     expect(card?.outputTruncated).toBe(true);
     expect(card?.input).toContain("...[");
@@ -217,7 +217,7 @@ describe("hydrateHistory", () => {
   test("trailing user message leaves an open currentTurn for continue()", () => {
     const result = hydrateHistory([user("pending")], 0);
     expect(result.history).toEqual([]);
-    expect(result.currentTurn).toEqual({ userPrompt: "pending", cards: [], blocks: [], streamId: null, seq: 0 });
+    expect(result.currentTurn).toEqual({ userPrompt: "pending", entries: [], streamId: null, seq: 0 });
   });
 
   test("a leading compaction summary becomes the marker and turns number after it", () => {
@@ -253,3 +253,11 @@ describe("hydrateHistory", () => {
     });
   });
 });
+
+function isToolCard(entry: MessageBlock | MessageCard): entry is MessageCard {
+  return entry.kind === "toolCall" || entry.kind === "toolResult";
+}
+
+function firstCard(turn: MessageTurn | null | undefined): MessageCard | undefined {
+  return turn?.entries.find(isToolCard);
+}

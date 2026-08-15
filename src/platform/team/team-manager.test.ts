@@ -45,6 +45,7 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   persist: vi.fn(),
   compact: vi.fn(),
   restore: vi.fn(async () => []),
+  restoreDisplay: vi.fn(async () => []),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
   listAgentKeys: vi.fn(() => []),
@@ -86,7 +87,8 @@ function makeModel(provider: string, id: string): Model<Api> {
   };
 }
 
-function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMessage>): AgentBody {
+function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMessage>, displayed?: ReadonlyArray<AgentMessage>): AgentBody {
+  const display = displayed ?? restored;
   return {
     identity: {
       teamId: params.teamId,
@@ -101,14 +103,15 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
     },
     restore: async () => restored,
     messages: () => [...restored],
+    displayMessages: () => [...display],
     start: async () => {},
     compact: async () => {},
     stop: () => {},
   };
 }
 
-function makeManager(homeJieDir: string, projectJieDir: string | null, resumeSessionId?: string, restored: ReadonlyArray<AgentMessage> = []) {
-  const agentBodyFactory = vi.fn((params: AgentBodyParams): AgentBody => makeFakeBody(params, restored));
+function makeManager(homeJieDir: string, projectJieDir: string | null, resumeSessionId?: string, restored: ReadonlyArray<AgentMessage> = [], displayed?: ReadonlyArray<AgentMessage>) {
+  const agentBodyFactory = vi.fn((params: AgentBodyParams): AgentBody => makeFakeBody(params, restored, displayed));
   const agentRegistry = new AgentRegistryImpl(homeJieDir, projectJieDir);
   const teamRegistry = new TeamRegistryImpl(homeJieDir, projectJieDir, agentRegistry);
   const manager = new TeamManagerImpl(teamRegistry, agentRegistry, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, agentBodyFactory, resumeSessionId);
@@ -266,6 +269,7 @@ describe("TeamManagerImpl — full surface", () => {
         identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
+        displayMessages: () => [],
         start: async () => { throw new Error("start failure"); },
         compact: async () => {},
         stop: vi.fn(),
@@ -288,6 +292,7 @@ describe("TeamManagerImpl — full surface", () => {
         identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
+        displayMessages: () => [],
         start: async () => { started.push(params.agentKey); },
         compact: async () => {},
         stop: () => {},
@@ -470,6 +475,18 @@ describe("TeamManagerImpl — full surface", () => {
       expect(identity.history[0]?.messages).toEqual(payload?.history[0]?.messages ?? []);
     });
 
+    test("toTeamInfo exposes displayMessages as the agent history", async () => {
+      transcriptStore.hasSession.mockReturnValue(true);
+      const llm: ReadonlyArray<AgentMessage> = [{ role: "user", content: "hello", timestamp: 1 }, assistantMessage("hi there", 2)];
+      const display: ReadonlyArray<AgentMessage> = [{ role: "user", content: "compacted", timestamp: 0 }, ...llm];
+      const { manager } = makeManager(homeJieDir, null, undefined, llm, display);
+      const identity = await manager.resumeSession("setup-assistant", "01-seeded");
+      const payload = teamLoadedEvents().find((e) => e.payload.id === "setup-assistant")?.payload;
+      expect(identity.history[0]?.messages).toEqual(display);
+      expect(payload?.history[0]?.messages).toEqual(display);
+      expect(identity.history[0]?.messages).not.toEqual(llm);
+    });
+
     test("resumeSession reloads an already-loaded team and re-publishes history (picker flow, not a cache hit)", async () => {
       transcriptStore.hasSession.mockReturnValue(true);
       const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "hello", timestamp: 1 }, assistantMessage("hi there", 2)];
@@ -494,6 +511,7 @@ describe("TeamManagerImpl — full surface", () => {
         identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [...live],
         messages: () => [...live],
+        displayMessages: () => [...live],
         start: async () => {},
         compact: async () => {},
         stop: () => {},
@@ -590,6 +608,7 @@ describe("TeamManagerImpl — full surface", () => {
           identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
+        displayMessages: () => [],
           start: async () => {},
           compact: async () => {},
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
@@ -622,6 +641,7 @@ describe("TeamManagerImpl — full surface", () => {
         identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
+        displayMessages: () => [],
         start: async () => {},
         compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
@@ -643,6 +663,7 @@ describe("TeamManagerImpl — full surface", () => {
           identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
+        displayMessages: () => [],
           start: async () => { if (created > 0) throw new Error("start failure"); },
           compact: async () => {},
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
@@ -664,6 +685,7 @@ describe("TeamManagerImpl — full surface", () => {
         identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
+        displayMessages: () => [],
         start: async () => {},
         compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
@@ -687,6 +709,7 @@ describe("TeamManagerImpl — full surface", () => {
           identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
+        displayMessages: () => [],
           start: async () => {},
           compact: async () => {},
           stop: () => {},
