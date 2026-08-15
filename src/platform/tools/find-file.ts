@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import { Type } from "typebox";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
+import { expandMentionPath } from "./mention-path";
 import { mapErrno, resolveWithinWorkspace, walkFiles } from "./path-utils";
 
 const DEFAULT_PATH = ".";
@@ -43,7 +44,8 @@ export function createFindFileTool(dependencies: FindFileDeps): Tool<FindFileInp
       signal?: AbortSignal,
     ): Promise<ToolResult> {
       const target = input.path ?? DEFAULT_PATH;
-      const { realPath, relativePath } = resolveWithinWorkspace(target, dependencies.workspaceRoot);
+      const path = expandMentionPath(target, dependencies.workspaceRoot);
+      const { realPath, relativePath } = resolveWithinWorkspace(path, dependencies.workspaceRoot);
 
       let stat;
       try {

@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import type { EditResultDetails, ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
+import { expandMentionPath } from "./mention-path";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -77,7 +78,8 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
       return args;
     },
     async execute(input: EditInput, executionContext: ExecutionContext): Promise<ToolResult> {
-      const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      const path = expandMentionPath(input.path, dependencies.workspaceRoot);
+      const { realPath, relativePath } = resolveWithinWorkspace(path, dependencies.workspaceRoot);
       const globs = executionContext.toolArgs.get("edit_file");
       if (globs !== undefined && !globs.some((pattern) => new Bun.Glob(pattern).match(relativePath))) {
         throw new JiePlatformError("WRITE_PATH_DENIED", {

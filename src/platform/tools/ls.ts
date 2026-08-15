@@ -2,6 +2,7 @@ import { readdirSync, statSync } from "node:fs";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
+import { expandMentionPath } from "./mention-path";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 
 const DEFAULT_PATH = ".";
@@ -37,7 +38,8 @@ export function createLsTool(dependencies: LsDeps): Tool<LsInput> {
     }),
     async execute(input: LsInput): Promise<ToolResult> {
       const target = input.path ?? DEFAULT_PATH;
-      const { realPath } = resolveWithinWorkspace(target, dependencies.workspaceRoot);
+      const path = expandMentionPath(target, dependencies.workspaceRoot);
+      const { realPath } = resolveWithinWorkspace(path, dependencies.workspaceRoot);
 
       let stat;
       try {

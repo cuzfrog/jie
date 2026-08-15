@@ -1,5 +1,5 @@
 import { FileMentionSource } from "./file-mention-source";
-import type { ScannedFile } from "./list-files";
+import type { ScannedFile } from "../../utils";
 
 const CWD = "/proj";
 

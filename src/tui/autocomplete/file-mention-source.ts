@@ -1,5 +1,5 @@
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
-import { type ScannedFile } from "./list-files";
+import { type ScannedFile } from "../../utils";
 import type { CompletionSource, JieSuggestions } from "./completion-source";
 
 const MAX_SUGGESTIONS = 20;
