@@ -1,6 +1,8 @@
 import { truncateToWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
+import { isDiffDetails, type ToolResultDetails } from "../../../platform";
 import type { MessageCard, StateStore } from "../../state";
 import { style } from "../themes";
+import { diffStats } from "./diff-stats";
 import { DiffView } from "./diff-view";
 import { formatDuration } from "./format-duration";
 
@@ -75,8 +77,13 @@ function renderHeader(card: MessageCard, isError: boolean, width: number): strin
   const titleStyle = isError ? "error" : "toolTitle";
   const arg = formatToolArg(card.name, card.input, card.inputTruncated);
   const argPart = arg === "" ? "" : style("muted")(`(${arg})`);
+  const hint = card.name === "write_file" || card.name === "edit_file" ? formatDiffHint(card.details) : "";
   const duration = card.durationMs !== undefined ? `  ${formatDuration(card.durationMs)}` : "";
-  const title = argPart === "" ? style(titleStyle)(`${card.name}${duration}`) : style(titleStyle)(card.name) + argPart + style(titleStyle)(duration);
+  if (hint === "" && argPart === "") {
+    return truncateToWidth(`${glyph} ${style(titleStyle)(`${card.name}${duration}`)}`, width);
+  }
+  const durationPart = duration === "" ? "" : style(titleStyle)(duration);
+  const title = `${style(titleStyle)(card.name)}${argPart}${hint}${durationPart}`;
   return truncateToWidth(`${glyph} ${title}`, width);
 }
 
@@ -97,6 +104,43 @@ function formatToolArg(name: string, input: string | undefined, inputTruncated: 
   } catch {
     return "";
   }
+}
+
+type DiffDetails = Extract<ToolResultDetails, { kind: "diff" }>;
+
+function formatDiffHint(details: ToolResultDetails | null | undefined): string {
+  if (!isDiffDetails(details)) return "";
+  const diff = details.diff;
+  if (diff === null || diff === "") {
+    return fallbackDiffHint(details);
+  }
+  const stats = diffStats(diff);
+  const parts: string[] = [];
+  if (isEditDiffDetails(details) && details.replacementsCount > 0) {
+    parts.push(`${details.replacementsCount} ${details.replacementsCount === 1 ? "replacement" : "replacements"}`);
+  }
+  if (stats.added > 0) parts.push(style("success")(`+${stats.added}`));
+  if (stats.removed > 0) parts.push(style("error")(`-${stats.removed}`));
+  if (parts.length === 0) return "";
+  return ` ${parts.join(" ")}`;
+}
+
+function fallbackDiffHint(details: DiffDetails): string {
+  if (isEditDiffDetails(details) && details.replacementsCount > 0) {
+    return ` ${details.replacementsCount} ${details.replacementsCount === 1 ? "replacement" : "replacements"}`;
+  }
+  if (isWriteFileDiffDetails(details)) {
+    return ` ${details.bytesWritten} bytes`;
+  }
+  return "";
+}
+
+function isEditDiffDetails(details: DiffDetails): details is Extract<ToolResultDetails, { kind: "diff"; replacementsCount: number }> {
+  return "replacementsCount" in details;
+}
+
+function isWriteFileDiffDetails(details: DiffDetails): details is Extract<ToolResultDetails, { kind: "diff"; bytesWritten: number }> {
+  return "bytesWritten" in details;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
