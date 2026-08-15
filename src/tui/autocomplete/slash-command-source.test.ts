@@ -355,13 +355,13 @@ describe("SlashCommandSource — /model arguments", () => {
     expect(suggestions).toBeNull();
   });
 
-  test("caps the suggestion list at twenty entries", async () => {
+  test("returns all matching suggestions without a cap", async () => {
     const many = Array.from({ length: 25 }, (_, index) => ({
       provider: "anthropic", id: `model-${index}`, name: `Model ${index}`, available: true,
     }));
     const suggestions = await slashSource(modelPlatform(many), makeStateStore())
       .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(20);
+    expect(suggestions!.items).toHaveLength(25);
   });
 
   test("hides models whose provider is not available", async () => {
