@@ -380,11 +380,12 @@ describe("reduceTurnStart", () => {
 
   test("a turn.continue clears the error banner and the interrupted marker", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "do work"));
-    state = { ...state, errorBanner: "boom", interruptedAgentId: "my-team:general-1" };
+    state = { ...state, errorBanner: "boom", interruptedAgentId: "my-team:general-1", requireUserAttention: true };
     state = reduce(state, Events.agentTurnContinue(AGENT_SENDER));
     const agent = state.agents.get("my-team:general-1");
     expect(state.errorBanner).toBeNull();
     expect(state.interruptedAgentId).toBeNull();
+    expect(state.requireUserAttention).toBe(false);
     expect(agent?.status).toBe("busy");
     expect(agent?.currentTurn?.userPrompt).toBe("do work");
   });
@@ -464,6 +465,43 @@ describe("reduceIdle", () => {
     state = reduce(state, Events.agentTurnStart(WORKER_SENDER, null));
     state = reduce(state, Events.agentIdle(WORKER_SENDER, "aborted"));
     expect(state.interruptedAgentId).toBeNull();
+  });
+
+  test("sets requireUserAttention when the focused agent idles with a ringable stop while the terminal is unfocused", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    expect(state.requireUserAttention).toBe(true);
+  });
+
+  test("does not set requireUserAttention when the focused agent idles while the terminal is focused", () => {
+    let state = { ...loadedState(), terminalFocused: true };
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    expect(state.requireUserAttention).toBe(false);
+  });
+
+  test("does not set requireUserAttention for a non-ringable stop reason", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "toolUse"));
+    expect(state.requireUserAttention).toBe(false);
+  });
+
+  test("does not set requireUserAttention when a non-focused agent idles", () => {
+    let state = twoAgentState();
+    state = reduce(state, Events.agentTurnStart(WORKER_SENDER, null));
+    state = reduce(state, Events.agentIdle(WORKER_SENDER, "stop"));
+    expect(state.requireUserAttention).toBe(false);
+  });
+
+  test("clears requireUserAttention when the focused agent starts a new turn", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    expect(state.requireUserAttention).toBe(true);
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "again"));
+    expect(state.requireUserAttention).toBe(false);
   });
 });
 

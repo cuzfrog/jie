@@ -39,6 +39,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   editorText: "",
   editorCursorAtStart: true,
   terminalFocused: false,
+  requireUserAttention: false,
 } as const);
 
 /** a subscriber can perform side effect */

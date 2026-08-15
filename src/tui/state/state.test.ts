@@ -203,6 +203,25 @@ describe("TuiState.isIdleAttentionNeeded", () => {
     store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, "again")));
     expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
   });
+
+  test("returns false when the focused agent idles while the terminal is already focused", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.terminalFocusGained());
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "stop")));
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
+  });
+
+  test("returns false after the user focuses the terminal", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "stop")));
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(true);
+    store.dispatch(Actions.terminalFocusGained());
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
+  });
 });
 
 describe("TuiState.isUserInputNeeded", () => {
