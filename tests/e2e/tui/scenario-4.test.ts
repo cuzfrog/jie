@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { loadMockExpectations } from "../../mock-llm-backend";
 import { seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForErrorBanner, waitForNoErrorBanner, waitForTeam, sendLine } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForErrorBanner, waitForNoErrorBanner, waitForTeam, sendLine, textOfTurns } from "./harness";
 import expectations from "./scenario-4.llm.ts";
 
 describe("Scenario 4 — first-time setup (TUI flow)", () => {
@@ -45,7 +45,7 @@ describe("Scenario 4 — first-time setup (TUI flow)", () => {
         ...(agent?.history ?? []),
         ...(agent?.currentTurn !== null && agent?.currentTurn !== undefined ? [agent.currentTurn] : []),
       ];
-      const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
+      const allBlocks = textOfTurns(allTurns);
       expect(allBlocks.length).toBeGreaterThan(0);
     } finally {
       await stopTui(harness);

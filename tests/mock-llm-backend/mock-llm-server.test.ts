@@ -131,6 +131,50 @@ describe("MockLlmServerImpl", () => {
     expect(performance.now() - started).toBeGreaterThanOrEqual(8);
     expect(text).toContain("data: [DONE]");
   });
+
+  test("POST /v1/chat/completions returns 400 context_length_exceeded when the request exceeds contextLimitTokens", async () => {
+    const expectation: Expectation = {
+      match: {},
+      responseChunks: [{ kind: "finish", reason: "stop" }],
+      contextLimitTokens: 1,
+    };
+    store.selectAndRecord.mockReturnValue({ index: 0, expectation });
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(chatRequest("hello")),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: {
+        message: "This model's maximum context length is 1 tokens. Your request was estimated at more than 1 tokens.",
+        type: "invalid_request_error",
+        param: "messages",
+        code: "context_length_exceeded",
+      },
+    });
+  });
+
+  test("POST /v1/chat/completions streams a usage chunk when the expectation includes one", async () => {
+    const expectation: Expectation = {
+      match: {},
+      responseChunks: [
+        { kind: "text", delta: "ok" },
+        { kind: "finish", reason: "stop" },
+        { kind: "usage", promptTokens: 100, completionTokens: 20 },
+      ],
+    };
+    store.selectAndRecord.mockReturnValue({ index: 0, expectation });
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(chatRequest("hi there")),
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('"usage":{"prompt_tokens":100,"completion_tokens":20');
+    expect(text).toContain('"prompt_tokens":');
+  });
 });
 
 function chatRequest(content: string): ChatCompletionRequestBody {

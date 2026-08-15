@@ -34,7 +34,7 @@ const conversation = {
   },
 };
 
-function makeRunner(): CompactionRunner {
+function makeRunner(getOverheadTokens = () => 0): CompactionRunner {
   return new CompactionRunnerImpl({
     compactor,
     eventManager,
@@ -44,6 +44,7 @@ function makeRunner(): CompactionRunner {
     teamId: "t1",
     conversation,
     memoryManager,
+    getOverheadTokens,
   });
 }
 
@@ -90,6 +91,7 @@ describe("CompactionRunner — compact input", () => {
     expect(input.sessionId).toBe("s1");
     expect(input.teamId).toBe("t1");
     expect(input.signal?.aborted).toBe(false);
+    expect(input.overheadTokens).toBe(0);
   });
 });
 
@@ -156,6 +158,25 @@ describe("CompactionRunner — applying the result", () => {
     expect(contextTokensCall).toHaveLength(2);
     expect(contextTokensCall[0]).toMatchObject({ role: "compactionSummary", summary: "the summary", tokensBefore: 500 });
     expect(contextTokensCall[1]).toEqual(retained);
+  });
+
+  test("tokens_after is computed with overhead passed from the body", async () => {
+    messages = [makeUserMessage("m1"), makeUserMessage("m2")];
+    compactor.compact.mockResolvedValueOnce({
+      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: [messages[0]!],
+    });
+    compactor.contextTokens.mockImplementation((_, overhead) => 100 + (overhead ?? 0));
+    await makeRunner(() => 42).ensure(model);
+    const compacted = envelopes("agent.compacted");
+    expect(compacted).toHaveLength(1);
+    expect(compacted[0]!.payload.tokens_after).toBe(142);
+    const contextCall = compactor.contextTokens.mock.calls[compactor.contextTokens.mock.calls.length - 1]!;
+    expect(contextCall[1]).toBe(42);
+    const compactInput = compactor.compact.mock.calls[0]![0];
+    expect(compactInput.overheadTokens).toBe(42);
   });
 
   test("a successful run hands the summarized prefix to the distiller", async () => {

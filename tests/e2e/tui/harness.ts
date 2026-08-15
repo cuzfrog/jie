@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { bootPlatform, type EffortLevel, type JiePlatform } from "../../../src/platform";
 import { bootTui, type CreateTUIOptions, type Tui, type TuiCradle } from "../../../src/tui";
+import type { MessageCard, MessageTurn } from "../../../src/tui/state";
 import { writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 
 type AgentId = `${string}:${string}`;
@@ -196,15 +197,13 @@ export async function submitAndWaitForAgentIdle(
 ): Promise<void> {
   const before = harness.stateStore.getState().agents.get(agentId);
   const priorHistoryLen = before?.history.length ?? 0;
-  const priorCurrentBlocks = before?.currentTurn?.blocks.length ?? 0;
-  const priorCurrentCards = before?.currentTurn?.cards.length ?? 0;
+  const priorCurrentEntries = before?.currentTurn?.entries.length ?? 0;
   await sendLine(harness.stdin, prompt);
   await waitForPromptSettled(
     harness,
     agentId,
     priorHistoryLen,
-    priorCurrentBlocks,
-    priorCurrentCards,
+    priorCurrentEntries,
     timeoutMs,
   );
 }
@@ -213,8 +212,7 @@ async function waitForPromptSettled(
   harness: TuiHarness,
   agentId: AgentId,
   priorHistoryLen: number,
-  priorCurrentBlocks: number,
-  priorCurrentCards: number,
+  priorCurrentEntries: number,
   timeoutMs: number,
 ): Promise<void> {
   const start = Date.now();
@@ -226,12 +224,8 @@ async function waitForPromptSettled(
     }
     if (agent.status === "idle") {
       const historyGrew = agent.history.length > priorHistoryLen;
-      const currentHasOutput =
-        (agent.currentTurn?.blocks.length ?? 0) > priorCurrentBlocks ||
-        (agent.currentTurn?.cards.length ?? 0) > priorCurrentCards;
-      const currentReplaced =
-        agent.currentTurn !== null &&
-        (agent.currentTurn.blocks.length > 0 || agent.currentTurn.cards.length > 0);
+      const currentHasOutput = (agent.currentTurn?.entries.length ?? 0) > priorCurrentEntries;
+      const currentReplaced = agent.currentTurn !== null && agent.currentTurn.entries.length > 0;
       if (historyGrew && currentReplaced) return;
       if (!historyGrew && currentHasOutput) return;
     }
@@ -239,7 +233,7 @@ async function waitForPromptSettled(
   }
   const agent = harness.stateStore.getState().agents.get(agentId);
   throw new Error(
-    `submitAndWaitForAgentIdle timed out after ${timeoutMs}ms for agent ${agentId} (status=${agent?.status}, history=${agent?.history.length}, curBlocks=${agent?.currentTurn?.blocks.length}, curCards=${agent?.currentTurn?.cards.length})`,
+    `submitAndWaitForAgentIdle timed out after ${timeoutMs}ms for agent ${agentId} (status=${agent?.status}, history=${agent?.history.length}, curEntries=${agent?.currentTurn?.entries.length})`,
   );
 }
 
@@ -250,7 +244,7 @@ export async function waitForTurnText(harness: TuiHarness, agentId: AgentId, con
       if (agent === undefined) return false;
       const current = agent.currentTurn;
       if (current === null) return false;
-      return current.blocks.some((b) => b.text.includes(contains));
+      return current.entries.some((e) => (e.kind === "text" || e.kind === "thinking") && e.text.includes(contains));
     },
     timeoutMs,
     `agent ${agentId} blocks contain '${contains}'`,
@@ -263,7 +257,7 @@ export async function waitForConversationText(harness: TuiHarness, agentId: Agen
       const agent = harness.stateStore.getState().agents.get(agentId);
       if (agent === undefined) return false;
       const turns = agent.currentTurn === null ? agent.history : [...agent.history, agent.currentTurn];
-      return turns.some((t) => t.blocks.some((b) => b.text.includes(contains)));
+      return turns.some((t) => t.entries.some((e) => (e.kind === "text" || e.kind === "thinking") && e.text.includes(contains)));
     },
     timeoutMs,
     `agent ${agentId} conversation contains '${contains}'`,
@@ -322,6 +316,18 @@ export async function waitForTransient(harness: TuiHarness, contains: string, ti
     timeoutMs,
     `transientMessage contains '${contains}'`,
   );
+}
+
+export function textOfTurns(turns: ReadonlyArray<MessageTurn>): string {
+  return turns
+    .flatMap((t) => t.entries)
+    .filter((e): e is { readonly kind: "text" | "thinking"; readonly text: string } => e.kind === "text" || e.kind === "thinking")
+    .map((e) => e.text)
+    .join("\n");
+}
+
+export function cardsOfTurns(turns: ReadonlyArray<MessageTurn>): MessageCard[] {
+  return turns.flatMap((t) => t.entries).filter((e): e is MessageCard => e.kind === "toolCall" || e.kind === "toolResult");
 }
 
 function restoreLang(prevLang: string | undefined, prevLangAll: string | undefined): void {

@@ -1,6 +1,6 @@
 import { seedTeam } from "../_fixture.ts";
 import { loadMockExpectations } from "../../mock-llm-backend";
-import { startTui, stopTui, waitForTeam, sendLine, submitAndWaitForAgentIdle, type TuiHarness } from "./harness";
+import { startTui, stopTui, waitForTeam, sendLine, submitAndWaitForAgentIdle, cardsOfTurns, type TuiHarness } from "./harness";
 import expectations from "./scenario-7.llm.ts";
 
 describe("Scenario 7 — ! bash mode", () => {
@@ -29,7 +29,7 @@ describe("Scenario 7 — ! bash mode", () => {
     const agent = state.agents.get("my-team:general-1");
     expect(agent).toBeDefined();
     const turns = [...(agent?.history ?? []), ...(agent?.currentTurn !== null && agent?.currentTurn !== undefined ? [agent.currentTurn] : [])];
-    const cards = turns.flatMap((t) => t.cards);
+    const cards = cardsOfTurns(turns);
     expect(cards.some((c) => c.kind === "toolResult" && c.name === "bash" && c.error === null)).toBe(true);
   });
 

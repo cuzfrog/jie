@@ -13,6 +13,12 @@ import type { TranscriptStore } from "../storage";
 const BIG = "x".repeat(100_000);
 const HUGE = "y".repeat(200_000);
 const THRESHOLD_WINDOW = 30_000;
+const RESERVE_30K = Math.min(16384, Math.floor(THRESHOLD_WINDOW * 0.1));
+const BUDGET_30K = THRESHOLD_WINDOW - RESERVE_30K;
+const SUMMARY_MAX_30K = Math.floor(0.8 * RESERVE_30K);
+const RESERVE_20K = Math.min(16384, Math.floor(20_000 * 0.1));
+const BUDGET_20K = 20_000 - RESERVE_20K;
+const SUMMARY_MAX_20K = Math.floor(0.8 * RESERVE_20K);
 
 type CompactionOverrides = NonNullable<Settings["compaction"]>;
 
@@ -23,6 +29,7 @@ function makeTranscriptStore() {
     persist: vi.fn(),
     compact: vi.fn(),
     restore: vi.fn(async () => []),
+    restoreDisplay: vi.fn(async () => []),
     hasSession: vi.fn(() => false),
     listSessions: vi.fn(() => []),
     listAgentKeys: vi.fn(() => []),
@@ -123,7 +130,7 @@ describe("CompactorImpl.compact", () => {
     const model = makeModel(THRESHOLD_WINDOW, 8192);
     const result = await compactor.compact({ ...makeInput(messages, model), contextWindow: 20_000 });
     expect(result).not.toBeNull();
-    expect(result!.tokensBefore).toBeGreaterThan(20_000 - 16384);
+    expect(result!.tokensBefore).toBeGreaterThan(BUDGET_20K);
   });
 
   test("compacts when the estimate exceeds the threshold", async () => {
@@ -131,11 +138,11 @@ describe("CompactorImpl.compact", () => {
     const compactor = makeCompactor(transcriptStore);
     const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
     transcriptStore.restore.mockResolvedValue([...messages]);
-    const input = makeInput(messages);
+    const input = makeInput(messages, makeModel(20_000, 8192));
     const result = await compactor.compact(input);
     expect(result).not.toBeNull();
     expect(result?.firstKeptIndex).toBe(1);
-    expect(result?.tokensBefore).toBeGreaterThan(THRESHOLD_WINDOW - 16384);
+    expect(result?.tokensBefore).toBeGreaterThan(BUDGET_20K);
     expect(result?.summarizedPrefix).toEqual([userMsg("please do the thing")]);
     expect(llmService.complete).toHaveBeenCalledTimes(1);
     const call = llmService.complete.mock.calls[0]![0];
@@ -167,7 +174,7 @@ describe("CompactorImpl.compact", () => {
     const compactor = makeCompactor(transcriptStore);
     const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
     transcriptStore.restore.mockResolvedValue([...messages]);
-    await compactor.compact(makeInput(messages));
+    await compactor.compact(makeInput(messages, makeModel(20_000, 8192)));
     expect(transcriptStore.compact).toHaveBeenCalledTimes(1);
   });
 
@@ -176,7 +183,7 @@ describe("CompactorImpl.compact", () => {
     const compactor = makeCompactor(transcriptStore);
     const messages = [userMsg("please do the thing"), assistantMsg("calling tool"), toolResultMsg(BIG), userMsg("tail prompt")];
     transcriptStore.restore.mockResolvedValue([...messages]);
-    const result = await compactor.compact(makeInput(messages));
+    const result = await compactor.compact(makeInput(messages, makeModel(20_000, 8192)));
     expect(result?.firstKeptIndex).toBe(3);
     const call = llmService.complete.mock.calls[0]![0];
     expect(call.prompt).toContain("please do the thing");
@@ -254,7 +261,7 @@ describe("CompactorImpl.compact", () => {
     const transcriptStore = makeTranscriptStore();
     const compactor = makeCompactor(transcriptStore);
     transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
-    await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 1024)));
+    await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(20_000, 1024)));
     expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(1024);
   });
 
@@ -262,8 +269,8 @@ describe("CompactorImpl.compact", () => {
     const transcriptStore = makeTranscriptStore();
     const compactor = makeCompactor(transcriptStore);
     transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
-    await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 100_000)));
-    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
+    await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(20_000, 100_000)));
+    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(SUMMARY_MAX_20K);
   });
 
   test("propagates the abort signal to complete", async () => {
@@ -271,7 +278,10 @@ describe("CompactorImpl.compact", () => {
     const compactor = makeCompactor(transcriptStore);
     transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     const controller = new AbortController();
-    await compactor.compact({ ...makeInput([userMsg("please do the thing"), assistantMsg(BIG)]), signal: controller.signal });
+    await compactor.compact({
+      ...makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(20_000, 8192)),
+      signal: controller.signal,
+    });
     expect(llmService.complete.mock.calls[0]![0].signal).toBe(controller.signal);
   });
 
@@ -280,7 +290,8 @@ describe("CompactorImpl.compact", () => {
     llmService.complete.mockRejectedValue(new Error("summarization failed"));
     const compactor = makeCompactor(transcriptStore);
     transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
-    await expect(compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]))).rejects.toThrow("summarization failed");
+    const input = makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(20_000, 8192));
+    await expect(compactor.compact(input)).rejects.toThrow("summarization failed");
     expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
 
@@ -288,7 +299,8 @@ describe("CompactorImpl.compact", () => {
     const transcriptStore = makeTranscriptStore();
     const compactor = makeCompactor(transcriptStore);
     transcriptStore.restore.mockResolvedValue([userMsg("only one stored row")]);
-    await expect(compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]))).rejects.toThrow("out of sync");
+    const input = makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(20_000, 8192));
+    await expect(compactor.compact(input)).rejects.toThrow("out of sync");
     expect(llmService.complete).not.toHaveBeenCalled();
     expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
@@ -319,7 +331,7 @@ describe("CompactorImpl.compact", () => {
     const compactor = makeCompactor(transcriptStore, () => ({ keepRecentTokens: 1 }));
     const messages = [userMsg("please do the thing"), assistantMsg(BIG), userMsg("tail prompt")];
     transcriptStore.restore.mockResolvedValue([...messages]);
-    const result = await compactor.compact(makeInput(messages));
+    const result = await compactor.compact(makeInput(messages, makeModel(20_000, 8192)));
     expect(result?.firstKeptIndex).toBe(2);
     const call = llmService.complete.mock.calls[0]![0];
     expect(call.prompt).toContain(BIG.slice(0, 100));
@@ -329,11 +341,11 @@ describe("CompactorImpl.compact", () => {
   test("falls back to the defaults for absent overrides", async () => {
     const transcriptStore = makeTranscriptStore();
     transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
-    const input = makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 100_000));
+    const input = makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(20_000, 100_000));
     await makeCompactor(transcriptStore, () => undefined).compact(input);
     await makeCompactor(transcriptStore, () => ({})).compact(input);
-    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
-    expect(llmService.complete.mock.calls[1]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
+    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(SUMMARY_MAX_20K);
+    expect(llmService.complete.mock.calls[1]![0].maxTokens).toBe(SUMMARY_MAX_20K);
   });
 
   test("reads the overrides at each compact call", async () => {
@@ -342,9 +354,9 @@ describe("CompactorImpl.compact", () => {
     const compactor = makeCompactor(transcriptStore, () => overrides);
     const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
     transcriptStore.restore.mockResolvedValue([...messages]);
-    expect(await compactor.compact(makeInput(messages))).toBeNull();
+    expect(await compactor.compact(makeInput(messages, makeModel(20_000, 8192)))).toBeNull();
     overrides = undefined;
-    expect(await compactor.compact(makeInput(messages))).not.toBeNull();
+    expect(await compactor.compact(makeInput(messages, makeModel(20_000, 8192)))).not.toBeNull();
     expect(llmService.complete).toHaveBeenCalledTimes(1);
   });
 
@@ -356,9 +368,10 @@ describe("CompactorImpl.compact", () => {
     const result = await compactor.compact(makeInput(messages));
     expect(result?.firstKeptIndex).toBe(2);
     expect(llmService.complete).toHaveBeenCalledTimes(1);
-    const prompt = llmService.complete.mock.calls[0]![0]!.prompt;
-    expect(prompt).toContain("[content truncated to fit the context window]");
-    expect(prompt).not.toContain(HUGE);
+    const call = llmService.complete.mock.calls[0]![0];
+    expect(call.maxTokens).toBe(SUMMARY_MAX_30K);
+    expect(call.prompt).toContain("[content truncated to fit the context window]");
+    expect(call.prompt).not.toContain(HUGE);
   });
 
   test("summarizes an oversized earlier turn and keeps only the small assistant tail in a 60k window", async () => {
@@ -377,6 +390,16 @@ describe("CompactorImpl.compact", () => {
     expect(prompt).toContain("[content truncated to fit the context window]");
     expect(prompt).not.toContain(tail);
   });
+
+  test("scales reserveTokens to 10% of the window by default", async () => {
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    const messages = [userMsg(HUGE), assistantMsg(HUGE)];
+    transcriptStore.restore.mockResolvedValue([...messages]);
+    const result = await compactor.compact(makeInput(messages, makeModel(60_000, 8192)));
+    expect(result).not.toBeNull();
+    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 6000));
+  });
 });
 
 describe("CompactorImpl.contextTokens", () => {
@@ -394,6 +417,21 @@ describe("CompactorImpl.contextTokens", () => {
     const messages = [summaryMsg("old summary", 1000), userMsg(BIG), assistantMsg(BIG, 6000, freshUsage)];
     expect(compactor.contextTokens(messages)).toBeGreaterThan(1_000_000);
   });
+
+  test("adds overheadTokens to the message-estimate fallback", () => {
+    const staleUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages = [summaryMsg("summary", 5000), userMsg(BIG), assistantMsg("ok", 1000, staleUsage)];
+    const expected = messages.reduce((sum, message) => sum + estimateTokens(message), 0) + 500;
+    expect(compactor.contextTokens(messages, 500)).toBe(expected);
+  });
+
+  test("does not double-count overheadTokens when an anchored usage is available", () => {
+    const freshUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages = [userMsg(BIG), assistantMsg("ok", 1000, freshUsage)];
+    expect(compactor.contextTokens(messages, 500)).toBe(1_900_000);
+  });
 });
 
 describe("CompactorImpl.needsCompaction", () => {
@@ -404,7 +442,7 @@ describe("CompactorImpl.needsCompaction", () => {
 
   test("returns true when the estimate exceeds the threshold", () => {
     const compactor = makeCompactor(makeTranscriptStore());
-    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    const messages = [userMsg("please do the thing"), assistantMsg(HUGE)];
     expect(compactor.needsCompaction(messages, THRESHOLD_WINDOW)).toBe(true);
   });
 
@@ -435,6 +473,13 @@ describe("CompactorImpl.needsCompaction", () => {
     const messages = [summaryMsg("old summary", 1000), userMsg(BIG), assistantMsg(BIG, 6000, freshUsage)];
     expect(compactor.needsCompaction(messages, model.contextWindow)).toBe(true);
   });
+
+  test("triggers earlier when overheadTokens is present", () => {
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    expect(compactor.needsCompaction(messages, THRESHOLD_WINDOW)).toBe(false);
+    expect(compactor.needsCompaction(messages, THRESHOLD_WINDOW, 3000)).toBe(true);
+  });
 });
 
 describe("CompactorImpl.fitToWindow", () => {
@@ -454,7 +499,7 @@ describe("CompactorImpl.fitToWindow", () => {
     const compactor = makeCompactor(makeTranscriptStore());
     const messages: AgentMessage[] = [userMsg(HUGE), assistantMsg("small tail")];
     const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192), 20_000);
-    expect(totalTokens(result)).toBeLessThanOrEqual(20_000 - 16384);
+    expect(totalTokens(result)).toBeLessThanOrEqual(BUDGET_20K);
   });
 
   test("truncates the largest message until the total fits the budget", () => {
@@ -470,7 +515,7 @@ describe("CompactorImpl.fitToWindow", () => {
     }
     expect(truncated.content.startsWith(HUGE.slice(0, 1000))).toBe(true);
     expect(truncated.content.endsWith(MARKER)).toBe(true);
-    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+    expect(totalTokens(result)).toBeLessThanOrEqual(BUDGET_30K);
     expect(messages[0]).toEqual(userMsg(HUGE));
   });
 
@@ -492,7 +537,7 @@ describe("CompactorImpl.fitToWindow", () => {
       const text = block.type === "thinking" ? block.thinking : block.type === "text" ? block.text : "";
       expect(text.endsWith(MARKER)).toBe(true);
     }
-    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+    expect(totalTokens(result)).toBeLessThanOrEqual(BUDGET_30K);
     expect(heavyAssistant.content).toHaveLength(3);
     if (heavyAssistant.content[1]!.type !== "text") throw new Error("expected a text block");
     expect(heavyAssistant.content[1]!.text).toBe(BIG);
@@ -505,7 +550,7 @@ describe("CompactorImpl.fitToWindow", () => {
     const summary = result[0];
     if (summary === undefined || summary.role !== "compactionSummary") throw new Error("expected a summary message");
     expect(summary.summary.endsWith(MARKER)).toBe(true);
-    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+    expect(totalTokens(result)).toBeLessThanOrEqual(BUDGET_30K);
   });
 
   test("truncates a custom message with string content", () => {
@@ -518,7 +563,7 @@ describe("CompactorImpl.fitToWindow", () => {
     }
     expect(custom.content.startsWith(HUGE.slice(0, 1000))).toBe(true);
     expect(custom.content.endsWith(MARKER)).toBe(true);
-    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+    expect(totalTokens(result)).toBeLessThanOrEqual(BUDGET_30K);
   });
 
   test("passes through a message with nothing shrinkable", () => {
@@ -537,11 +582,18 @@ describe("CompactorImpl.fitToWindow", () => {
     expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 29000);
   });
 
-  test("falls back to the full window when reserveTokens reaches the window", () => {
+  test("clamps the budget to zero when reserveTokens reaches the window", () => {
     const compactor = makeCompactor(makeTranscriptStore(), () => ({ reserveTokens: 40000 }));
     const result = compactor.fitToWindow([userMsg(HUGE)], makeModel(THRESHOLD_WINDOW, 8192));
     expect(result).toHaveLength(1);
     expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW);
     expect(result[0]).not.toEqual(userMsg(HUGE));
+  });
+
+  test("subtracts overheadTokens from the available budget", () => {
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages: AgentMessage[] = [userMsg(HUGE), assistantMsg("tail")];
+    const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192), THRESHOLD_WINDOW, 5000);
+    expect(totalTokens(result)).toBeLessThanOrEqual(BUDGET_30K - 5000);
   });
 });

@@ -10,6 +10,8 @@ import {
   waitForFocusedAgent,
   sendCmd,
   sendLine,
+  textOfTurns,
+  cardsOfTurns,
   type TuiHarness,
 } from "./harness";
 import expectations from "./scenario-2.llm.ts";
@@ -53,9 +55,9 @@ describe("Scenario 2 — pass work in a team", () => {
     const state = harness.stateStore.getState();
     const manager = state.agents.get("my-team:manager-1");
     const allTurns = [...(manager?.history ?? []), ...(manager?.currentTurn !== null && manager?.currentTurn !== undefined ? [manager.currentTurn] : [])];
-    const allCards = allTurns.flatMap((t) => t.cards);
+    const allCards = cardsOfTurns(allTurns);
     expect(allCards.some((c) => c.kind === "toolResult" && c.name === "bash" && c.error === null)).toBe(true);
-    const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
+    const allBlocks = textOfTurns(allTurns);
     expect(allBlocks.length).toBeGreaterThan(0);
     expect(readFileSync(join(harness.dir, "my-answer.txt"), "utf8")).toBe("Hello world");
   });
@@ -112,7 +114,7 @@ function snapshotConversations(harness: TuiHarness): ReadonlyArray<Readonly<{ ag
     return {
       agentId: agent.agentId,
       prompts: turns.map((turn) => turn.userPrompt),
-      blocks: turns.flatMap((turn) => turn.blocks).map((block) => block.text),
+      blocks: textOfTurns(turns).split("\n"),
     };
   });
 }

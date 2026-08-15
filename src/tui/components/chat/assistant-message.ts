@@ -36,47 +36,58 @@ export class AssistantMessage implements Component {
     let thinkingOrdinal = 0;
     let cardOrdinal = 0;
     let prefixed = false;
-    let aggregatedThinkingMs: number | null = null;
-    let liveBlockIndex: number | null = null;
-    for (let i = 0; i < turn.blocks.length; i += 1) {
-      const block = turn.blocks[i]!;
-      if (block.kind === "thinking") {
-        if (thinkingExpanded && block.text !== "") {
-          lines.push(...this.thinkingAt(thinkingOrdinal, block).render(w));
+    const run: RunState = { thinkingMs: null, cards: [], liveBlockIndex: null };
+    for (let i = 0; i < turn.entries.length; i += 1) {
+      const entry = turn.entries[i]!;
+      if (isInvisibleEntry(entry)) continue;
+      if (entry.kind === "text") {
+        this.flushRun(lines, w, run);
+        const rendered = this.markdownAt(textOrdinal, entry.text).render(prefixed ? w : Math.max(1, w - PREFIX_WIDTH));
+        textOrdinal += 1;
+        if (!prefixed && rendered.length > 0) {
+          lines.push(style("assistantMessageIcon")(ASSISTANT_PREFIX) + rendered[0]);
+          lines.push(...rendered.slice(1));
+        } else {
+          lines.push(...rendered);
+        }
+        prefixed = true;
+        continue;
+      }
+      if (entry.kind === "thinking") {
+        if (thinkingExpanded && entry.text !== "") {
+          this.flushRun(lines, w, run);
+          lines.push(...this.thinkingAt(thinkingOrdinal, entry).render(w));
           thinkingOrdinal += 1;
           continue;
         }
-        if (block.durationMs !== undefined) {
-          aggregatedThinkingMs = (aggregatedThinkingMs ?? 0) + block.durationMs;
-        } else if (block.text !== "") {
-          liveBlockIndex = i;
+        if (entry.durationMs !== undefined) {
+          run.thinkingMs = (run.thinkingMs ?? 0) + entry.durationMs;
+        } else if (entry.text !== "") {
+          run.liveBlockIndex = i;
         }
         continue;
       }
-      if (block.text === "") continue;
-      const rendered = this.markdownAt(textOrdinal, block.text).render(prefixed ? w : Math.max(1, w - PREFIX_WIDTH));
-      textOrdinal += 1;
-      if (!prefixed && rendered.length > 0) {
-        lines.push(style("assistantMessageIcon")(ASSISTANT_PREFIX) + rendered[0]);
-        lines.push(...rendered.slice(1));
-      } else {
-        lines.push(...rendered);
-      }
-      prefixed = true;
-    }
-    const aggregatedCards: MessageCard[] = [];
-    for (const card of turn.cards) {
-      if (!toolCardsExpanded && isAggregatableCard(card)) {
-        aggregatedCards.push(card);
+      if (!isCard(entry)) continue;
+      if (toolCardsExpanded || !isAggregatableCard(entry)) {
+        this.flushRun(lines, w, run);
+        lines.push(...this.cardAt(cardOrdinal, entry).render(w));
+        cardOrdinal += 1;
         continue;
       }
-      lines.push(...this.cardAt(cardOrdinal, card).render(w));
-      cardOrdinal += 1;
+      run.cards.push(entry);
     }
-    const liveElapsedMs = this.liveElapsedFor(liveBlockIndex);
-    const summary = summarizeWork(aggregatedThinkingMs, aggregatedCards, liveElapsedMs);
-    if (summary !== null) lines.push(truncateToWidth(style("thinkingText")(summary), w));
+    this.flushRun(lines, w, run);
     return lines;
+  }
+
+  private flushRun(lines: string[], width: number, run: RunState): void {
+    if (run.thinkingMs === null && run.cards.length === 0 && run.liveBlockIndex === null) return;
+    const liveElapsedMs = this.liveElapsedFor(run.liveBlockIndex);
+    const summary = summarizeWork(run.thinkingMs, run.cards, liveElapsedMs);
+    if (summary !== null) lines.push(truncateToWidth(style("thinkingText")(summary), width));
+    run.thinkingMs = null;
+    run.cards.length = 0;
+    run.liveBlockIndex = null;
   }
 
   invalidate(): void {
@@ -130,6 +141,22 @@ export class AssistantMessage implements Component {
     existing.update(card);
     return existing;
   }
+}
+
+interface RunState {
+  thinkingMs: number | null;
+  cards: MessageCard[];
+  liveBlockIndex: number | null;
+}
+
+function isInvisibleEntry(entry: MessageBlock | MessageCard): boolean {
+  if (entry.kind === "text") return entry.text === "";
+  if (entry.kind === "thinking") return entry.text === "" && entry.durationMs === undefined;
+  return false;
+}
+
+function isCard(entry: MessageBlock | MessageCard): entry is MessageCard {
+  return entry.kind === "toolCall" || entry.kind === "toolResult";
 }
 
 function isAggregatableCard(card: MessageCard): boolean {

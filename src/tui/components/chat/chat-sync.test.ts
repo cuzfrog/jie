@@ -8,7 +8,7 @@ type CompactionMarker = NonNullable<AgentUiState["compactionMarker"]>;
 const AGENT_ID: AgentId = "my-team:general-1";
 
 function makeTurn(userPrompt: string, text: string | null = null, seq = 0): MessageTurn {
-  return { userPrompt, cards: [], blocks: text === null ? [] : [{ kind: "text", text }], streamId: null, seq };
+  return { userPrompt, entries: text === null ? [] : [{ kind: "text", text }], streamId: null, seq };
 }
 
 function teamState(agents: ReadonlyArray<AgentUiState>, focusedAgentId: AgentId | null, overrides: Partial<TuiState> = {}): TuiState {

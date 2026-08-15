@@ -52,6 +52,7 @@ export interface SeedRole {
   readonly systemPrompt: string;
   readonly tools?: ReadonlyArray<string>;
   readonly model?: string;
+  readonly targetContextWindowSize?: number;
   readonly subscribe?: ReadonlyArray<string>;
   readonly skills?: ReadonlyArray<string>;
 }
@@ -67,13 +68,14 @@ export function seedTeam(jieDir: string, teamId: string, leaderRole: string, rol
     const tools = role.tools ?? [];
     const toolsYaml = tools.length === 0 ? "tools: []" : `tools:\n${tools.map((t) => `  - ${t}`).join("\n")}`;
     const modelLine = role.model !== undefined ? `model: ${role.model}\n` : "";
+    const targetWindowLine = role.targetContextWindowSize !== undefined ? `target_context_window_size: ${role.targetContextWindowSize}\n` : "";
     const subscribe = role.subscribe ?? [];
     const subscribeYaml = subscribe.length === 0 ? "" : `\nsubscribe:\n${subscribe.map((t) => `  - ${t}`).join("\n")}`;
     const skills = role.skills ?? [];
     const skillsYaml = skills.length === 0 ? "" : `\nskills:\n${skills.map((s) => `  - ${s}`).join("\n")}`;
     writeFileSync(
       join(teamsDir, `${role.role}.md`),
-      `---\n${modelLine}${toolsYaml}${subscribeYaml}${skillsYaml}\n---\n${role.systemPrompt}\n`,
+      `---\n${modelLine}${targetWindowLine}${toolsYaml}${subscribeYaml}${skillsYaml}\n---\n${role.systemPrompt}\n`,
     );
   }
 }

@@ -9,8 +9,8 @@ function block(text: string): MessageBlock {
   return { kind: "text", text };
 }
 
-function turn(userPrompt: string, blocks: ReadonlyArray<MessageBlock> = [], cards: ReadonlyArray<MessageCard> = []): MessageTurn {
-  return { userPrompt, blocks: [...blocks], cards: [...cards], streamId: null, seq: 0 };
+function turn(userPrompt: string, entries: ReadonlyArray<MessageBlock | MessageCard> = []): MessageTurn {
+  return { userPrompt, entries: [...entries], streamId: null, seq: 0 };
 }
 
 describe("estimateContextTokens", () => {
@@ -27,7 +27,7 @@ describe("estimateContextTokens", () => {
   });
 
   test("counts tool call input and output in current turn", () => {
-    expect(estimateContextTokens([], turn("", [], [card("abcd", "efghijkl")]))).toBe(3);
+    expect(estimateContextTokens([], turn("", [card("abcd", "efghijkl")]))).toBe(3);
   });
 
   test("counts history across multiple turns", () => {
@@ -36,11 +36,11 @@ describe("estimateContextTokens", () => {
   });
 
   test("skips null tool output without throwing", () => {
-    expect(estimateContextTokens([], turn("", [], [card("abcd", null)]))).toBe(1);
+    expect(estimateContextTokens([], turn("", [card("abcd", null)]))).toBe(1);
   });
 
   test("counts tool error text when output is null", () => {
-    expect(estimateContextTokens([], turn("", [], [card("abcd", null, "err-msg")]))).toBe(3);
+    expect(estimateContextTokens([], turn("", [card("abcd", null, "err-msg")]))).toBe(3);
   });
 
   test("rounds up partial tokens (ceiling)", () => {

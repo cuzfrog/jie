@@ -2,7 +2,7 @@ import { seedTeam, FIXTURE } from "../_fixture.ts";
 import { loadMockExpectations } from "../../mock-llm-backend";
 import {
   startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, waitForAgent,
-  waitForAgentEffort, waitForAgentModelId, sendCmd, sendLine, type TuiHarness,
+  waitForAgentEffort, waitForAgentModelId, sendCmd, sendLine, textOfTurns, type TuiHarness,
 } from "./harness";
 import expectations from "./scenario-1.llm.ts";
 
@@ -37,7 +37,7 @@ describe("Scenario 1 — simple agent", () => {
       ...(agent?.history ?? []),
       ...(agent?.currentTurn !== null && agent?.currentTurn !== undefined ? [agent.currentTurn] : []),
     ];
-    const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
+    const allBlocks = textOfTurns(allTurns);
     expect(allBlocks.length).toBeGreaterThan(0);
     const allPrompts = allTurns.map((t) => t.userPrompt).join("\n");
     expect(allPrompts).toContain("Tell me a story");

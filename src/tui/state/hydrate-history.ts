@@ -1,6 +1,6 @@
 import { isDiffDetails, type AgentMessage, type UserIngressMessage } from "../../platform";
 import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { AgentUiState, MessageCard, MessageTurn } from "./state";
+import type { AgentUiState, MessageBlock, MessageCard, MessageTurn } from "./state";
 
 const TRUNCATION_BYTES = 4 * 1024;
 const TRUNCATION_MARKER = "...[%d chars truncated]...";
@@ -21,17 +21,17 @@ export function hydrateHistory(messages: ReadonlyArray<AgentMessage>, startSeq: 
   for (const message of messages) {
     if (message.role === "user") {
       if (current !== null) turns.push(current);
-      current = { userPrompt: userPromptText(message), cards: [], blocks: [], streamId: null, seq: nextSeq };
+      current = { userPrompt: userPromptText(message), entries: [], streamId: null, seq: nextSeq };
       nextSeq += 1;
     } else if (message.role === "assistant") {
       if (current === null) {
-        current = { userPrompt: "", cards: [], blocks: [], streamId: null, seq: nextSeq };
+        current = { userPrompt: "", entries: [], streamId: null, seq: nextSeq };
         nextSeq += 1;
       }
       appendAssistant(current, message);
     } else if (message.role === "toolResult") {
       if (current === null) {
-        current = { userPrompt: "", cards: [], blocks: [], streamId: null, seq: nextSeq };
+        current = { userPrompt: "", entries: [], streamId: null, seq: nextSeq };
         nextSeq += 1;
       }
       appendToolResult(current, message);
@@ -59,43 +59,49 @@ function appendAssistant(turn: MessageTurn, message: AssistantMessage): void {
     } else if (part.type === "toolCall") {
       const input = JSON.stringify(part.arguments);
       const { text, truncated } = truncateString(input);
-      turn.cards.push({ kind: "toolCall", callId: part.id, name: part.name, input: text, inputTruncated: truncated });
+      turn.entries.push({ kind: "toolCall", callId: part.id, name: part.name, input: text, inputTruncated: truncated });
     }
   }
 }
 
 function appendToolResult(turn: MessageTurn, message: ToolResultMessage): void {
   const text = message.content.filter(isTextContent).map((part) => part.text).join("");
-  const index = turn.cards.findIndex((card) => card.kind === "toolCall" && card.callId === message.toolCallId);
-  const prior = index === -1 ? undefined : turn.cards[index];
+  const index = turn.entries.findIndex((entry) => (entry.kind === "toolCall" || entry.kind === "toolResult") && entry.callId === message.toolCallId);
+  const prior = index === -1 ? undefined : turn.entries[index];
+  const priorInput = prior !== undefined && isToolCard(prior) ? prior.input : undefined;
+  const priorInputTruncated = prior !== undefined && isToolCard(prior) ? prior.inputTruncated : undefined;
   const output = message.isError ? null : text;
   const { text: outputText, truncated: outputTruncated } = maybeTruncate(output);
   const card: MessageCard = {
     kind: "toolResult",
     callId: message.toolCallId,
     name: message.toolName,
-    input: prior?.input,
-    inputTruncated: prior?.inputTruncated,
+    input: priorInput,
+    inputTruncated: priorInputTruncated,
     output: outputText,
     outputTruncated,
     error: message.isError ? text : null,
     details: isDiffDetails(message.details) ? message.details : null,
   };
-  if (index === -1) turn.cards.push(card);
-  else turn.cards[index] = card;
+  if (index === -1) turn.entries.push(card);
+  else turn.entries[index] = card;
 }
 
 function appendBlock(turn: MessageTurn, kind: "text" | "thinking", text: string, durationMs = 0): void {
-  const last = turn.blocks[turn.blocks.length - 1];
-  if (last !== undefined && last.kind === kind) {
+  const last = turn.entries[turn.entries.length - 1];
+  if (last !== undefined && (last.kind === "text" || last.kind === "thinking") && last.kind === kind) {
     if (kind === "thinking") {
-      turn.blocks[turn.blocks.length - 1] = { ...last, text: last.text + text, durationMs: (last.durationMs ?? 0) + durationMs };
+      turn.entries[turn.entries.length - 1] = { ...last, text: last.text + text, durationMs: (last.durationMs ?? 0) + durationMs };
     } else {
-      turn.blocks[turn.blocks.length - 1] = { ...last, text: last.text + text };
+      turn.entries[turn.entries.length - 1] = { ...last, text: last.text + text };
     }
     return;
   }
-  turn.blocks.push({ kind, text, ...(kind === "thinking" ? { durationMs } : {}) });
+  turn.entries.push({ kind, text, ...(kind === "thinking" ? { durationMs } : {}) });
+}
+
+function isToolCard(entry: MessageBlock | MessageCard): entry is MessageCard {
+  return entry.kind === "toolCall" || entry.kind === "toolResult";
 }
 
 function isTextContent(part: { readonly type: string }): part is TextContent {

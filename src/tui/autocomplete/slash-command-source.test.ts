@@ -637,6 +637,28 @@ describe("SlashCommandSource — /kanban arguments", () => {
       .getSuggestions(["/kanban remove "], 0, 15, { signal: signal() });
     expect(suggestions).toBeNull();
   });
+});
 
+describe("SlashCommandSource — /setting arguments", () => {
+  function settingStateStore(expanded: Partial<{ toolCardsExpanded: boolean; thinkingExpanded: boolean }> = {}): StateStore {
+    return makeStateStore(makeTuiState({ teamId: "my-team", ...expanded }));
+  }
 
+  test("suggests setting names with current status after '/setting '", async () => {
+    const suggestions = await slashSource(makePlatform().platform, settingStateStore({ toolCardsExpanded: true }))
+      .getSuggestions(["/setting "], 0, 9, { signal: signal() });
+    expect(suggestions!.items).toEqual([
+      { value: "diff-block-expand", label: "diff-block-expand", description: "current: on" },
+      { value: "thinking-block-expand", label: "thinking-block-expand", description: "current: off" },
+    ]);
+  });
+
+  test("suggests values with the arg hint and current status after a feature", async () => {
+    const suggestions = await slashSource(makePlatform().platform, settingStateStore({ thinkingExpanded: true }))
+      .getSuggestions(["/setting thinking-block-expand "], 0, 31, { signal: signal() });
+    expect(suggestions!.items).toEqual([
+      { value: "on", label: "on", description: "<on|off> — current: on" },
+      { value: "off", label: "off", description: "<on|off> — current: on" },
+    ]);
+  });
 });

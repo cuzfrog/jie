@@ -100,6 +100,24 @@ describe("SqliteTranscriptStore", () => {
     expect(second.content).toBe("c");
   });
 
+  test("restoreDisplay returns the compacted prefix, summary, and retained tail in seq order", async () => {
+    const m = makeTranscriptStore();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s1", "t1");
+    m.persist(userMessage("c"), "agent-1", "s1", "t1");
+    m.compact(2, summaryMessage("sum"), "agent-1", "s1", "t1");
+    const all = await m.restoreDisplay("agent-1", "s1", "t1");
+    expect(all).toHaveLength(4);
+    const roles = all.map((msg) => msg.role);
+    expect(roles).toEqual(["user", "user", "compactionSummary", "user"]);
+  });
+
+  test("restoreDisplay returns empty array when no history exists", async () => {
+    const m = makeTranscriptStore();
+    const all = await m.restoreDisplay("agent-1", "s-fresh", "t1");
+    expect(all).toEqual([]);
+  });
+
   test("compact flips compacted=1 on the oldest N non-compacted rows", () => {
     const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");

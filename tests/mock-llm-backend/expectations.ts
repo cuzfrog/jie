@@ -32,11 +32,13 @@ export type ResponseChunk =
       readonly argumentsChunks: ReadonlyArray<string>;
       readonly delayMs?: number;
     }
-  | { readonly kind: "finish"; readonly reason: "stop" | "length" | "tool_calls"; readonly delayMs?: number };
+  | { readonly kind: "finish"; readonly reason: "stop" | "length" | "tool_calls"; readonly delayMs?: number }
+  | { readonly kind: "usage"; readonly promptTokens: number; readonly completionTokens?: number; readonly cacheReadTokens?: number; readonly cacheWriteTokens?: number; readonly delayMs?: number };
 
 export interface Expectation {
   readonly match: MatchRule;
   readonly responseChunks: ReadonlyArray<ResponseChunk>;
+  readonly contextLimitTokens?: number;
 }
 
 export interface RecordedCall {
@@ -185,6 +187,19 @@ function renderChunk(chunk: ResponseChunk, completionId: string, model: string, 
     return out.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n");
   }
 
+  if (chunk.kind === "usage") {
+    const usage: Record<string, unknown> = {
+      prompt_tokens: chunk.promptTokens,
+      completion_tokens: chunk.completionTokens ?? 0,
+      total_tokens: chunk.promptTokens + (chunk.completionTokens ?? 0),
+    };
+    const details: Record<string, unknown> = {};
+    if (chunk.cacheReadTokens !== undefined) details.cached_tokens = chunk.cacheReadTokens;
+    if (chunk.cacheWriteTokens !== undefined) details.cache_write_tokens = chunk.cacheWriteTokens;
+    if (Object.keys(details).length > 0) usage.prompt_tokens_details = details;
+    return `data: ${JSON.stringify({ ...base, choices: [], usage })}`;
+  }
+
   const finishBase: Record<string, unknown> = {
     ...base,
     choices: [
@@ -236,4 +251,16 @@ export function renderSseStream(
 function sleep(ms: number): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function contentLength(content: ChatCompletionRequestBody["messages"][number]["content"]): number {
+  if (typeof content === "string") return content.length;
+  return content.reduce((sum, part) => sum + (part.text ?? "").length, 0);
+}
+
+export function estimateRequestTokens(req: ChatCompletionRequestBody): number {
+  let chars = 0;
+  for (const message of req.messages) chars += message.role.length + contentLength(message.content);
+  const toolsChars = req.tools === undefined ? 0 : JSON.stringify(req.tools).length;
+  return Math.ceil((chars + toolsChars) / 4);
 }

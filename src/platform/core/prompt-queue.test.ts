@@ -1,3 +1,4 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentSender, EventEnvelope, EventManager } from "../event";
 import { PromptQueueImpl, type PromptDispatcher, type PromptQueue } from "./prompt-queue";
 
@@ -6,6 +7,7 @@ type QueueUpdateEnvelope = EventEnvelope<"agent.prompt.queue.update">;
 const dispatcher = vi.mocked<PromptDispatcher>({
   prompt: vi.fn(),
   followUp: vi.fn(),
+  steer: vi.fn(),
   isStreaming: vi.fn(),
 });
 
@@ -39,6 +41,26 @@ function lastSnapshot(): ReadonlyArray<{ text: string; source: "user" | "peer"; 
 
 beforeEach(() => {
   dispatcher.isStreaming.mockReturnValue(false);
+});
+
+describe("PromptQueue — steer", () => {
+  test("steer delegates to dispatcher.steer immediately, bypassing the queue array and queue-update events", () => {
+    const message: AgentMessage = { role: "user", content: "steer me", timestamp: 0 };
+    makeQueue().steer(message);
+    expect(dispatcher.steer).toHaveBeenCalledTimes(1);
+    expect(dispatcher.steer).toHaveBeenCalledWith(message);
+    expect(dispatcher.prompt).not.toHaveBeenCalled();
+    expect(dispatcher.followUp).not.toHaveBeenCalled();
+    expect(queueUpdates()).toHaveLength(0);
+  });
+
+  test("steer works while the dispatcher is streaming", () => {
+    dispatcher.isStreaming.mockReturnValue(true);
+    const message: AgentMessage = { role: "user", content: "steer me", timestamp: 0 };
+    makeQueue().steer(message);
+    expect(dispatcher.steer).toHaveBeenCalledTimes(1);
+    expect(dispatcher.steer).toHaveBeenCalledWith(message);
+  });
 });
 
 describe("PromptQueue — ingress", () => {

@@ -3,6 +3,7 @@ import type { PlatformCradle } from "../container";
 import { AgentRegistryImpl } from "./agent-registry";
 import { AgentDispatcherImpl } from "./agent-dispatcher";
 import { TeamRegistryImpl } from "./registry";
+import { SessionNamerImpl } from "./session-namer";
 import { TeamManagerImpl } from "./team-manager";
 
 export function registerTeamModule(container: AwilixContainer<PlatformCradle>): void {
@@ -11,5 +12,6 @@ export function registerTeamModule(container: AwilixContainer<PlatformCradle>): 
     teamRegistry: asClass(TeamRegistryImpl).singleton(),
     teamManager: asClass(TeamManagerImpl).singleton(),
     agentDispatcher: asClass(AgentDispatcherImpl).singleton(),
+    sessionNamer: asClass(SessionNamerImpl).singleton(),
   });
 }

@@ -86,6 +86,11 @@ describe("WelcomeBanner", () => {
     expect(new WelcomeBanner(stateStore).render(80)).toEqual([]);
   });
 
+  test("hides the banner when an agent has historical messages", () => {
+    stateStore.getState.mockReturnValue(stateWithHistory());
+    expect(new WelcomeBanner(stateStore).render(80)).toEqual([]);
+  });
+
   test("every banner line fits the given width", () => {
     stateStore.getState.mockReturnValue(stateWithTeamAndModel());
     const banner = new WelcomeBanner(stateStore);
@@ -131,6 +136,16 @@ describe("WelcomeBanner.update", () => {
     const banner = new WelcomeBanner(stateStore);
     banner.update();
     stateStore.getState.mockReturnValue(makeTuiState({ agents, teamId: "my-team" }));
+    expect(banner.update()).toBe(true);
+  });
+
+  test("reports dirty when chat content appears even if the agents map reference is reused", () => {
+    const agents = new Map();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents }));
+    const banner = new WelcomeBanner(stateStore);
+    banner.update();
+    agents.set(LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, history: [makeTurn()] }));
+    stateStore.getState.mockReturnValue(makeTuiState({ agents }));
     expect(banner.update()).toBe(true);
   });
 
@@ -192,8 +207,17 @@ function stateWithTurn(): TuiState {
   });
 }
 
+function stateWithHistory(): TuiState {
+  const history = [makeTurn()];
+  return makeTuiState({
+    teamId: "my-team",
+    leaderAgentId: LEADER_ID,
+    agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, history })]]),
+  });
+}
+
 function makeTurn(): MessageTurn {
-  return { userPrompt: "q", cards: [], blocks: [], streamId: 1, seq: 0 };
+  return { userPrompt: "q", entries: [], streamId: 1, seq: 0 };
 }
 
 function stripAnsi(text: string): string {

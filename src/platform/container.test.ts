@@ -19,6 +19,7 @@ const SERVICE_KEYS = [
   "toolRegistry",
   "agentBodyFactory",
   "teamManager",
+  "sessionNamer",
   "agentDispatcher",
   "commandExecutor",
   "mcpConnector",

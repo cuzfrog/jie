@@ -6,7 +6,7 @@ const ROW_BACKGROUND = "\x1b[40m";
 const ROW_BACKGROUND_END = "\x1b[49m";
 
 function turn(userPrompt: string): MessageTurn {
-  return { userPrompt, cards: [], blocks: [], streamId: null, seq: 0 };
+  return { userPrompt, entries: [], streamId: null, seq: 0 };
 }
 
 function stripAnsi(text: string): string {

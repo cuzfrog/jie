@@ -67,13 +67,13 @@ describe("SettingCommand", () => {
     });
   });
 
-  test("complete returns the setting names", () => {
+  test("complete returns the setting names with current status", () => {
     const { platform } = makePlatform();
-    const context = { state: makeTuiState(), platform };
+    const context = { state: makeTuiState({ toolCardsExpanded: true }), platform };
     expect(command.complete("", context)).toEqual({
       items: [
-        { value: "diff-block-expand", label: "diff-block-expand" },
-        { value: "thinking-block-expand", label: "thinking-block-expand" },
+        { value: "diff-block-expand", label: "diff-block-expand", description: "current: on" },
+        { value: "thinking-block-expand", label: "thinking-block-expand", description: "current: off" },
       ],
     });
   });
@@ -82,17 +82,17 @@ describe("SettingCommand", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
     expect(command.complete("thin", context)).toEqual({
-      items: [{ value: "thinking-block-expand", label: "thinking-block-expand" }],
+      items: [{ value: "thinking-block-expand", label: "thinking-block-expand", description: "current: off" }],
     });
   });
 
-  test("complete returns on and off after a setting is chosen", () => {
+  test("complete returns on and off with current status", () => {
     const { platform } = makePlatform();
-    const context = { state: makeTuiState(), platform };
-    expect(command.complete("diff-block-expand ", context)).toEqual({
+    const context = { state: makeTuiState({ thinkingExpanded: true }), platform };
+    expect(command.complete("thinking-block-expand ", context)).toEqual({
       items: [
-        { value: "on", label: "on" },
-        { value: "off", label: "off" },
+        { value: "on", label: "on", description: "<on|off> — current: on" },
+        { value: "off", label: "off", description: "<on|off> — current: on" },
       ],
     });
   });
@@ -101,7 +101,7 @@ describe("SettingCommand", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
     expect(command.complete("thinking-block-expand of", context)).toEqual({
-      items: [{ value: "off", label: "off" }],
+      items: [{ value: "off", label: "off", description: "<on|off> — current: off" }],
     });
   });
 
@@ -109,5 +109,15 @@ describe("SettingCommand", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
     expect(command.complete("diff-block-expand on", context)).toBe(null);
+  });
+
+  test("complete value descriptions include the arg hint and current status", () => {
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ toolCardsExpanded: true }), platform };
+    const completion = command.complete("diff-block-expand ", context);
+    expect(completion?.items).toEqual([
+      { value: "on", label: "on", description: "<on|off> — current: on" },
+      { value: "off", label: "off", description: "<on|off> — current: on" },
+    ]);
   });
 });

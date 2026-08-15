@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   createCompactionSummaryMessage,
+  estimateTokens,
   type Agent as PiAgent,
   type AgentEvent as PiAgentEvent,
   type AgentMessage,
@@ -222,16 +223,19 @@ function makeFakeTranscriptStore(): {
   transcriptStore: TranscriptStore;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
+  restoreDisplay: ReturnType<typeof vi.fn>;
 } {
   const persisted: AgentMessage[] = [];
   const persist = vi.fn(async (message: AgentMessage) => {
     persisted.push(message);
   });
   const restore = vi.fn(async () => persisted.slice());
+  const restoreDisplay = vi.fn(async () => persisted.slice());
   const transcriptStore = vi.mocked<TranscriptStore>({
     persist,
     compact: vi.fn(),
     restore,
+    restoreDisplay,
     hasSession: vi.fn(() => false),
     listSessions: vi.fn(() => []),
     listAgentKeys: vi.fn(() => []),
@@ -239,7 +243,7 @@ function makeFakeTranscriptStore(): {
     sessionName: vi.fn(() => null),
     renameSession: vi.fn(),
   });
-  return { transcriptStore, persisted, restore };
+  return { transcriptStore, persisted, restore, restoreDisplay };
 }
 
 interface MakeBodyOverrides {
@@ -265,12 +269,15 @@ interface Harness {
   skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
   hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
   memoryManager: ReturnType<typeof vi.mocked<MemoryManager>>;
+  transcriptStore: TranscriptStore;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
+  restoreDisplay: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
   state: FakeAgentState;
   prompt: ReturnType<typeof vi.fn>;
   followUp: ReturnType<typeof vi.fn>;
+  steer: ReturnType<typeof vi.fn>;
   abort: ReturnType<typeof vi.fn>;
   continue: ReturnType<typeof vi.fn>;
   hasQueuedMessages: ReturnType<typeof vi.fn>;
@@ -300,7 +307,7 @@ function makeFakeEventManager(): EventManager {
 
 function makeHarness(): Harness {
   const events: EventManager = makeFakeEventManager();
-  const { transcriptStore, persisted, restore } = makeFakeTranscriptStore();
+  const { transcriptStore, persisted, restore, restoreDisplay } = makeFakeTranscriptStore();
   const cap = makeFakeAgentFactory();
   const resolveModel = vi.fn<(provider: string, modelId: string) => Model<Api> | undefined>(() => undefined);
   const toolRegistry = vi.mocked<ToolRegistry>({
@@ -374,12 +381,15 @@ function makeHarness(): Harness {
     hookRunner,
     memoryManager,
     agentDispatcher,
+    transcriptStore,
     persisted,
     restore,
+    restoreDisplay,
     cap,
     state: cap.fake.state,
     prompt: cap.fake.prompt,
     followUp: cap.fake.followUp,
+    steer: cap.fake.steer,
     abort: cap.fake.abort,
     continue: cap.fake.continue,
     hasQueuedMessages: cap.fake.hasQueuedMessages,
@@ -1044,6 +1054,56 @@ describe("JieAgentBody — messages()", () => {
   });
 });
 
+describe("JieAgentBody — displayMessages()", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  function makeUserMessage(content: string): AgentMessage {
+    return { role: "user", content, timestamp: 0 };
+  }
+
+  test("returns an empty array before restore", () => {
+    const body = h.makeBody();
+    expect(body.displayMessages()).toEqual([]);
+    body.stop();
+  });
+
+  test("matches messages when restoreDisplay has no extra rows", async () => {
+    const body = h.makeBody();
+    h.persisted.push(makeUserMessage("m1"), makeAssistantMessage({ content: [{ type: "text", text: "reply" }] }));
+    await body.restore();
+    expect(body.displayMessages()).toEqual(body.messages());
+    body.stop();
+  });
+
+  test("includes the compacted prefix returned by restoreDisplay", async () => {
+    const body = h.makeBody();
+    const m1 = makeUserMessage("compacted");
+    const m2 = makeAssistantMessage({ content: [{ type: "text", text: "reply" }] });
+    const m3 = makeUserMessage("tail");
+    h.restore.mockResolvedValue([m2, m3]);
+    h.restoreDisplay.mockResolvedValue([m1, m2, m3]);
+    await body.restore();
+    expect(body.messages()).toEqual([m2, m3]);
+    expect(body.displayMessages()).toEqual([m1, m2, m3]);
+    body.stop();
+  });
+
+  test("returns the snapshot as a new array, not the internal state", async () => {
+    const body = h.makeBody();
+    h.persisted.push(makeUserMessage("m1"));
+    await body.restore();
+    const first = body.displayMessages();
+    h.state.messages.push(makeAssistantMessage({ content: [{ type: "text", text: "extra" }] }));
+    expect(first).toHaveLength(1);
+    expect(body.displayMessages()).toHaveLength(2);
+    body.stop();
+  });
+});
+
 describe("JieAgentBody — skill invocation expansion", () => {
   let h: Harness;
 
@@ -1233,6 +1293,25 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     await body.start();
     expect(idleEvents).toHaveLength(0);
     expect(turnStartEvents).toHaveLength(0);
+    body.stop();
+  });
+
+  test("the prompt queue dispatcher routes steer to agent.steer and the run continues when the agent has queued messages", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.hasQueuedMessages.mockReturnValue(true);
+    h.fireEvent({
+      type: "agent_end",
+      messages: [makeAssistantMessage({ stopReason: "length", content: [] })],
+    });
+    expect(h.steer).toHaveBeenCalledTimes(1);
+    expect(h.steer.mock.calls[0]![0]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("cut off"),
+    });
+    h.settleIdle();
+    await flush();
+    expect(h.continue).toHaveBeenCalledTimes(1);
     body.stop();
   });
 
@@ -1940,6 +2019,23 @@ describe("JieAgentBody — compaction", () => {
     body.stop();
   });
 
+  test("compaction rewrite appends removed messages to the compacted prefix for display", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    const first = makeUserMessage("m1");
+    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
+    const third = makeUserMessage("m3");
+    h.state.messages = [first, second, third];
+    const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
+    compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500, summarizedPrefix: [first] });
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(body.displayMessages()).toEqual([first, summary, second, third]);
+    body.stop();
+  });
+
   test("agent_end settle compacts even with an empty queue", async () => {
     const { compactor, compact } = makeFakeCompactor();
     const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
@@ -2208,5 +2304,214 @@ describe("JieAgentBody — debug logging", () => {
     } finally {
       rmSync(logDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("JieAgentBody — context overhead", () => {
+  function makeUserMessage(content: string): AgentMessage {
+    return { role: "user", content, timestamp: 0 };
+  }
+
+  function makeOverheadCompactor() {
+    const fitToWindow = vi.fn(
+      (messages: ReadonlyArray<AgentMessage>, _model?: Model<Api>, _contextWindow?: number, _overheadTokens?: number) => messages,
+    );
+    const compactor: Compactor = {
+      needsCompaction: () => false,
+      contextTokens: () => 0,
+      compact: async () => null,
+      fitToWindow,
+    };
+    return { compactor, fitToWindow };
+  }
+
+  test("seeds overhead from the composed system prompt and tool schemas", async () => {
+    const { compactor, fitToWindow } = makeOverheadCompactor();
+    const h = makeHarness();
+    const body = h.makeBody({
+      model: makeModel("anthropic", "claude-sonnet-4"),
+      soul: makeSoul({ tools: ["noop"] }),
+      compactor,
+    });
+    const transformContext = h.cap.capturedOptions?.transformContext;
+    if (transformContext === undefined) throw new Error("transformContext not wired");
+    await transformContext([makeUserMessage("hello")]);
+    expect(fitToWindow).toHaveBeenCalled();
+    const expected = estimateTokens({ role: "user", content: h.cap.fake.state.systemPrompt, timestamp: 0 })
+      + Math.ceil(JSON.stringify(h.cap.fake.state.tools).length / 4);
+    expect(fitToWindow.mock.calls[0]![3]).toBe(expected);
+    body.stop();
+  });
+
+  test("passes the same overhead to fitToWindow on successive transformContext calls", async () => {
+    const { compactor, fitToWindow } = makeOverheadCompactor();
+    const h = makeHarness();
+    const body = h.makeBody({
+      model: makeModel("anthropic", "claude-sonnet-4"),
+      compactor,
+    });
+    const transformContext = h.cap.capturedOptions?.transformContext;
+    if (transformContext === undefined) throw new Error("transformContext not wired");
+    const messages = [makeUserMessage("hello")];
+    await transformContext([...messages]);
+    await transformContext([...messages]);
+    expect(fitToWindow).toHaveBeenCalledTimes(2);
+    expect(fitToWindow.mock.calls[0]![3]).toBe(fitToWindow.mock.calls[1]![3]);
+    body.stop();
+  });
+
+  test("calibrates overhead from assistant usage at message_end", async () => {
+    const { compactor, fitToWindow } = makeOverheadCompactor();
+    const h = makeHarness();
+    const body = h.makeBody({
+      model: makeModel("anthropic", "claude-sonnet-4"),
+      compactor,
+    });
+    const transformContext = h.cap.capturedOptions?.transformContext;
+    if (transformContext === undefined) throw new Error("transformContext not wired");
+    const userMessage = makeUserMessage("hello");
+    await transformContext([userMessage]);
+    h.fireEvent({
+      type: "message_end",
+      message: makeAssistantMessage({
+        usage: {
+          input: 100,
+          output: 20,
+          cacheRead: 5,
+          cacheWrite: 0,
+          totalTokens: 125,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      }),
+    });
+    await transformContext([userMessage]);
+    expect(fitToWindow).toHaveBeenCalledTimes(2);
+    expect(fitToWindow.mock.calls[1]![3]).toBe(105 - estimateTokens(userMessage));
+    body.stop();
+  });
+
+  test("does not calibrate overhead when the assistant model id does not match the pending model", async () => {
+    const { compactor, fitToWindow } = makeOverheadCompactor();
+    const h = makeHarness();
+    const body = h.makeBody({
+      model: makeModel("anthropic", "claude-sonnet-4"),
+      compactor,
+    });
+    const transformContext = h.cap.capturedOptions?.transformContext;
+    if (transformContext === undefined) throw new Error("transformContext not wired");
+    await transformContext([makeUserMessage("hello")]);
+    h.fireEvent({
+      type: "message_end",
+      message: makeAssistantMessage({
+        model: "different-model",
+        usage: {
+          input: 10000,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 10000,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      }),
+    });
+    await transformContext([makeUserMessage("hello again")]);
+    expect(fitToWindow).toHaveBeenCalledTimes(2);
+    expect(fitToWindow.mock.calls[1]![3]).toBe(fitToWindow.mock.calls[0]![3]);
+    body.stop();
+  });
+
+  test("does not calibrate overhead when the assistant provider does not match the pending model provider", async () => {
+    const { compactor, fitToWindow } = makeOverheadCompactor();
+    const h = makeHarness();
+    const body = h.makeBody({
+      model: makeModel("anthropic", "claude-sonnet-4"),
+      compactor,
+    });
+    const transformContext = h.cap.capturedOptions?.transformContext;
+    if (transformContext === undefined) throw new Error("transformContext not wired");
+    await transformContext([makeUserMessage("hello")]);
+    h.fireEvent({
+      type: "message_end",
+      message: makeAssistantMessage({
+        provider: "openai",
+        usage: {
+          input: 10000,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 10000,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      }),
+    });
+    await transformContext([makeUserMessage("hello again")]);
+    expect(fitToWindow).toHaveBeenCalledTimes(2);
+    expect(fitToWindow.mock.calls[1]![3]).toBe(fitToWindow.mock.calls[0]![3]);
+    body.stop();
+  });
+
+  test("resets overhead and clears the pending snapshot on model change", async () => {
+    const { compactor, fitToWindow } = makeOverheadCompactor();
+    const h = makeHarness();
+    h.resolveModel.mockReturnValue(makeModel("lm-studio", "qwen3.5-2b"));
+    const body = h.makeBody({
+      soul: makeSoul({ model: "" }),
+      model: makeModel("anthropic", "claude-sonnet-4"),
+      compactor,
+    });
+    await body.start();
+    const transformContext = h.cap.capturedOptions?.transformContext;
+    if (transformContext === undefined) throw new Error("transformContext not wired");
+    const userMessage = makeUserMessage("hello");
+    await transformContext([userMessage]);
+    h.fireEvent({
+      type: "message_end",
+      message: makeAssistantMessage({
+        usage: {
+          input: 100,
+          output: 20,
+          cacheRead: 5,
+          cacheWrite: 0,
+          totalTokens: 125,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      }),
+    });
+    await transformContext([userMessage]);
+    expect(fitToWindow.mock.calls[1]![3]).toBe(105 - estimateTokens(userMessage));
+
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    await transformContext([makeUserMessage("after model change")]);
+    expect(fitToWindow).toHaveBeenCalledTimes(3);
+    expect(fitToWindow.mock.calls[2]![3]).toBe(fitToWindow.mock.calls[0]![3]);
+
+    h.fireEvent({
+      type: "message_end",
+      message: makeAssistantMessage({
+        model: "claude-sonnet-4",
+        usage: {
+          input: 500,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 500,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      }),
+    });
+    await transformContext([makeUserMessage("old model ignored")]);
+    expect(fitToWindow).toHaveBeenCalledTimes(4);
+    expect(fitToWindow.mock.calls[3]![3]).toBe(fitToWindow.mock.calls[0]![3]);
+    body.stop();
+  });
+
+  test("identity.model.contextWindow reflects the soul's target", () => {
+    const h = makeHarness();
+    const body = h.makeBody({
+      soul: makeSoul({ targetContextWindowSize: 60_000 }),
+      model: makeModel("anthropic", "claude-sonnet-4"),
+    });
+    expect(body.identity.model?.contextWindow).toBe(60_000);
+    body.stop();
   });
 });

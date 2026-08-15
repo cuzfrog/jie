@@ -1,5 +1,5 @@
 import type { AnyEventEnvelope } from "../../platform";
-import { TuiState, type AgentId, type AgentUiState, type MessageCard, type MessageTurn } from "./state";
+import { TuiState, type AgentId, type AgentUiState, type MessageBlock, type MessageCard, type MessageTurn } from "./state";
 import { teamLoadReducer } from "./team-load-reducer";
 import { contextHistory, estimateContextTokens } from "./context-tokens";
 import { Actions } from "./actions";
@@ -9,6 +9,7 @@ import { reduceQuestionAction } from "./question-reducer";
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
     case "system.team.loaded": return reduceTeamLoaded(state, event);
+    case "system.session.renamed": return reduceSessionRenamed(state, event);
     case "system.error": return reduceSystemError(state, event);
     case "agent.model.assigned": return reduceModelAssigned(state, event);
     case "agent.prompt.queue.update": return reduceQueueUpdate(state, event);
@@ -31,6 +32,12 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
 function reduceTeamLoaded(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type !== "system.team.loaded") return state;
   return teamLoadReducer(state, event.payload);
+}
+
+function reduceSessionRenamed(state: TuiState, event: AnyEventEnvelope): TuiState {
+  if (event.type !== "system.session.renamed") return state;
+  if (state.teamId !== event.payload.teamId) return state;
+  return { ...state, sessionName: event.payload.sessionName };
 }
 
 function reduceSystemError(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -84,14 +91,16 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const turn = agent.currentTurn;
   if (turn !== null && !turnIsPopulated(turn) && turn.userPrompt === "") {
     const currentTurn = { ...turn, userPrompt: prompt };
-    const contextTokensUsed = estimateContextTokens(contextHistory(agent), currentTurn);
+    const priorTokens = agent.lastReportedTotalTokens ?? estimateContextTokens(contextHistory(agent), null);
+    const contextTokensUsed = priorTokens + estimateContextTokens([], currentTurn);
     const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
     return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention });
   }
   const completed = turn === null ? contextHistory(agent) : [...contextHistory(agent), turn];
   const history = turn === null ? agent.history : [...agent.history, turn];
   const currentTurn = freshTurn(prompt, seq);
-  const contextTokensUsed = estimateContextTokens(completed, currentTurn);
+  const priorTokens = agent.lastReportedTotalTokens ?? estimateContextTokens(completed, null);
+  const contextTokensUsed = priorTokens + estimateContextTokens([], currentTurn);
   const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
   return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention, nextEntrySeq: seq + 1 });
 }
@@ -149,7 +158,7 @@ function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
     compactionMarker: { turnsBefore, summary: event.payload.summary, tokensBefore: event.payload.tokens_before },
     compactionInProgress: false,
     contextTokensUsed: event.payload.tokens_after,
-    lastReportedTotalTokens: null,
+    lastReportedTotalTokens: event.payload.tokens_after,
     uploadTokens: 0,
     downloadTokens: 0,
   };
@@ -179,16 +188,20 @@ function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
   const { agentId, agent } = resolved;
   if (agent.currentTurn === null) return state;
   const { stream_id, block_type, text } = event.payload;
-  const blocks = [...agent.currentTurn.blocks];
-  const last = blocks[blocks.length - 1];
+  const entries = [...agent.currentTurn.entries];
+  const last = entries[entries.length - 1];
   if (agent.currentTurn.streamId !== stream_id) {
-    blocks.push({ kind: block_type, text });
-  } else if (last !== undefined && last.kind === block_type) {
-    blocks[blocks.length - 1] = { ...last, text: last.text + text };
+    entries.push({ kind: block_type, text });
+  } else if (
+    last !== undefined &&
+    (last.kind === "text" || last.kind === "thinking") &&
+    last.kind === block_type
+  ) {
+    entries[entries.length - 1] = { ...last, text: last.text + text };
   } else {
-    blocks.push({ kind: block_type, text });
+    entries.push({ kind: block_type, text });
   }
-  const nextTurn = { ...agent.currentTurn, blocks, streamId: stream_id };
+  const nextTurn = { ...agent.currentTurn, entries, streamId: stream_id };
   const contextTokensUsed = estimateContextTokens(contextHistory(agent), nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(state, agentId, next);
@@ -204,16 +217,16 @@ function reduceStreamEnd(state: TuiState, event: AnyEventEnvelope): TuiState {
   const { stream_id, thinking_durations } = event.payload;
   if (thinking_durations.length === 0) return state;
   if (turn.streamId !== stream_id) return state;
-  const blocks = [...turn.blocks];
+  const entries = [...turn.entries];
   let durationIndex = 0;
-  for (let i = 0; i < blocks.length && durationIndex < thinking_durations.length; i += 1) {
-    const block = blocks[i]!;
-    if (block.kind !== "thinking" || block.durationMs !== undefined) continue;
-    blocks[i] = { ...block, durationMs: thinking_durations[durationIndex]! };
+  for (let i = 0; i < entries.length && durationIndex < thinking_durations.length; i += 1) {
+    const entry = entries[i]!;
+    if (entry.kind !== "thinking" || entry.durationMs !== undefined) continue;
+    entries[i] = { ...entry, durationMs: thinking_durations[durationIndex]! };
     durationIndex += 1;
   }
   if (durationIndex === 0) return state;
-  const nextTurn = { ...turn, blocks };
+  const nextTurn = { ...turn, entries };
   return withAgent(state, agentId, { ...agent, currentTurn: nextTurn });
 }
 
@@ -224,9 +237,9 @@ function reduceToolCall(state: TuiState, event: AnyEventEnvelope): TuiState {
   const { agentId, agent } = resolved;
   if (agent.currentTurn === null) return state;
   const { tool_call_id, name, input, input_truncated } = event.payload;
-  if (agent.currentTurn.cards.some((card) => card.kind === "toolCall" && card.callId === tool_call_id)) return state;
+  if (agent.currentTurn.entries.some((entry) => (entry.kind === "toolCall" || entry.kind === "toolResult") && entry.callId === tool_call_id)) return state;
   const toolCallCard: MessageCard = { kind: "toolCall", callId: tool_call_id, name, input, inputTruncated: input_truncated };
-  const nextTurn = { ...agent.currentTurn, cards: [...agent.currentTurn.cards, toolCallCard] };
+  const nextTurn = { ...agent.currentTurn, entries: [...agent.currentTurn.entries, toolCallCard] };
   const contextTokensUsed = estimateContextTokens(contextHistory(agent), nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(state, agentId, next);
@@ -252,23 +265,25 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
     ? kanbanReducer(state, Actions.setKanbanBoard(details.cards))
     : state;
   if (agent.currentTurn === null) return boardState;
-  const cards = [...agent.currentTurn.cards];
-  const index = cards.findIndex((card) => card.kind === "toolCall" && card.callId === tool_call_id);
+  const entries = [...agent.currentTurn.entries];
+  const index = entries.findIndex((entry) => (entry.kind === "toolCall" || entry.kind === "toolResult") && entry.callId === tool_call_id);
   if (index === -1) return boardState;
-  const prior = cards[index];
-  cards[index] = {
+  const prior = entries[index];
+  const priorInput = isToolCard(prior) ? prior.input : undefined;
+  const priorInputTruncated = isToolCard(prior) ? prior.inputTruncated : undefined;
+  entries[index] = {
     kind: "toolResult",
     callId: tool_call_id,
     name,
-    input: prior?.input,
-    inputTruncated: prior?.inputTruncated,
+    input: priorInput,
+    inputTruncated: priorInputTruncated,
     output: displayOutput(output),
     outputTruncated: output_truncated,
     durationMs: duration_ms,
     error,
     details,
   };
-  const nextTurn = { ...agent.currentTurn, cards };
+  const nextTurn = { ...agent.currentTurn, entries };
   const contextTokensUsed = estimateContextTokens(contextHistory(agent), nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(boardState, agentId, next, { question });
@@ -293,28 +308,34 @@ function withAgent(state: TuiState, agentId: AgentId, agent: AgentUiState, extra
 }
 
 function freshTurn(userPrompt: string, seq: number): MessageTurn {
-  return { userPrompt, cards: [], blocks: [], streamId: null, seq };
+  return { userPrompt, entries: [], streamId: null, seq };
 }
 
 function turnIsPopulated(turn: MessageTurn | null): boolean {
   if (turn === null) return false;
-  if (turn.cards.length > 0) return true;
-  return turn.blocks.some((block) => block.text.length > 0);
+  return turn.entries.some((entry) => {
+    if (entry.kind === "text" || entry.kind === "thinking") return entry.text.length > 0;
+    return true;
+  });
 }
 
 function composeAgentId(teamId: string, agentKey: string): AgentId {
-  return `${teamId}:${agentKey}` as AgentId;
+  return `${teamId}:${agentKey}`;
+}
+
+function isToolCard(entry: MessageBlock | MessageCard): entry is MessageCard {
+  return entry.kind === "toolCall" || entry.kind === "toolResult";
 }
 
 function displayOutput(output: string | null): string | null {
   if (output === null) return null;
-  let parsed: unknown;
+  let parsed: { content?: string } | null;
   try {
     parsed = JSON.parse(output);
   } catch {
     return output;
   }
-  if (typeof parsed !== "object" || parsed === null || !("content" in parsed)) return output;
+  if (typeof parsed !== "object" || parsed === null) return output;
   const content = parsed.content;
   return typeof content === "string" ? content : output;
 }

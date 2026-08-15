@@ -23,6 +23,7 @@ function makeFakeBody(identity: AgentInfo): AgentBody {
     identity,
     restore: async () => [],
     messages: () => [],
+    displayMessages: () => [],
     start: async () => {},
     compact: async () => {},
     stop: () => {},

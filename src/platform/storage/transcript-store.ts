@@ -31,6 +31,12 @@ export interface TranscriptStore {
     teamId: string,
   ): Promise<AgentMessage[]>;
 
+  restoreDisplay(
+    agentKey: string,
+    sessionId: string,
+    teamId: string,
+  ): Promise<ReadonlyArray<AgentMessage>>;
+
   hasSession(teamId: string, sessionId: string): boolean;
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
@@ -135,6 +141,21 @@ export class SqliteTranscriptStore implements TranscriptStore {
       `SELECT team_id, session_id, agent_key, seq, role, content, compacted, created_at
        FROM memory_turns
        WHERE team_id = ? AND agent_key = ? AND session_id = ? AND compacted = 0
+       ORDER BY seq`,
+      [teamId, agentKey, sessionId],
+    );
+    return rows.map((row, index) => decodeMessage(expectString(row[5]), index));
+  }
+
+  async restoreDisplay(
+    agentKey: string,
+    sessionId: string,
+    teamId: string,
+  ): Promise<ReadonlyArray<AgentMessage>> {
+    const rows = this.storage.query(
+      `SELECT team_id, session_id, agent_key, seq, role, content, compacted, created_at
+       FROM memory_turns
+       WHERE team_id = ? AND agent_key = ? AND session_id = ?
        ORDER BY seq`,
       [teamId, agentKey, sessionId],
     );

@@ -1,6 +1,6 @@
 import { loadMockExpectations } from "../../mock-llm-backend";
 import { seedTeam } from "../_fixture.ts";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, textOfTurns, type TuiHarness } from "./harness";
 import expectations from "./scenario-5.llm.ts";
 
 describe("Scenario 5 — second prompt after the first turn", () => {
@@ -37,7 +37,7 @@ describe("Scenario 5 — second prompt after the first turn", () => {
     const allPrompts = allTurns.map((t) => t.userPrompt).join("\n");
     expect(allPrompts).toContain("Research the history of J");
     expect(allPrompts).toContain("Tell me a haiku");
-    const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
+    const allBlocks = textOfTurns(allTurns);
     expect(allBlocks.length).toBeGreaterThan(0);
     expect(agent?.status).toBe("idle");
   });

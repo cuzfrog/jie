@@ -23,6 +23,7 @@ export interface CompactionInput {
   readonly sessionId: string;
   readonly teamId: string;
   readonly signal?: AbortSignal;
+  readonly overheadTokens?: number;
 }
 
 export interface CompactionResult {
@@ -33,10 +34,10 @@ export interface CompactionResult {
 }
 
 export interface Compactor {
-  needsCompaction(messages: ReadonlyArray<AgentMessage>, contextWindow: number): boolean;
-  contextTokens(messages: ReadonlyArray<AgentMessage>): number;
+  needsCompaction(messages: ReadonlyArray<AgentMessage>, contextWindow: number, overheadTokens?: number): boolean;
+  contextTokens(messages: ReadonlyArray<AgentMessage>, overheadTokens?: number): number;
   compact(input: CompactionInput): Promise<CompactionResult | null>;
-  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>, contextWindow?: number): ReadonlyArray<AgentMessage>;
+  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>, contextWindow?: number, overheadTokens?: number): ReadonlyArray<AgentMessage>;
 }
 
 type CompactionOverrides = NonNullable<Settings["compaction"]>;
@@ -58,20 +59,21 @@ export class CompactorImpl implements Compactor {
     this.getSettings = deps.getSettings;
   }
 
-  needsCompaction(messages: ReadonlyArray<AgentMessage>, contextWindow: number): boolean {
-    const settings = resolveSettings(this.getSettings?.());
+  needsCompaction(messages: ReadonlyArray<AgentMessage>, contextWindow: number, overheadTokens = 0): boolean {
+    const settings = resolveSettings(this.getSettings?.(), contextWindow);
     if (!settings.enabled) return false;
-    return shouldCompact(this.contextTokens(messages), contextWindow, settings);
+    return shouldCompact(this.contextTokens(messages, overheadTokens), contextWindow, settings);
   }
 
-  contextTokens(messages: ReadonlyArray<AgentMessage>): number {
-    return contextTokensSince(messages, lastSummaryTimestamp(messages));
+  contextTokens(messages: ReadonlyArray<AgentMessage>, overheadTokens = 0): number {
+    return contextTokensSince(messages, lastSummaryTimestamp(messages), overheadTokens);
   }
 
   async compact(input: CompactionInput): Promise<CompactionResult | null> {
-    const settings = resolveSettings(this.getSettings?.());
+    const settings = resolveSettings(this.getSettings?.(), input.contextWindow);
     if (!settings.enabled) return null;
-    const tokensBefore = contextTokensSince(input.messages, lastSummaryTimestamp(input.messages));
+    const overheadTokens = input.overheadTokens ?? 0;
+    const tokensBefore = contextTokensSince(input.messages, lastSummaryTimestamp(input.messages), overheadTokens);
     if (!shouldCompact(tokensBefore, input.contextWindow, settings)) return null;
     const preparation = prepareCompaction(input.messages, settings.keepRecentTokens);
     if (preparation === null) return null;
@@ -93,15 +95,19 @@ export class CompactorImpl implements Compactor {
     return { summaryMessage, firstKeptIndex: preparation.firstKeptIndex, tokensBefore, summarizedPrefix };
   }
 
-  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>, contextWindow: number = model.contextWindow): ReadonlyArray<AgentMessage> {
-    const settings = resolveSettings(this.getSettings?.());
-    const budget = settings.reserveTokens < contextWindow ? contextWindow - settings.reserveTokens : contextWindow;
+  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>, contextWindow: number = model.contextWindow, overheadTokens = 0): ReadonlyArray<AgentMessage> {
+    const settings = resolveSettings(this.getSettings?.(), contextWindow);
+    const budget = Math.max(contextWindow - settings.reserveTokens - overheadTokens, 0);
     return fitMessages(messages, budget);
   }
 }
 
-function resolveSettings(overrides: CompactionOverrides | undefined): typeof DEFAULT_COMPACTION_SETTINGS {
-  return { ...DEFAULT_COMPACTION_SETTINGS, ...overrides };
+function resolveSettings(overrides: CompactionOverrides | undefined, contextWindow: number): typeof DEFAULT_COMPACTION_SETTINGS {
+  return {
+    enabled: overrides?.enabled ?? DEFAULT_COMPACTION_SETTINGS.enabled,
+    reserveTokens: overrides?.reserveTokens ?? Math.min(DEFAULT_COMPACTION_SETTINGS.reserveTokens, Math.floor(contextWindow * 0.1)),
+    keepRecentTokens: overrides?.keepRecentTokens ?? Math.floor(contextWindow * 0.2),
+  };
 }
 
 function lastSummaryTimestamp(messages: ReadonlyArray<AgentMessage>): number {
@@ -109,12 +115,12 @@ function lastSummaryTimestamp(messages: ReadonlyArray<AgentMessage>): number {
   return first !== undefined && first.role === "compactionSummary" ? first.timestamp : 0;
 }
 
-function contextTokensSince(messages: ReadonlyArray<AgentMessage>, sinceTimestamp: number): number {
+function contextTokensSince(messages: ReadonlyArray<AgentMessage>, sinceTimestamp: number, overheadTokens: number): number {
   const estimate = estimateContextTokens([...messages]);
-  if (estimate.lastUsageIndex === null) return estimate.tokens;
+  if (estimate.lastUsageIndex === null) return estimate.tokens + overheadTokens;
   const usageMessage = messages[estimate.lastUsageIndex];
   if (usageMessage !== undefined && usageMessage.timestamp <= sinceTimestamp) {
-    return messages.reduce((sum, message) => sum + estimateTokens(message), 0);
+    return messages.reduce((sum, message) => sum + estimateTokens(message), 0) + overheadTokens;
   }
   return estimate.tokens;
 }

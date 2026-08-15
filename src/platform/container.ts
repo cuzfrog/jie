@@ -15,7 +15,7 @@ import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
 import { registerSkillsModule, type SkillManager } from "./skills";
 import { registerStorageModule, type ArtifactStore, type KanbanStore, type Storage, type TranscriptStore } from "./storage";
-import { registerTeamModule, type AgentRegistry, type TeamManager } from "./team";
+import { registerTeamModule, type AgentRegistry, type SessionNamer, type TeamManager } from "./team";
 import type { AgentDispatcher } from "./types";
 import { registerToolsModule, type QuestionBroker, type ToolRegistry } from "./tools";
 
@@ -48,6 +48,7 @@ export interface PlatformCradle {
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
   readonly agentRegistry: AgentRegistry;
   readonly teamManager: TeamManager;
+  readonly sessionNamer: SessionNamer;
   readonly agentDispatcher: AgentDispatcher;
   readonly commandExecutor: CommandExecutor;
   readonly mcpConnector: McpConnector;
@@ -88,6 +89,7 @@ export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixC
   registerCommandModule(container);
   registerPlatformModule(container);
   container.resolve("agentDispatcher");
+  container.resolve("sessionNamer");
   await container.resolve("mcpManager").connectAll();
   return container;
 }

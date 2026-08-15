@@ -11,7 +11,7 @@ beforeEach(() => {
 });
 
 function turn(partial: Partial<MessageTurn> = {}): MessageTurn {
-  return { userPrompt: "q", cards: [], blocks: [], streamId: null, seq: 0, ...partial };
+  return { userPrompt: "q", entries: [], streamId: null, seq: 0, ...partial };
 }
 
 function card(partial: Partial<MessageCard> = {}): MessageCard {
@@ -34,80 +34,80 @@ describe("AssistantMessage — text blocks", () => {
   });
 
   test("renders markdown text with the assistant prefix on the first line", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "text", text: "answer **bold**" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "text", text: "answer **bold**" }] }), stateStore);
     const lines = message.render(80);
     expect(lines[0].trimEnd()).toBe("\x1b[36m● \x1b[39manswer \x1b[1mbold\x1b[22m");
   });
 
   test("markdown headings render with the theme heading style", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "text", text: "# Title" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "text", text: "# Title" }] }), stateStore);
     const lines = message.render(80);
     expect(lines[0]).toContain("\x1b[36m");
     expect(lines[0]).toContain("Title");
   });
 
   test("only the first text block carries the prefix", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "text", text: "one" }, { kind: "text", text: "two" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "text", text: "one" }, { kind: "text", text: "two" }] }), stateStore);
     const lines = message.render(80).map((line) => line.trimEnd());
     expect(lines[0]).toBe("\x1b[36m● \x1b[39mone");
     expect(lines[1]).toBe("two");
   });
 
   test("skips empty text blocks", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "text", text: "" }, { kind: "text", text: "real" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "text", text: "" }, { kind: "text", text: "real" }] }), stateStore);
     expect(message.render(80).map((line) => line.trimEnd())).toEqual(["\x1b[36m● \x1b[39mreal"]);
   });
 
   test("update streams new text through the same markdown instance", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "text", text: "a" }] }), stateStore);
-    message.update(turn({ blocks: [{ kind: "text", text: "ab" }] }));
+    const message = new AssistantMessage(turn({ entries: [{ kind: "text", text: "a" }] }), stateStore);
+    message.update(turn({ entries: [{ kind: "text", text: "ab" }] }));
     expect(message.render(80).map((line) => line.trimEnd())).toEqual(["\x1b[36m● \x1b[39mab"]);
   });
 });
 
 describe("AssistantMessage — thinking blocks", () => {
   test("collapsed by default: a streaming block folds into a live summary line", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "pondering" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering" }] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (0ms)\x1b[39m"]);
   });
 
   test("expanded after ctrl+t: label plus dim text", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "pondering" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering" }] }), stateStore);
     const lines = message.render(80);
     expect(lines[0]).toBe("\x1b[90mThinking...\x1b[39m");
     expect(lines[1]).toBe("\x1b[90mpondering\x1b[39m");
   });
 
   test("redacted thinking with empty text still contributes its duration to the summary", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "", durationMs: 1000 }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "", durationMs: 1000 }] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThought for 1s\x1b[39m"]);
   });
 
   test("redacted thinking with empty text does not render an individual block when expanded", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
     const message = new AssistantMessage(turn({
-      blocks: [
+      entries: [
         { kind: "thinking", text: "", durationMs: 1000 },
         { kind: "text", text: "answer" },
       ],
     }), stateStore);
     expect(message.render(80).map((line) => line.trimEnd())).toEqual([
-      "\x1b[36m● \x1b[39manswer",
       "\x1b[90mThought for 1s\x1b[39m",
+      "\x1b[36m● \x1b[39manswer",
     ]);
   });
 });
 
 describe("AssistantMessage — tool cards", () => {
   test("completed results fold into the work summary", () => {
-    const message = new AssistantMessage(turn({ cards: [card({ output: "ok" })] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [card({ output: "ok" })] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mused bash 1 time\x1b[39m"]);
   });
 
   test("expanded after ctrl+o: header plus output section", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
-    const message = new AssistantMessage(turn({ cards: [card({ output: "ok" })] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [card({ output: "ok" })] }), stateStore);
     const lines = message.render(80);
     expect(lines[0]).toBe("\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m");
     expect(lines[1]).toBe("\x1b[90moutput:\x1b[39m");
@@ -118,7 +118,7 @@ describe("AssistantMessage — tool cards", () => {
 describe("AssistantMessage — work summary", () => {
   test("completed thinking blocks collapse into a single total line", () => {
     const message = new AssistantMessage(turn({
-      blocks: [
+      entries: [
         { kind: "thinking", text: "a", durationMs: 19600 },
         { kind: "thinking", text: "b", durationMs: 37000 },
       ],
@@ -128,7 +128,7 @@ describe("AssistantMessage — work summary", () => {
 
   test("a streaming thinking block folds its live elapsed into the summary", () => {
     const message = new AssistantMessage(turn({
-      blocks: [
+      entries: [
         { kind: "thinking", text: "a", durationMs: 1000 },
         { kind: "thinking", text: "streaming" },
       ],
@@ -138,31 +138,30 @@ describe("AssistantMessage — work summary", () => {
 
   test("completed tool results fold into usage counts", () => {
     const message = new AssistantMessage(turn({
-      cards: [card({ durationMs: 12 }), card({ durationMs: 8 }), card({ name: "read_file", durationMs: 3 })],
+      entries: [card({ durationMs: 12 }), card({ durationMs: 8 }), card({ name: "read_file", durationMs: 3 })],
     }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mused bash 2 times, used read_file 1 time\x1b[39m"]);
   });
 
   test("thinking and tool usage combine into one summary", () => {
     const message = new AssistantMessage(turn({
-      blocks: [{ kind: "thinking", text: "deep", durationMs: 56600 }],
-      cards: [card({ name: "read_file", durationMs: 400 })],
+      entries: [{ kind: "thinking", text: "deep", durationMs: 56600 }, card({ name: "read_file", durationMs: 400 })],
     }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThought for 57s, used read_file 1 time\x1b[39m"]);
   });
 
   test("error cards stay individual", () => {
-    const message = new AssistantMessage(turn({ cards: [card({ error: "boom" })] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [card({ error: "boom" })] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[31m✗\x1b[39m \x1b[31mbash\x1b[39m"]);
   });
 
   test("running tool calls stay individual", () => {
-    const message = new AssistantMessage(turn({ cards: [card({ kind: "toolCall" })] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [card({ kind: "toolCall" })] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m"]);
   });
 
   test("diff cards stay individual and show their diff block", () => {
-    const message = new AssistantMessage(turn({ cards: [card({ details: diffDetails("+a") })] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [card({ details: diffDetails("+a") })] }), stateStore);
     expect(message.render(80)).toEqual([
       "\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m",
       "\x1b[32m+a\x1b[39m",
@@ -172,7 +171,7 @@ describe("AssistantMessage — work summary", () => {
   test("ctrl+t restores the individual thinking blocks", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
     const message = new AssistantMessage(turn({
-      blocks: [
+      entries: [
         { kind: "thinking", text: "a", durationMs: 100 },
         { kind: "thinking", text: "b", durationMs: 200 },
       ],
@@ -187,14 +186,13 @@ describe("AssistantMessage — work summary", () => {
 
   test("ctrl+o restores the individual tool cards", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
-    const message = new AssistantMessage(turn({ cards: [card({ durationMs: 12 }), card({ durationMs: 8 })] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [card({ durationMs: 12 }), card({ durationMs: 8 })] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash  12ms\x1b[39m", "\x1b[32m✓\x1b[39m \x1b[37mbash  8ms\x1b[39m"]);
   });
 
   test("the summary follows the diff blocks", () => {
     const message = new AssistantMessage(turn({
-      blocks: [{ kind: "text", text: "answer" }],
-      cards: [card({ details: diffDetails("@@ -1,1 +1,1 @@\n-a\n+b") }), card({ durationMs: 500 })],
+      entries: [{ kind: "text", text: "answer" }, card({ details: diffDetails("@@ -1,1 +1,1 @@\n-a\n+b") }), card({ durationMs: 500 })],
     }), stateStore);
     expect(message.render(80).map((line) => line.trimEnd())).toEqual([
       "\x1b[36m● \x1b[39manswer",
@@ -206,15 +204,56 @@ describe("AssistantMessage — work summary", () => {
     ]);
   });
 
+  test("thinking separated by visible text yields two summaries", () => {
+    const message = new AssistantMessage(turn({
+      entries: [
+        { kind: "thinking", text: "a", durationMs: 1000 },
+        { kind: "text", text: "middle" },
+        { kind: "thinking", text: "b", durationMs: 2000 },
+      ],
+    }), stateStore);
+    expect(message.render(80).map((line) => line.trimEnd())).toEqual([
+      "\x1b[90mThought for 1s\x1b[39m",
+      "\x1b[36m● \x1b[39mmiddle",
+      "\x1b[90mThought for 2s\x1b[39m",
+    ]);
+  });
+
+  test("thinking separated by a diff card yields two summaries around the diff", () => {
+    const message = new AssistantMessage(turn({
+      entries: [
+        { kind: "thinking", text: "a", durationMs: 1000 },
+        card({ details: diffDetails("+a") }),
+        { kind: "thinking", text: "b", durationMs: 2000 },
+      ],
+    }), stateStore);
+    expect(message.render(80).map((line) => line.trimEnd())).toEqual([
+      "\x1b[90mThought for 1s\x1b[39m",
+      "\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m",
+      "\x1b[32m+a\x1b[39m",
+      "\x1b[90mThought for 2s\x1b[39m",
+    ]);
+  });
+
+  test("text after an aggregatable card renders below its summary", () => {
+    const message = new AssistantMessage(turn({
+      entries: [card({ durationMs: 500 }), { kind: "text", text: "after" }],
+    }), stateStore);
+    expect(message.render(80).map((line) => line.trimEnd())).toEqual([
+      "\x1b[90mused bash 1 time\x1b[39m",
+      "\x1b[36m● \x1b[39mafter",
+    ]);
+  });
+
   test("the summary follows the text blocks and individual cards", () => {
     const message = new AssistantMessage(turn({
-      blocks: [{ kind: "text", text: "answer" }, { kind: "thinking", text: "deep", durationMs: 1000 }],
-      cards: [card({ error: "boom" }), card({ durationMs: 500 })],
+      entries: [{ kind: "text", text: "answer" }, { kind: "thinking", text: "deep", durationMs: 1000 }, card({ error: "boom" }), card({ durationMs: 500 })],
     }), stateStore);
     expect(message.render(80).map((line) => line.trimEnd())).toEqual([
       "\x1b[36m● \x1b[39manswer",
+      "\x1b[90mThought for 1s\x1b[39m",
       "\x1b[31m✗\x1b[39m \x1b[31mbash\x1b[39m",
-      "\x1b[90mThought for 1s, used bash 1 time\x1b[39m",
+      "\x1b[90mused bash 1 time\x1b[39m",
     ]);
   });
 });
@@ -261,7 +300,7 @@ describe("AssistantMessage - live thinking counter", () => {
   });
 
   test("starts at zero and grows with elapsed time", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "pondering" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering" }] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (0ms)\x1b[39m"]);
     vi.advanceTimersByTime(1500);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
@@ -269,7 +308,7 @@ describe("AssistantMessage - live thinking counter", () => {
 
   test("accumulates with completed thinking", () => {
     const message = new AssistantMessage(turn({
-      blocks: [
+      entries: [
         { kind: "thinking", text: "a", durationMs: 1000 },
         { kind: "thinking", text: "streaming" },
       ],
@@ -280,11 +319,11 @@ describe("AssistantMessage - live thinking counter", () => {
   });
 
   test("resets when a new in-progress block takes over", () => {
-    const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "first" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "first" }] }), stateStore);
     message.render(80);
     vi.advanceTimersByTime(2000);
     message.update(turn({
-      blocks: [
+      entries: [
         { kind: "thinking", text: "first", durationMs: 2000 },
         { kind: "thinking", text: "second" },
       ],
@@ -299,16 +338,16 @@ describe("AssistantMessage — width contract", () => {
   test("never renders a line wider than the given width (doRender guard)", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true, toolCardsExpanded: true }));
     const message = new AssistantMessage(turn({
-      blocks: [
+      entries: [
         { kind: "text", text: `${"x".repeat(300)}\n${"中文🎉".repeat(40)}` },
         { kind: "thinking", text: "x".repeat(300) },
+        card({
+          name: "x".repeat(300),
+          input: "x".repeat(300),
+          output: "中文🎉".repeat(40),
+          details: diffDetails(`+${"x".repeat(300)}`),
+        }),
       ],
-      cards: [card({
-        name: "x".repeat(300),
-        input: "x".repeat(300),
-        output: "中文🎉".repeat(40),
-        details: diffDetails(`+${"x".repeat(300)}`),
-      })],
     }), stateStore);
     for (const width of [13, 40, 61, 80, 139]) {
       for (const line of message.render(width)) {
@@ -319,8 +358,7 @@ describe("AssistantMessage — width contract", () => {
 
   test("never renders the summary wider than the given width", () => {
     const message = new AssistantMessage(turn({
-      blocks: [{ kind: "thinking", text: "x".repeat(300), durationMs: 99_999 }],
-      cards: [card({ name: "x".repeat(300), durationMs: 99_999 })],
+      entries: [{ kind: "thinking", text: "x".repeat(300), durationMs: 99_999 }, card({ name: "x".repeat(300), durationMs: 99_999 })],
     }), stateStore);
     for (const width of [13, 40, 61, 80, 139]) {
       for (const line of message.render(width)) {

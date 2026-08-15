@@ -1,4 +1,4 @@
-import { Agent, convertToLlm, type AgentLoopTurnUpdate, type AgentMessage, type AgentTool, type PrepareNextTurnContext } from "@earendil-works/pi-agent-core";
+import { Agent, convertToLlm, estimateTokens, type AgentEvent, type AgentLoopTurnUpdate, type AgentMessage, type AgentTool, type PrepareNextTurnContext } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { MemoryManager } from "../memory";
@@ -63,9 +63,14 @@ export class JieAgentBody implements AgentBody {
   private readonly resolvedSkills: ReadonlyArray<Skill>;
   private readonly cleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
+  private compactedPrefix: AgentMessage[] = [];
   private started = false;
   private stopped = false;
   private loopLogger: AgentLoopLogger | null = null;
+  private contextOverheadTokens = 0;
+  private pendingSentMessages: ReadonlyArray<AgentMessage> = [];
+  private pendingSendModel: Model<Api> | null = null;
+  private readonly adaptedTools: AgentTool[] = [];
 
   constructor(params: AgentBodyParams, deps: AgentBodyDeps) {
     this.agentKey = params.agentKey;
@@ -91,6 +96,7 @@ export class JieAgentBody implements AgentBody {
       dispatcher: {
         prompt: (message) => void this.agent.prompt(message),
         followUp: (message) => this.agent.followUp(message),
+        steer: (message) => this.agent.steer(message),
         isStreaming: () => this.agent.state.isStreaming,
       },
       eventManager: deps.eventManager,
@@ -107,10 +113,17 @@ export class JieAgentBody implements AgentBody {
       conversation: {
         getMessages: () => this.agent.state.messages,
         setMessages: (messages) => {
+          const old = this.agent.state.messages;
           this.agent.state.messages = [...messages];
+          if (messages.length === 0) return;
+          const removedCount = old.length - (messages.length - 1);
+          if (removedCount > 0) {
+            this.compactedPrefix.push(...old.slice(0, removedCount));
+          }
         },
       },
       memoryManager: this.memoryManager,
+      getOverheadTokens: () => this.getOverheadTokens(),
     });
     const eventBridge = new AgentEventBridgeImpl({
       eventManager: deps.eventManager,
@@ -142,7 +155,7 @@ export class JieAgentBody implements AgentBody {
       toolArgs,
       agentDispatcher: deps.agentDispatcher,
     };
-    const adaptedTools = adaptAllTools(parsedTools, params.soul.role, deps.toolRegistry, executionContext);
+    this.adaptedTools = adaptAllTools(parsedTools, params.soul.role, deps.toolRegistry, executionContext);
     const toolCallObserver = new ToolCallObserverImpl({
       eventManager: deps.eventManager,
       hookRunner: this.hookRunner,
@@ -158,7 +171,9 @@ export class JieAgentBody implements AgentBody {
       transformContext: async (messages: AgentMessage[]) => {
         const stripped = stripThinkingDurations(messages);
         const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
-        return [...this.compactor.fitToWindow(stripped, this.agent.state.model, contextWindow)];
+        this.pendingSentMessages = stripped;
+        this.pendingSendModel = this.agent.state.model;
+        return [...this.compactor.fitToWindow(stripped, this.agent.state.model, contextWindow, this.getOverheadTokens())];
       },
       steeringMode: "one-at-a-time",
       followUpMode: "one-at-a-time",
@@ -172,9 +187,10 @@ export class JieAgentBody implements AgentBody {
       rolePrompt: params.soul.systemPrompt,
       cwd: deps.cwd,
       contextBlock: deps.systemContextBlock,
-      tools: adaptedTools,
+      tools: this.adaptedTools,
       skills: this.resolvedSkills,
     });
+    this.seedOverhead();
     this.isLeader = params.isLeader;
     this.modelController = new ModelControllerImpl(params.model, params.effort, {
       eventManager: deps.eventManager,
@@ -182,9 +198,11 @@ export class JieAgentBody implements AgentBody {
       soulPinsModel: params.soul.model !== "",
       soulPinsEffort: params.soul.effort !== undefined,
       resolveModel: deps.resolveModel,
+      targetContextWindowSize: this.soul.targetContextWindowSize,
       agentState: {
         setModel: (model) => {
           this.agent.state.model = model;
+          this.resetOverhead(model);
         },
         getThinkingLevel: () => this.agent.state.thinkingLevel,
         setThinkingLevel: (level) => {
@@ -192,7 +210,7 @@ export class JieAgentBody implements AgentBody {
         },
       },
     });
-    this.agent.state.tools = adaptedTools;
+    this.agent.state.tools = this.adaptedTools;
     if (deps.logDir !== null) {
       this.loopLogger = new FileAgentLoopLogger({
         logDir: deps.logDir,
@@ -204,6 +222,7 @@ export class JieAgentBody implements AgentBody {
     const logger = this.loopLogger;
     const unsubscribeAgent = this.agent.subscribe((event, _signal) => {
       logger?.log(event);
+      this.onAgentEvent(event);
       eventBridge.handleEvent(event);
     });
     this.cleanups.push(unsubscribeAgent);
@@ -230,9 +249,16 @@ export class JieAgentBody implements AgentBody {
       this.sessionId,
       this.teamId,
     );
+    const displayMessages = await this.transcriptStore.restoreDisplay(
+      this.agentKey,
+      this.sessionId,
+      this.teamId,
+    );
     if (messages.length > 0) {
       this.agent.state.messages = [...messages];
     }
+    const compactedCount = displayMessages.length - messages.length;
+    this.compactedPrefix = compactedCount > 0 ? displayMessages.slice(0, compactedCount) : [];
     this.restored = messages;
     this.loadMemoryBlock();
     return messages;
@@ -253,10 +279,15 @@ export class JieAgentBody implements AgentBody {
       memoryBlock,
       skills: this.resolvedSkills,
     });
+    this.seedOverhead();
   }
 
   messages(): ReadonlyArray<AgentMessage> {
     return [...this.agent.state.messages];
+  }
+
+  displayMessages(): ReadonlyArray<AgentMessage> {
+    return [...this.compactedPrefix, ...this.agent.state.messages];
   }
 
   async start(): Promise<void> {
@@ -374,12 +405,14 @@ export class JieAgentBody implements AgentBody {
 
   private ensureCompacted(): Promise<void> {
     if (this.modelController.modelInfo === null) return Promise.resolve();
+    if (this.contextOverheadTokens === 0) this.seedOverhead();
     const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
     return this.compactionRunner.ensure(this.agent.state.model, contextWindow).then(() => undefined);
   }
 
   private async compactBetweenTurns(context: PrepareNextTurnContext): Promise<AgentLoopTurnUpdate | undefined> {
     if (this.modelController.modelInfo === null) return undefined;
+    if (this.contextOverheadTokens === 0) this.seedOverhead();
     const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
     const outcome = await this.compactionRunner.ensure(this.agent.state.model, contextWindow);
     if (outcome === null) return undefined;
@@ -391,6 +424,42 @@ export class JieAgentBody implements AgentBody {
     this.agent.abort();
   }
 
+  private getOverheadTokens(): number {
+    return this.contextOverheadTokens;
+  }
+
+  private seedOverhead(): void {
+    this.contextOverheadTokens = this.estimateOverhead(this.agent.state.systemPrompt, this.adaptedTools);
+  }
+
+  private resetOverhead(model: Model<Api>): void {
+    this.seedOverhead();
+    this.pendingSentMessages = [];
+    this.pendingSendModel = model;
+  }
+
+  private estimateOverhead(systemPrompt: string, tools: AgentTool[]): number {
+    const promptTokens = estimateTokens({ role: "user", content: systemPrompt, timestamp: 0 });
+    const toolsTokens = Math.ceil(JSON.stringify(tools).length / 4);
+    return promptTokens + toolsTokens;
+  }
+
+  private onAgentEvent(event: AgentEvent): void {
+    if (event.type !== "message_end") return;
+    this.calibrateOverhead(event);
+  }
+
+  private calibrateOverhead(event: Extract<AgentEvent, { type: "message_end" }>): void {
+    const message = event.message;
+    if (message.role !== "assistant" || this.pendingSendModel === null) return;
+    if (message.provider !== this.pendingSendModel.provider || message.model !== this.pendingSendModel.id) return;
+    const usage = message.usage;
+    if (usage === undefined || usage.input + usage.cacheRead + usage.cacheWrite === 0) return;
+    const reported = usage.input + usage.cacheRead + usage.cacheWrite;
+    const estimated = this.pendingSentMessages.reduce((sum, m) => sum + estimateTokens(m), 0);
+    const measured = Math.max(0, reported - estimated);
+    this.contextOverheadTokens = measured;
+  }
 }
 
 function stripThinkingDurations(messages: AgentMessage[]): AgentMessage[] {

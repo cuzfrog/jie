@@ -28,8 +28,7 @@ export interface MessageBlock {
 
 export interface MessageTurn {
   readonly userPrompt: string;
-  readonly cards: MessageCard[];
-  readonly blocks: MessageBlock[];
+  readonly entries: (MessageBlock | MessageCard)[];
   readonly streamId: number | null;
   readonly seq: number;
 }
@@ -167,8 +166,8 @@ function anyAgentThinking(state: TuiState): boolean {
   for (const agent of state.agents.values()) {
     const turn = agent.currentTurn;
     if (turn === null) continue;
-    for (const block of turn.blocks) {
-      if (block.kind === "thinking" && block.text !== "" && block.durationMs === undefined) return true;
+    for (const entry of turn.entries) {
+      if (entry.kind === "thinking" && entry.text !== "" && entry.durationMs === undefined) return true;
     }
   }
   return false;
