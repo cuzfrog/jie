@@ -40,6 +40,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         transientSetAt: null,
         errorBanner: null,
         helpPanelVisible: false,
+        requireUserAttention: false,
       };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
       return { ...state, transientMessage: action.payload.text, transientSetAt: Date.now() };
@@ -65,8 +66,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       if (state.interruptedAgentId === null) return state;
       return { ...state, interruptedAgentId: null };
     case ActionTypes.TERMINAL_FOCUS_GAINED:
-      if (state.terminalFocused) return state;
-      return { ...state, terminalFocused: true };
+      if (state.terminalFocused && !state.requireUserAttention) return state;
+      return { ...state, terminalFocused: true, requireUserAttention: false };
     case ActionTypes.TERMINAL_FOCUS_LOST:
       if (!state.terminalFocused) return state;
       return { ...state, terminalFocused: false };

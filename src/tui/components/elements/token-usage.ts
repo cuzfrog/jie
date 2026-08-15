@@ -1,6 +1,5 @@
 import type { AgentUiState } from "../../state";
 import { style } from "../themes";
-import { contextPercentColor, formatContextPercent } from "./context-percent";
 
 export interface TokenUsage {
   format(agent: AgentUiState | null): string;
@@ -19,4 +18,32 @@ function formatCompactNumber(value: number): string {
   if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}m`;
   if (value >= 1_000) return `${Math.round(value / 100) / 10}k`;
   return String(value);
+}
+
+function formatContextPercent(used: number, window: number | null): string {
+  if (window === null || window <= 0) return "—";
+  return `${computePercent(used, window)}%/${formatWindow(window)}`;
+}
+
+function contextPercentColor(used: number, window: number | null): "muted" | "warning" | "error" {
+  if (window === null || window <= 0) return "muted";
+  const ratio = used / window;
+  if (ratio >= CONTEXT_PERCENT_ERROR) return "error";
+  if (ratio >= CONTEXT_PERCENT_WARN) return "warning";
+  return "muted";
+}
+
+const CONTEXT_PERCENT_WARN = 0.7;
+const CONTEXT_PERCENT_ERROR = 0.9;
+
+function formatWindow(window: number): string {
+  if (window >= 1000) return `${Math.floor(window / 1000)}k`;
+  return String(window);
+}
+
+function computePercent(used: number, window: number): number {
+  if (window <= 0) return 0;
+  const ratio = used / window;
+  if (ratio >= 1) return 100;
+  return Math.floor(ratio * 100);
 }

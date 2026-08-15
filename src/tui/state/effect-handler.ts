@@ -1,10 +1,9 @@
-import type { StopReason } from "@earendil-works/pi-ai";
 import type { Terminal } from "@earendil-works/pi-tui";
 import { type AnyEventEnvelope, type JiePlatform, type QuestionAnswer } from "../../platform";
 import { logger } from "../../utils";
 import type { CommandHandler } from "../command";
 import { Actions, ActionTypes } from "./actions";
-import type { KanbanEditField, TuiState } from "./state";
+import { TuiState, type KanbanEditField } from "./state";
 import type { StateStore } from "./state-store";
 
 const log = logger.getSubLogger({ name: "jie.tui.effect-handler" });
@@ -117,7 +116,7 @@ export class EffectHandlerImpl implements EffectHandler {
       const activeId = state.focusedAgentId ?? state.leaderAgentId;
       if (activeId === null) return;
       if (`${env.sender.teamId}:${env.sender.agentKey}` !== activeId) return;
-      if (!_shouldRingOnIdle(env.payload)) return;
+      if (!TuiState.isAttentionStopReason(env.payload)) return;
     } else if (env.type === "agent.question.ask") {
       const question = state.question;
       if (question === null) return;
@@ -161,8 +160,3 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
   };
 }
 
-function _shouldRingOnIdle(reason: StopReason): boolean {
-  return reason === "stop" || reason === "error" || reason === "length";
-}
-
-export { _shouldRingOnIdle };

@@ -1,7 +1,7 @@
 import type { AnyEventEnvelope } from "../../platform";
-import type { AgentId, AgentUiState, MessageCard, TuiState, MessageTurn } from "./state";
+import { TuiState, type AgentId, type AgentUiState, type MessageCard, type MessageTurn } from "./state";
 import { teamLoadReducer } from "./team-load-reducer";
-import { estimateContextTokens } from "./context-tokens";
+import { contextHistory, estimateContextTokens } from "./context-tokens";
 import { Actions } from "./actions";
 import { kanbanReducer } from "./kanban-reducer";
 import { reduceQuestionAction } from "./question-reducer";
@@ -80,18 +80,20 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const prompt = event.payload ?? "";
   const seq = state.nextEntrySeq;
   const interruptedAgentId = state.interruptedAgentId === agentId ? null : state.interruptedAgentId;
+  const requireUserAttention = agentId === state.focusedAgentId ? false : state.requireUserAttention;
   const turn = agent.currentTurn;
   if (turn !== null && !turnIsPopulated(turn) && turn.userPrompt === "") {
     const currentTurn = { ...turn, userPrompt: prompt };
-    const contextTokensUsed = estimateContextTokens(agent.history, currentTurn);
+    const contextTokensUsed = estimateContextTokens(contextHistory(agent), currentTurn);
     const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
-    return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId });
+    return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention });
   }
+  const completed = turn === null ? contextHistory(agent) : [...contextHistory(agent), turn];
   const history = turn === null ? agent.history : [...agent.history, turn];
   const currentTurn = freshTurn(prompt, seq);
-  const contextTokensUsed = estimateContextTokens(history, currentTurn);
+  const contextTokensUsed = estimateContextTokens(completed, currentTurn);
   const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
-  return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, nextEntrySeq: seq + 1 });
+  return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention, nextEntrySeq: seq + 1 });
 }
 
 function reduceTurnContinue(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -100,8 +102,9 @@ function reduceTurnContinue(state: TuiState, event: AnyEventEnvelope): TuiState 
   if (event.type !== "agent.turn.continue") return state;
   const { agentId, agent } = resolved;
   const interruptedAgentId = state.interruptedAgentId === agentId ? null : state.interruptedAgentId;
+  const requireUserAttention = agentId === state.focusedAgentId ? false : state.requireUserAttention;
   const next: AgentUiState = { ...agent, status: "busy", uploadTokens: 0, downloadTokens: 0 };
-  return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId });
+  return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention });
 }
 
 function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -109,10 +112,14 @@ function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   if (event.type !== "agent.idle") return state;
   const { agentId, agent } = resolved;
-  const contextTokensUsed = agent.lastReportedTotalTokens ?? estimateContextTokens(agent.history, agent.currentTurn);
+  const contextTokensUsed = agent.lastReportedTotalTokens ?? estimateContextTokens(contextHistory(agent), agent.currentTurn);
   const next: AgentUiState = { ...agent, status: "idle", lastStopReason: event.payload, contextTokensUsed };
   const interruptedAgentId = agentId === state.focusedAgentId && event.payload === "aborted" ? agentId : state.interruptedAgentId;
-  return withAgent(state, agentId, next, { interruptedAgentId });
+  const requireUserAttention =
+    agentId === state.focusedAgentId && !state.terminalFocused && TuiState.isAttentionStopReason(event.payload)
+      ? true
+      : state.requireUserAttention;
+  return withAgent(state, agentId, next, { interruptedAgentId, requireUserAttention });
 }
 
 function reduceUsage(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -134,24 +141,19 @@ function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   if (event.type !== "agent.compacted") return state;
   const { agentId, agent } = resolved;
+  const previous = agent.compactionMarker?.turnsBefore ?? 0;
   const turns = agent.currentTurn === null ? [...agent.history] : [...agent.history, agent.currentTurn];
-  const dropCount = Math.min(event.payload.summarized_prompts, Math.max(turns.length - 1, 0));
-  const markerSeq = state.nextEntrySeq;
-  const survivors = turns.slice(dropCount).map((turn, index) => ({ ...turn, seq: markerSeq + 1 + index }));
-  const history = survivors.slice(0, survivors.length - 1);
-  const currentTurn = survivors.length === 0 ? null : survivors[survivors.length - 1]!;
+  const turnsBefore = Math.min(previous + event.payload.summarized_prompts, Math.max(turns.length - 1, 0));
   const next: AgentUiState = {
     ...agent,
-    history,
-    currentTurn,
-    compactionMarker: { seq: markerSeq, summary: event.payload.summary, tokensBefore: event.payload.tokens_before },
+    compactionMarker: { turnsBefore, summary: event.payload.summary, tokensBefore: event.payload.tokens_before },
     compactionInProgress: false,
-    contextTokensUsed: estimateContextTokens(history, currentTurn),
+    contextTokensUsed: event.payload.tokens_after,
     lastReportedTotalTokens: null,
     uploadTokens: 0,
     downloadTokens: 0,
   };
-  return withAgent(state, agentId, next, { nextEntrySeq: markerSeq + 1 + survivors.length });
+  return withAgent(state, agentId, next);
 }
 
 function reduceCompactionStart(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -187,7 +189,7 @@ function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
     blocks.push({ kind: block_type, text });
   }
   const nextTurn = { ...agent.currentTurn, blocks, streamId: stream_id };
-  const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
+  const contextTokensUsed = estimateContextTokens(contextHistory(agent), nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(state, agentId, next);
 }
@@ -225,7 +227,7 @@ function reduceToolCall(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (agent.currentTurn.cards.some((card) => card.kind === "toolCall" && card.callId === tool_call_id)) return state;
   const toolCallCard: MessageCard = { kind: "toolCall", callId: tool_call_id, name, input, inputTruncated: input_truncated };
   const nextTurn = { ...agent.currentTurn, cards: [...agent.currentTurn.cards, toolCallCard] };
-  const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
+  const contextTokensUsed = estimateContextTokens(contextHistory(agent), nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(state, agentId, next);
 }
@@ -267,7 +269,7 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
     details,
   };
   const nextTurn = { ...agent.currentTurn, cards };
-  const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
+  const contextTokensUsed = estimateContextTokens(contextHistory(agent), nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(boardState, agentId, next, { question });
 }

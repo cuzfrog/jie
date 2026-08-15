@@ -59,6 +59,7 @@ describe("_buildTerminalTitle", () => {
       ]),
       focusedAgentId: "my-team:general-1",
       leaderAgentId: "my-team:general-1",
+      requireUserAttention: true,
     });
     expect(_buildTerminalTitle(state, 0)).toBe(`${"🔔"}jie`);
   });
@@ -71,6 +72,7 @@ describe("_buildTerminalTitle", () => {
       ]),
       focusedAgentId: "my-team:general-1",
       leaderAgentId: "my-team:general-1",
+      requireUserAttention: true,
     });
     expect(_buildTerminalTitle(state, 1)).toBe(`${"◓"}jie`);
   });
@@ -125,6 +127,7 @@ describe("_buildTerminalTitle", () => {
       focusedAgentId: "my-team:general-1",
       leaderAgentId: "my-team:general-1",
       terminalFocused: true,
+      requireUserAttention: false,
     });
     expect(_buildTerminalTitle(state, 0)).toBe(`${"●"}jie`);
   });
@@ -147,6 +150,19 @@ describe("_buildTerminalTitle", () => {
         otherText: [],
         editingOther: false,
       },
+    });
+    expect(_buildTerminalTitle(state, 0)).toBe(`${"●"}jie`);
+  });
+
+  test("does not re-show the bell when the terminal loses focus after the user has focused", () => {
+    const state = makeTuiState({
+      agents: new Map([
+        ["my-team:general-1", makeAgentUiState("my-team:general-1", { isLeader: true, status: "idle", lastStopReason: "stop" })],
+      ]),
+      focusedAgentId: "my-team:general-1",
+      leaderAgentId: "my-team:general-1",
+      terminalFocused: false,
+      requireUserAttention: false,
     });
     expect(_buildTerminalTitle(state, 0)).toBe(`${"●"}jie`);
   });

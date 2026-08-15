@@ -347,9 +347,9 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
       }],
     });
     const agent = state.agents.get("my-team:general-1");
-    expect(agent?.compactionMarker).toEqual({ seq: 0, summary: "the summary", tokensBefore: 500 });
-    expect(agent?.currentTurn?.seq).toBe(1);
-    expect(state.nextEntrySeq).toBe(2);
+    expect(agent?.compactionMarker).toEqual({ turnsBefore: 0, summary: "the summary", tokensBefore: 500 });
+    expect(agent?.currentTurn?.seq).toBe(0);
+    expect(state.nextEntrySeq).toBe(1);
   });
 
   test("a fresh agent starts without a compaction marker", () => {

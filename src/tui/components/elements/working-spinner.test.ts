@@ -1,7 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { type StateStore } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
-import { WorkingSpinnerImpl, _spinnerFrame } from "./working-spinner";
+import { WorkingSpinner, _spinnerFrame } from "./working-spinner";
 
 const AGENT_ID = "demo:general-1";
 const ANOTHER_AGENT_ID = "demo:helper-1";
@@ -32,13 +32,13 @@ describe("_spinnerFrame", () => {
   });
 });
 
-describe("WorkingSpinnerImpl.update", () => {
+describe("WorkingSpinner.update", () => {
   test("reports dirty when the focused agent becomes busy", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
-    expect(new WorkingSpinnerImpl(stateStore).update()).toBe(true);
+    expect(new WorkingSpinner(stateStore).update()).toBe(true);
   });
 
   test("reports dirty when the working kind changes to team", () => {
@@ -46,7 +46,7 @@ describe("WorkingSpinnerImpl.update", () => {
       focusedAgentId: AGENT_ID,
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
-    const spinner = new WorkingSpinnerImpl(stateStore);
+    const spinner = new WorkingSpinner(stateStore);
     spinner.update();
 
     stateStore.getState.mockReturnValue(makeTuiState({
@@ -61,7 +61,7 @@ describe("WorkingSpinnerImpl.update", () => {
       focusedAgentId: AGENT_ID,
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
-    const spinner = new WorkingSpinnerImpl(stateStore);
+    const spinner = new WorkingSpinner(stateStore);
     spinner.update();
 
     stateStore.getState.mockReturnValue(makeTuiState({}));
@@ -70,7 +70,7 @@ describe("WorkingSpinnerImpl.update", () => {
 
   test("reports dirty when interrupted with no active work", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ interruptedAgentId: AGENT_ID }));
-    expect(new WorkingSpinnerImpl(stateStore).update()).toBe(true);
+    expect(new WorkingSpinner(stateStore).update()).toBe(true);
   });
 
   test("reports clean when the working kind is unchanged", () => {
@@ -79,16 +79,16 @@ describe("WorkingSpinnerImpl.update", () => {
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     });
     stateStore.getState.mockReturnValue(busy);
-    const spinner = new WorkingSpinnerImpl(stateStore);
+    const spinner = new WorkingSpinner(stateStore);
     spinner.update();
     expect(spinner.update()).toBe(false);
   });
 });
 
-describe("WorkingSpinnerImpl.render", () => {
+describe("WorkingSpinner.render", () => {
   test("renders nothing when no agent is working", () => {
     stateStore.getState.mockReturnValue(makeTuiState({}));
-    expect(new WorkingSpinnerImpl(stateStore).render(80)).toEqual([]);
+    expect(new WorkingSpinner(stateStore).render(80)).toEqual([]);
   });
 
   test("renders the focused spinner with a frame, label and elapsed time", () => {
@@ -97,9 +97,9 @@ describe("WorkingSpinnerImpl.render", () => {
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
-    const spinner = new WorkingSpinnerImpl(stateStore);
+    const spinner = new WorkingSpinner(stateStore);
     spinner.update();
-    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.0s)\x1b[39m"]);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0s)\x1b[39m"]);
   });
 
   test("renders the team spinner with a slower frame interval and elapsed time", () => {
@@ -108,26 +108,38 @@ describe("WorkingSpinnerImpl.render", () => {
       agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy" })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
-    const spinner = new WorkingSpinnerImpl(stateStore);
+    const spinner = new WorkingSpinner(stateStore);
     spinner.update();
-    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mTeam working… (0.0s)\x1b[39m"]);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mTeam working… (0s)\x1b[39m"]);
   });
 
-  test("shows the elapsed time since the working state began", () => {
+  test("advances the team spinner frame at the slower interval and counts whole seconds", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy" })]]),
+    }));
+    const spy = vi.spyOn(Date, "now").mockReturnValue(0);
+    const spinner = new WorkingSpinner(stateStore);
+    spinner.update();
+    spy.mockReturnValue(1000);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠙\x1b[39m \x1b[90mTeam working… (1s)\x1b[39m"]);
+  });
+
+  test("shows the elapsed time in whole seconds", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
     const spy = vi.spyOn(Date, "now").mockReturnValue(0);
-    const spinner = new WorkingSpinnerImpl(stateStore);
+    const spinner = new WorkingSpinner(stateStore);
     spinner.update();
-    spy.mockReturnValue(800);
-    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.8s)\x1b[39m"]);
+    spy.mockReturnValue(1600);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (1s)\x1b[39m"]);
   });
 
   test("renders the interrupted label", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ interruptedAgentId: AGENT_ID }));
-    const spinner = new WorkingSpinnerImpl(stateStore);
+    const spinner = new WorkingSpinner(stateStore);
     spinner.update();
     expect(spinner.render(80)).toEqual(["", "\x1b[90mInterrupted\x1b[39m"]);
   });
@@ -138,7 +150,7 @@ describe("WorkingSpinnerImpl.render", () => {
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
-    expect(new WorkingSpinnerImpl(stateStore).render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.0s)\x1b[39m"]);
+    expect(new WorkingSpinner(stateStore).render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0s)\x1b[39m"]);
   });
 
   test("never renders a line wider than the given width", () => {
@@ -147,7 +159,7 @@ describe("WorkingSpinnerImpl.render", () => {
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
-    const spinner = new WorkingSpinnerImpl(stateStore);
+    const spinner = new WorkingSpinner(stateStore);
     spinner.update();
     for (const width of [10, 13, 40, 80, 139]) {
       for (const line of spinner.render(width)) {

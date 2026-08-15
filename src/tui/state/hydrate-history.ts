@@ -1,6 +1,6 @@
 import { isDiffDetails, type AgentMessage, type UserIngressMessage } from "../../platform";
 import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { MessageCard, MessageTurn } from "./state";
+import type { AgentUiState, MessageCard, MessageTurn } from "./state";
 
 const TRUNCATION_BYTES = 4 * 1024;
 const TRUNCATION_MARKER = "...[%d chars truncated]...";
@@ -9,7 +9,7 @@ const TRUNCATION_MARKER_LENGTH = 25;
 export interface HydratedHistory {
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
-  readonly compactionMarker: { readonly seq: number; readonly summary: string; readonly tokensBefore: number } | null;
+  readonly compactionMarker: AgentUiState["compactionMarker"];
   readonly nextSeq: number;
 }
 
@@ -36,8 +36,7 @@ export function hydrateHistory(messages: ReadonlyArray<AgentMessage>, startSeq: 
       }
       appendToolResult(current, message);
     } else if (message.role === "compactionSummary") {
-      compactionMarker = { seq: nextSeq, summary: message.summary, tokensBefore: message.tokensBefore };
-      nextSeq += 1;
+      compactionMarker = { turnsBefore: turns.length + (current !== null ? 1 : 0), summary: message.summary, tokensBefore: message.tokensBefore };
     }
   }
   if (current !== null) turns.push(current);

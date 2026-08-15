@@ -93,7 +93,8 @@ export class CompactionRunnerImpl implements CompactionRunner {
       const compacted = [result.summaryMessage, ...currentMessages.slice(result.firstKeptIndex)];
       this.conversation.setMessages(compacted);
       const summarizedPrompts = summarizedMessages.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
-      this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, summarizedPrompts));
+      const tokensAfter = this.compactor.contextTokens(compacted);
+      this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, tokensAfter, summarizedPrompts));
       if (this.distillationPromise === null) {
         this.distillationPromise = this.memoryManager.distill({
           messages: result.summarizedPrefix,

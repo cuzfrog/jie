@@ -1,4 +1,9 @@
-import type { MessageTurn } from "./state";
+import type { AgentUiState, MessageTurn } from "./state";
+
+export function contextHistory(agent: AgentUiState): ReadonlyArray<MessageTurn> {
+  if (agent.compactionMarker === null) return [...agent.history];
+  return agent.history.slice(agent.compactionMarker.turnsBefore);
+}
 
 export function estimateContextTokens(history: ReadonlyArray<MessageTurn>, currentTurn: MessageTurn | null): number {
   let chars = 0;

@@ -1,7 +1,7 @@
 import type { AgentInfo, TeamInfo } from "../../platform";
 import type { AgentId, AgentUiState, TuiState } from "./state";
 import { hydrateHistory } from "./hydrate-history";
-import { estimateContextTokens } from "./context-tokens";
+import { contextHistory, estimateContextTokens } from "./context-tokens";
 import { Actions } from "./actions";
 import { kanbanReducer } from "./kanban-reducer";
 
@@ -47,12 +47,15 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     if (existing === undefined) continue;
     const hydrated = hydrateHistory(entry.messages, nextEntrySeq);
     nextEntrySeq = hydrated.nextSeq;
-    newAgents.set(agentId, {
+    const nextAgent: AgentUiState = {
       ...existing,
       history: hydrated.history,
       currentTurn: hydrated.currentTurn,
       compactionMarker: hydrated.compactionMarker,
-      contextTokensUsed: estimateContextTokens(hydrated.history, hydrated.currentTurn),
+    };
+    newAgents.set(agentId, {
+      ...nextAgent,
+      contextTokensUsed: estimateContextTokens(contextHistory(nextAgent), hydrated.currentTurn),
     });
   }
   if (focused !== null && !newAgents.has(focused)) focused = null;

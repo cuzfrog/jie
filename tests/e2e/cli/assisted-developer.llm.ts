@@ -1,6 +1,6 @@
 import type { Expectation } from "../../mock-llm-backend";
 
-const DEV = "You are the Developer";
+const DEV = "You are a senior developer";
 const ARCH = "You are the Architect";
 const PEER = "You are the Peer";
 

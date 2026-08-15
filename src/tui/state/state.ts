@@ -50,7 +50,7 @@ export interface AgentUiState {
   readonly queue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer"; readonly chained: boolean }>;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
-  readonly compactionMarker: { readonly seq: number; readonly summary: string; readonly tokensBefore: number } | null;
+  readonly compactionMarker: { readonly turnsBefore: number; readonly summary: string; readonly tokensBefore: number } | null;
   readonly compactionInProgress: boolean;
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;
@@ -108,6 +108,7 @@ export interface TuiState {
   readonly editorText: string;
   readonly editorCursorAtStart: boolean;
   readonly terminalFocused: boolean;
+  readonly requireUserAttention: boolean;
 }
 
 function getFocusedAgent(state: TuiState): AgentUiState | null {
@@ -151,9 +152,7 @@ function hasChatContent(state: TuiState): boolean {
 }
 
 function isIdleAttentionNeeded(state: TuiState): boolean {
-  const agent = getFocusedAgent(state);
-  if (agent === null) return false;
-  return agent.status === "idle" && isAttentionStopReason(agent.lastStopReason);
+  return state.requireUserAttention;
 }
 
 function isAttentionStopReason(reason: StopReason | null): boolean {
@@ -209,6 +208,7 @@ export const TuiState = {
   anyAgentThinking,
   isIdleAttentionNeeded,
   isUserInputNeeded,
+  isAttentionStopReason,
   kanbanVisibleCards,
   closeOtherPanels,
 } as const;

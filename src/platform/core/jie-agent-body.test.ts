@@ -31,6 +31,9 @@ const noopCompactor: Compactor = {
   needsCompaction() {
     return false;
   },
+  contextTokens() {
+    return 0;
+  },
   async compact() {
     return null;
   },
@@ -1911,11 +1914,12 @@ describe("JieAgentBody — compaction", () => {
     return { role: "user", content, timestamp: 0 };
   }
 
-  function makeFakeCompactor(): { compactor: Compactor; compact: ReturnType<typeof vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>>; needsCompaction: ReturnType<typeof vi.fn<(messages: ReadonlyArray<AgentMessage>, contextWindow: number) => boolean>> } {
+  function makeFakeCompactor(): { compactor: Compactor; compact: ReturnType<typeof vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>>; needsCompaction: ReturnType<typeof vi.fn<(messages: ReadonlyArray<AgentMessage>, contextWindow: number) => boolean>>; contextTokens: ReturnType<typeof vi.fn<(messages: ReadonlyArray<AgentMessage>) => number>> } {
     const compact = vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>(async () => null);
     const needsCompaction = vi.fn<(messages: ReadonlyArray<AgentMessage>, contextWindow: number) => boolean>(() => true);
-    const compactor: Compactor = { needsCompaction, compact, fitToWindow: (messages) => messages };
-    return { compactor, compact, needsCompaction };
+    const contextTokens = vi.fn<(messages: ReadonlyArray<AgentMessage>) => number>(() => 0);
+    const compactor: Compactor = { needsCompaction, contextTokens, compact, fitToWindow: (messages) => messages };
+    return { compactor, compact, needsCompaction, contextTokens };
   }
 
   test("agent_end settle compacts and rewrites state to [summary, ...retainedTail]", async () => {

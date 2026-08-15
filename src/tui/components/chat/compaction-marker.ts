@@ -3,7 +3,15 @@ import type { AgentUiState } from "../../state";
 import { style } from "../themes";
 
 export class CompactionMarkerMessage implements Component {
-  constructor(private readonly marker: NonNullable<AgentUiState["compactionMarker"]>) {}
+  private marker: NonNullable<AgentUiState["compactionMarker"]>;
+
+  constructor(marker: NonNullable<AgentUiState["compactionMarker"]>) {
+    this.marker = marker;
+  }
+
+  update(marker: NonNullable<AgentUiState["compactionMarker"]>): void {
+    this.marker = marker;
+  }
 
   render(width: number): string[] {
     const effectiveWidth = Math.max(1, width);

@@ -472,9 +472,23 @@ describe("terminal focus", () => {
     expect(state.terminalFocused).toBe(true);
   });
 
-  test("terminalFocusGained is a no-op when already focused", () => {
+  test("terminalFocusGained is a no-op when already focused and attention is clear", () => {
     const focused = { ...INITIAL_TUI_STATE, terminalFocused: true };
     expect(reduceUiAction(focused, Actions.terminalFocusGained())).toBe(focused);
+  });
+
+  test("terminalFocusGained clears requireUserAttention", () => {
+    const state = { ...INITIAL_TUI_STATE, requireUserAttention: true };
+    const next = reduceUiAction(state, Actions.terminalFocusGained());
+    expect(next.terminalFocused).toBe(true);
+    expect(next.requireUserAttention).toBe(false);
+  });
+
+  test("terminalFocusGained clears a stale requireUserAttention even when already focused", () => {
+    const state = { ...INITIAL_TUI_STATE, terminalFocused: true, requireUserAttention: true };
+    const next = reduceUiAction(state, Actions.terminalFocusGained());
+    expect(next.terminalFocused).toBe(true);
+    expect(next.requireUserAttention).toBe(false);
   });
 
   test("terminalFocusLost sets terminalFocused to false", () => {
