@@ -2304,7 +2304,7 @@ describe("JieAgentBody — context overhead", () => {
     return { compactor, fitToWindow };
   }
 
-  test("seeds overhead from the composed system prompt and tools", async () => {
+  test("seeds overhead from the composed system prompt and tool schemas", async () => {
     const { compactor, fitToWindow } = makeOverheadCompactor();
     const h = makeHarness();
     const body = h.makeBody({
@@ -2316,7 +2316,9 @@ describe("JieAgentBody — context overhead", () => {
     if (transformContext === undefined) throw new Error("transformContext not wired");
     await transformContext([makeUserMessage("hello")]);
     expect(fitToWindow).toHaveBeenCalled();
-    expect(fitToWindow.mock.calls[0]![3]).toBeGreaterThan(0);
+    const expected = estimateTokens({ role: "user", content: h.cap.fake.state.systemPrompt, timestamp: 0 })
+      + Math.ceil(JSON.stringify(h.cap.fake.state.tools).length / 4);
+    expect(fitToWindow.mock.calls[0]![3]).toBe(expected);
     body.stop();
   });
 
@@ -2381,6 +2383,36 @@ describe("JieAgentBody — context overhead", () => {
       type: "message_end",
       message: makeAssistantMessage({
         model: "different-model",
+        usage: {
+          input: 10000,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 10000,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      }),
+    });
+    await transformContext([makeUserMessage("hello again")]);
+    expect(fitToWindow).toHaveBeenCalledTimes(2);
+    expect(fitToWindow.mock.calls[1]![3]).toBe(fitToWindow.mock.calls[0]![3]);
+    body.stop();
+  });
+
+  test("does not calibrate overhead when the assistant provider does not match the pending model provider", async () => {
+    const { compactor, fitToWindow } = makeOverheadCompactor();
+    const h = makeHarness();
+    const body = h.makeBody({
+      model: makeModel("anthropic", "claude-sonnet-4"),
+      compactor,
+    });
+    const transformContext = h.cap.capturedOptions?.transformContext;
+    if (transformContext === undefined) throw new Error("transformContext not wired");
+    await transformContext([makeUserMessage("hello")]);
+    h.fireEvent({
+      type: "message_end",
+      message: makeAssistantMessage({
+        provider: "openai",
         usage: {
           input: 10000,
           output: 0,

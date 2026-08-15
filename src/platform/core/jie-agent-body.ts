@@ -70,6 +70,7 @@ export class JieAgentBody implements AgentBody {
   private contextOverheadTokens = 0;
   private pendingSentMessages: ReadonlyArray<AgentMessage> = [];
   private pendingSendModel: Model<Api> | null = null;
+  private readonly adaptedTools: AgentTool[] = [];
 
   constructor(params: AgentBodyParams, deps: AgentBodyDeps) {
     this.agentKey = params.agentKey;
@@ -153,7 +154,7 @@ export class JieAgentBody implements AgentBody {
       toolArgs,
       agentDispatcher: deps.agentDispatcher,
     };
-    const adaptedTools = adaptAllTools(parsedTools, params.soul.role, deps.toolRegistry, executionContext);
+    this.adaptedTools = adaptAllTools(parsedTools, params.soul.role, deps.toolRegistry, executionContext);
     const toolCallObserver = new ToolCallObserverImpl({
       eventManager: deps.eventManager,
       hookRunner: this.hookRunner,
@@ -185,7 +186,7 @@ export class JieAgentBody implements AgentBody {
       rolePrompt: params.soul.systemPrompt,
       cwd: deps.cwd,
       contextBlock: deps.systemContextBlock,
-      tools: adaptedTools,
+      tools: this.adaptedTools,
       skills: this.resolvedSkills,
     });
     this.seedOverhead();
@@ -208,7 +209,7 @@ export class JieAgentBody implements AgentBody {
         },
       },
     });
-    this.agent.state.tools = adaptedTools;
+    this.agent.state.tools = this.adaptedTools;
     if (deps.logDir !== null) {
       this.loopLogger = new FileAgentLoopLogger({
         logDir: deps.logDir,
@@ -427,7 +428,7 @@ export class JieAgentBody implements AgentBody {
   }
 
   private seedOverhead(): void {
-    this.contextOverheadTokens = this.estimateOverhead(this.agent.state.systemPrompt, this.agent.state.tools);
+    this.contextOverheadTokens = this.estimateOverhead(this.agent.state.systemPrompt, this.adaptedTools);
   }
 
   private resetOverhead(model: Model<Api>): void {
@@ -450,7 +451,7 @@ export class JieAgentBody implements AgentBody {
   private calibrateOverhead(event: Extract<AgentEvent, { type: "message_end" }>): void {
     const message = event.message;
     if (message.role !== "assistant" || this.pendingSendModel === null) return;
-    if (message.model !== this.pendingSendModel.id) return;
+    if (message.provider !== this.pendingSendModel.provider || message.model !== this.pendingSendModel.id) return;
     const usage = message.usage;
     if (usage === undefined || usage.input + usage.cacheRead + usage.cacheWrite === 0) return;
     const reported = usage.input + usage.cacheRead + usage.cacheWrite;

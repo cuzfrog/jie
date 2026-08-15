@@ -29,6 +29,7 @@ type EventDefinitions = {
     text: string;
   }>;
   "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_durations: ReadonlyArray<number> }>;
+  // totalTokens is the context carried into the next turn; input + cacheRead + cacheWrite is the true prompt size (system prompt, tool schemas, messages - cached or not).
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null }>;
