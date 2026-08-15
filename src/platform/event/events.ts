@@ -41,6 +41,7 @@ type EventDefinitions = {
   "user.effort.update": EventDef<UserSender, { effort: "off" | "low" | "medium" | "high" | "max" }>;
   "user.model.update": EventDef<UserSender, { provider: string; modelId: string }>;
   "system.team.loaded": EventDef<SystemSender, TeamInfo>;
+  "system.session.renamed": EventDef<SystemSender, { teamId: string; sessionName: string }>;
   "agent.interrupt": EventDef<Sender, { teamId: string; agentKey: string }>;
   "agent.question.ask": EventDef<AgentSender, { requestId: string; questions: ReadonlyArray<QuestionItem> }>;
   "system.error": EventDef<SystemSender, { error: string }>;
@@ -108,6 +109,8 @@ export const Events = {
     createEvent("user.model.update", sender, { provider, modelId }),
   teamLoaded: (sender: SystemSender, info: TeamInfo): EventEnvelope<"system.team.loaded"> =>
     createEvent("system.team.loaded", sender, info),
+  sessionRenamed: (sender: SystemSender, teamId: string, sessionName: string): EventEnvelope<"system.session.renamed"> =>
+    createEvent("system.session.renamed", sender, { teamId, sessionName }),
   agentInterrupt: (sender: Sender, teamId: string, agentKey: string): EventEnvelope<"agent.interrupt"> =>
     createEvent("agent.interrupt", sender, { teamId, agentKey }),
   systemError: (sender: SystemSender, error: string): EventEnvelope<"system.error"> =>

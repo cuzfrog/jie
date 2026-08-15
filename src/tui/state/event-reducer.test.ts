@@ -115,6 +115,18 @@ describe("reduceTeamLoaded", () => {
   });
 });
 
+describe("reduceSessionRenamed", () => {
+  test("updates the session name for the active team", () => {
+    const state = reduce(loadedState(), Events.sessionRenamed(SYSTEM_SENDER, "my-team", "new name"));
+    expect(state.sessionName).toBe("new name");
+  });
+
+  test("ignores the event when it is for a different team", () => {
+    const state = reduce(loadedState(), Events.sessionRenamed(SYSTEM_SENDER, "other-team", "new name"));
+    expect(state.sessionName).toBeNull();
+  });
+});
+
 describe("Actions.switchTeam", () => {
   test("first-time switch from empty state seeds agents and focuses the leader", () => {
     const identity = {

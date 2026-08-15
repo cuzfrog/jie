@@ -9,6 +9,7 @@ import { reduceQuestionAction } from "./question-reducer";
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
     case "system.team.loaded": return reduceTeamLoaded(state, event);
+    case "system.session.renamed": return reduceSessionRenamed(state, event);
     case "system.error": return reduceSystemError(state, event);
     case "agent.model.assigned": return reduceModelAssigned(state, event);
     case "agent.prompt.queue.update": return reduceQueueUpdate(state, event);
@@ -31,6 +32,12 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
 function reduceTeamLoaded(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type !== "system.team.loaded") return state;
   return teamLoadReducer(state, event.payload);
+}
+
+function reduceSessionRenamed(state: TuiState, event: AnyEventEnvelope): TuiState {
+  if (event.type !== "system.session.renamed") return state;
+  if (state.teamId !== event.payload.teamId) return state;
+  return { ...state, sessionName: event.payload.sessionName };
 }
 
 function reduceSystemError(state: TuiState, event: AnyEventEnvelope): TuiState {
