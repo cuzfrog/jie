@@ -51,10 +51,10 @@ describe("completeItems", () => {
     expect(completeItems([...ITEMS], "turbo")).toBeNull();
   });
 
-  test("caps the result at MAX_SUGGESTIONS", () => {
+  test("returns all matches beyond MAX_SUGGESTIONS", () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ value: `item-${i}`, label: `item-${i}` }));
     const completion = completeItems(many, "");
-    expect(completion!.items.length).toBe(20);
+    expect(completion!.items.length).toBe(30);
   });
 
   test("uses a custom matcher when provided", () => {

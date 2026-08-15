@@ -70,7 +70,7 @@ export class KanbanCommand extends PositionalSlashCommand {
     const cards = context.state.kanban.board.filter((card) =>
       hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus) && hasTodos(card),
     );
-    const items: ReadonlyArray<SlashCompletionItem> = cards.slice(0, 20).map((card) => ({
+    const items: ReadonlyArray<SlashCompletionItem> = cards.map((card) => ({
       value: card.id,
       label: card.id,
       description: card.content,

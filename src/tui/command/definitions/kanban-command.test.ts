@@ -226,6 +226,19 @@ describe("KanbanCommand", () => {
     });
   });
 
+  test("complete remove returns all matching card ids beyond 20", async () => {
+    const { platform } = makePlatform();
+    const board: ReadonlyArray<KanbanCard> = Array.from({ length: 25 }, (_, i) => ({
+      id: `#${i + 1}`,
+      content: `task ${i + 1}`,
+      status: "pending",
+    }));
+    const context = { state: makeTuiState({ kanbanBoard: board }), platform };
+    const result = await command.complete("remove ", context);
+    expect(result).not.toBeNull();
+    expect(result!.items.length).toBe(25);
+  });
+
   test("complete add returns null", async () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };

@@ -46,8 +46,6 @@ export interface SlashCommandDefinition {
   complete(argumentText: string, context: SlashContext): SlashCompletion | Promise<SlashCompletion | null> | null;
 }
 
-export const MAX_SUGGESTIONS = 20;
-
 export function hasPrefix(value: string, prefix: string): boolean {
   return value.toLowerCase().startsWith(prefix.toLowerCase());
 }
@@ -63,6 +61,6 @@ export function completeItems(
 ): SlashCompletion | null {
   if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
   const matcher = match ?? ((item) => hasPrefix(item.value, prefix));
-  const matches = items.filter((item) => matcher(item, prefix)).slice(0, MAX_SUGGESTIONS);
+  const matches = items.filter((item) => matcher(item, prefix));
   return matches.length === 0 ? null : { items: matches };
 }
