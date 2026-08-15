@@ -63,7 +63,7 @@ describe("loadTeamFromDir", () => {
   test("agent with target-context-window-size stores the value", () => {
     writeFileSync(
       join(dir, "general.md"),
-      `---\ntools:\n  - bash\ntarget_context_window_size: 30000\n---\nsolo body`,
+      `---\ntools:\n  - bash\ntarget-context-window-size: 30000\n---\nsolo body`,
     );
     const bp = loadTeamFromDir(dir);
     expect(bp.roles[0]?.targetContextWindowSize).toBe(30000);
@@ -72,7 +72,7 @@ describe("loadTeamFromDir", () => {
   test("invalid target-context-window-size is rejected", () => {
     writeFileSync(
       join(dir, "general.md"),
-      `---\ntools:\n  - bash\ntarget_context_window_size: 0\n---\nsolo body`,
+      `---\ntools:\n  - bash\ntarget-context-window-size: 0\n---\nsolo body`,
     );
     expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
   });
