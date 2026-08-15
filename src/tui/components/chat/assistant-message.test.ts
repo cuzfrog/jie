@@ -204,6 +204,47 @@ describe("AssistantMessage — work summary", () => {
     ]);
   });
 
+  test("thinking separated by visible text yields two summaries", () => {
+    const message = new AssistantMessage(turn({
+      entries: [
+        { kind: "thinking", text: "a", durationMs: 1000 },
+        { kind: "text", text: "middle" },
+        { kind: "thinking", text: "b", durationMs: 2000 },
+      ],
+    }), stateStore);
+    expect(message.render(80).map((line) => line.trimEnd())).toEqual([
+      "\x1b[90mThought for 1s\x1b[39m",
+      "\x1b[36m● \x1b[39mmiddle",
+      "\x1b[90mThought for 2s\x1b[39m",
+    ]);
+  });
+
+  test("thinking separated by a diff card yields two summaries around the diff", () => {
+    const message = new AssistantMessage(turn({
+      entries: [
+        { kind: "thinking", text: "a", durationMs: 1000 },
+        card({ details: diffDetails("+a") }),
+        { kind: "thinking", text: "b", durationMs: 2000 },
+      ],
+    }), stateStore);
+    expect(message.render(80).map((line) => line.trimEnd())).toEqual([
+      "\x1b[90mThought for 1s\x1b[39m",
+      "\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m",
+      "\x1b[32m+a\x1b[39m",
+      "\x1b[90mThought for 2s\x1b[39m",
+    ]);
+  });
+
+  test("text after an aggregatable card renders below its summary", () => {
+    const message = new AssistantMessage(turn({
+      entries: [card({ durationMs: 500 }), { kind: "text", text: "after" }],
+    }), stateStore);
+    expect(message.render(80).map((line) => line.trimEnd())).toEqual([
+      "\x1b[90mused bash 1 time\x1b[39m",
+      "\x1b[36m● \x1b[39mafter",
+    ]);
+  });
+
   test("the summary follows the text blocks and individual cards", () => {
     const message = new AssistantMessage(turn({
       entries: [{ kind: "text", text: "answer" }, { kind: "thinking", text: "deep", durationMs: 1000 }, card({ error: "boom" }), card({ durationMs: 500 })],

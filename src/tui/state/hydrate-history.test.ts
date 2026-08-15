@@ -166,6 +166,24 @@ describe("hydrateHistory", () => {
     }]);
   });
 
+  test("interleaved text, tool call, and text keep their creation order", () => {
+    const message: AgentMessage = {
+      role: "assistant",
+      content: [
+        { type: "text", text: "before" },
+        { type: "toolCall", id: "c1", name: "bash", arguments: { cmd: "ls" } },
+        { type: "text", text: "after" },
+      ],
+      api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "toolUse", timestamp: 0,
+    };
+    const result = hydrateHistory([user("q"), message], 0);
+    expect(result.currentTurn?.entries).toEqual([
+      { kind: "text", text: "before" },
+      { kind: "toolCall", callId: "c1", name: "bash", input: JSON.stringify({ cmd: "ls" }), inputTruncated: false },
+      { kind: "text", text: "after" },
+    ]);
+  });
+
   test("tool result details pass through to the card", () => {
     const details: ToolResultDetails = { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 3, diff: "-x\n+y" };
     const result = hydrateHistory([
