@@ -114,7 +114,7 @@ export class ToolCallObserverImpl implements ToolCallObserver {
     }
     if (this.guardRepeatCount < LOOP_GUARD_THRESHOLD) return null;
     this.guardBlocks += 1;
-    if (this.guardBlocks < LOOP_GUARD_MAX_BLOCKS) {
+    if (this.guardBlocks <= LOOP_GUARD_MAX_CORRECTIONS) {
       return { reason: loopGuardMessage(context.toolCall.name, this.guardRepeatCount) };
     }
     const reason = loopGuardAbortMessage(context.toolCall.name, this.guardRepeatCount);
@@ -179,7 +179,7 @@ function jieToolResultOf(piResult: AgentToolResult<ToolResultDetails | null | un
 }
 
 const LOOP_GUARD_THRESHOLD = 4;
-const LOOP_GUARD_MAX_BLOCKS = 2;
+const LOOP_GUARD_MAX_CORRECTIONS = 1;
 
 type JsonObject = { readonly [key: string]: Json };
 type Json = string | number | boolean | null | Json[] | JsonObject;

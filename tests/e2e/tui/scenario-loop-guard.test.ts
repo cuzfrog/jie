@@ -48,9 +48,11 @@ describe("Scenario — tool loop guard", () => {
       expect(agent).toBeDefined();
       expect(agent?.lastStopReason).toBe("aborted");
       expect(state.interruptedAgentId).toBe("loop-team:general-1");
-      const turns = [...(agent?.history ?? []), ...(agent?.currentTurn !== null && agent?.currentTurn !== undefined ? [agent.currentTurn] : [])];
+      const currentTurn = agent?.currentTurn;
+      const turns = [...(agent?.history ?? []), ...(currentTurn !== null && currentTurn !== undefined ? [currentTurn] : [])];
       const cards = cardsOfTurns(turns);
-      const guardResult = cards.find((card) => card.kind === "toolResult" && (card.error?.includes("do not repeat") || card.error?.includes("aborted")));
+      const guardResult = cards.find((card) => card.kind === "toolResult"
+        && (card.error?.includes("do not repeat") || card.error?.includes("aborted")));
       expect(guardResult).toBeDefined();
     } finally {
       off();
