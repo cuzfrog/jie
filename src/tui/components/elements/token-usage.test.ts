@@ -40,17 +40,17 @@ describe("TokenUsageImpl", () => {
     expect(tokenUsage.format(agent)).toContain("999↓");
   });
 
-  test("uses the warning color between 70% and 89%", () => {
+  test("uses the warning color at exactly 70%", () => {
     const agent = makeAgentUiState("my-team:general-1", {
       model: model(1000),
-      contextTokensUsed: 750,
+      contextTokensUsed: 700,
       uploadTokens: 0,
       downloadTokens: 0,
     });
     expect(tokenUsage.format(agent)).toContain("\x1b[33m");
   });
 
-  test("uses the error color at 90% and above", () => {
+  test("uses the error color at exactly 90%", () => {
     const agent = makeAgentUiState("my-team:general-1", {
       model: model(1000),
       contextTokensUsed: 900,
@@ -58,5 +58,45 @@ describe("TokenUsageImpl", () => {
       downloadTokens: 0,
     });
     expect(tokenUsage.format(agent)).toContain("\x1b[31m");
+  });
+
+  test("shows a muted dash for the context percent when the model context window is null", () => {
+    const agent = makeAgentUiState("my-team:general-1", { model: model(null), uploadTokens: 0, downloadTokens: 0 });
+    expect(tokenUsage.format(agent)).toContain("\x1b[90m— 0↑ 0↓\x1b[39m");
+  });
+
+  test("shows a muted dash for the context percent when the model context window is zero", () => {
+    const agent = makeAgentUiState("my-team:general-1", { model: model(0), uploadTokens: 0, downloadTokens: 0 });
+    expect(tokenUsage.format(agent)).toContain("\x1b[90m— 0↑ 0↓\x1b[39m");
+  });
+
+  test("rounds percent down and formats the window as a k-suffix", () => {
+    const agent = makeAgentUiState("my-team:general-1", {
+      model: model(128000),
+      contextTokensUsed: 12800,
+      uploadTokens: 0,
+      downloadTokens: 0,
+    });
+    expect(tokenUsage.format(agent)).toContain("10%/128k");
+  });
+
+  test("floors 1500 to 1k for the window label", () => {
+    const agent = makeAgentUiState("my-team:general-1", {
+      model: model(1500),
+      contextTokensUsed: 0,
+      uploadTokens: 0,
+      downloadTokens: 0,
+    });
+    expect(tokenUsage.format(agent)).toContain("0%/1k");
+  });
+
+  test("clamps percent to 100 when used exceeds the window", () => {
+    const agent = makeAgentUiState("my-team:general-1", {
+      model: model(1000),
+      contextTokensUsed: 1500,
+      uploadTokens: 0,
+      downloadTokens: 0,
+    });
+    expect(tokenUsage.format(agent)).toContain("100%/1k");
   });
 });

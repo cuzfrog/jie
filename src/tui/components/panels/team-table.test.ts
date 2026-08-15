@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { makeAgentUiState } from "../../test";
-import { type TokenUsage } from "../elements";
+import { type ModelSegment, type TokenUsage } from "../elements";
 import { TeamTable, type TeamTableColumn, type TeamTableOptions } from "./team-table";
 
 function agent(id: string, overrides: Parameters<typeof makeAgentUiState>[1] = {}) {
@@ -11,7 +11,8 @@ describe("TeamTable", () => {
   const allColumns: TeamTableColumn[] = ["agent", "ctx", "tools", "subscribe", "model"];
   const defaultOptions: TeamTableOptions = { pointed: null, focused: null };
   const tokenUsage: TokenUsage = { format: (a) => a === null || a.model === null ? "—" : `50%/${a.model.contextWindow}` };
-  const table = new TeamTable(tokenUsage);
+  const modelSegment: ModelSegment = { format: (m) => `(${m.provider}) ${m.id} | ${m.effort}` };
+  const table = new TeamTable(tokenUsage, modelSegment);
 
   test("renders a header and one row per agent", () => {
     const agents = [agent("t1:general-1", { isLeader: true, tools: ["bash", "read_file"] })];

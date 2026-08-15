@@ -9,7 +9,7 @@ const INTERRUPTED_LABEL = "Interrupted";
 
 type WorkingMode = ReturnType<typeof TuiState.workingKind> | "interrupted";
 
-export class WorkingSpinnerImpl implements TuiComponent {
+export class WorkingSpinner implements TuiComponent {
   private readonly stateStore: StateStore;
   private mode: WorkingMode = "none";
   private startedAt: number | null = null;

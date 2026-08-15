@@ -1,13 +1,14 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { TuiState, type AgentUiState, type StateStore } from "../../state";
 import { type TuiComponent } from "../..";
-import { formatModelSegment, type TokenUsage } from "../elements";
+import { type ModelSegment, type TokenUsage } from "../elements";
 import { style } from "../themes";
 import { formatQueueIndicator } from "./queue-indicator";
 
 export class Footer implements TuiComponent {
   private readonly stateStore: StateStore;
   private readonly tokenUsage: TokenUsage;
+  private readonly modelSegment: ModelSegment;
   private focused: AgentUiState | null = null;
   private gitBranch: string | null = null;
   private gitDirty = false;
@@ -18,9 +19,10 @@ export class Footer implements TuiComponent {
   private kanbanView: TuiState["kanban"]["view"] = "hidden";
   private editorCursorAtStart = false;
 
-  constructor(stateStore: StateStore, tokenUsage: TokenUsage) {
+  constructor(stateStore: StateStore, tokenUsage: TokenUsage, modelSegment: ModelSegment) {
     this.stateStore = stateStore;
     this.tokenUsage = tokenUsage;
+    this.modelSegment = modelSegment;
   }
 
   update(): boolean {
@@ -64,7 +66,7 @@ export class Footer implements TuiComponent {
     if (focused !== null && focused.compactionInProgress) stats.push(style("warning")("Compacting..."));
     stats.push(footerHelpInfo(state));
     const modelInfo = focused === null ? null : focused.model;
-    const model = modelInfo === null ? style("muted")("—") : formatModelSegment(modelInfo);
+    const model = modelInfo === null ? style("muted")("—") : this.modelSegment.format(modelInfo);
     return [identityLine, rightAligned(stats.join("  "), model, w)];
   }
 

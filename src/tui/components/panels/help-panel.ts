@@ -3,7 +3,7 @@ import { BUILTIN_SETUP_ASSISTANT_TEAM_ID } from "../../../platform";
 import type { CommandCatalog, CommandMeta } from "../../command";
 import { type StateStore, type TuiState } from "../../state";
 import { type TuiComponent } from "../..";
-import { hintLines } from "../elements";
+import { type KeyHints } from "../elements";
 import { Panel } from "./panel";
 import { style } from "../themes";
 
@@ -16,10 +16,12 @@ const COLUMN_GAP = 4;
 export class HelpPanel extends Panel implements TuiComponent {
   private helpPanelVisible = false;
   private readonly commandCatalog: CommandCatalog;
+  private readonly keyHints: KeyHints;
 
-  constructor(stateStore: StateStore, commandRegistry: CommandCatalog) {
+  constructor(stateStore: StateStore, commandRegistry: CommandCatalog, keyHints: KeyHints) {
     super(stateStore);
     this.commandCatalog = commandRegistry;
+    this.keyHints = keyHints;
   }
 
   update(): boolean {
@@ -34,7 +36,7 @@ export class HelpPanel extends Panel implements TuiComponent {
   }
 
   protected override body(state: TuiState, inner: number): string[] {
-    return helpLines(inner, this.commandCatalog.metadata, state.installedTeams);
+    return helpLines(inner, this.commandCatalog.metadata, state.installedTeams, this.keyHints.lines(inner));
   }
 
   protected override hint(_state: TuiState, width: number): string | null {
@@ -42,9 +44,14 @@ export class HelpPanel extends Panel implements TuiComponent {
   }
 }
 
-function helpLines(width: number, metadata: ReadonlyArray<CommandMeta>, installedTeams: TuiState["installedTeams"]): string[] {
+function helpLines(
+  width: number,
+  metadata: ReadonlyArray<CommandMeta>,
+  installedTeams: TuiState["installedTeams"],
+  shortcutLines: ReadonlyArray<string>,
+): string[] {
   const w = Math.max(1, width);
-  return joinSections([commandSection(w, metadata), setupSection(w, installedTeams), shortcutsSection(w)], w);
+  return joinSections([commandSection(w, metadata), setupSection(w, installedTeams), shortcutsSection(shortcutLines)], w);
 }
 
 function joinSections(sections: ReadonlyArray<ReadonlyArray<string>>, width: number): string[] {
@@ -72,8 +79,8 @@ function commandSection(width: number, metadata: ReadonlyArray<CommandMeta>): st
   return [style("text")(COMMANDS_HEADING), ...rows];
 }
 
-function shortcutsSection(width: number): string[] {
-  return [style("text")(SHORTCUTS_HEADING), ...hintLines(width)];
+function shortcutsSection(shortcutLines: ReadonlyArray<string>): string[] {
+  return [style("text")(SHORTCUTS_HEADING), ...shortcutLines];
 }
 
 function setupSection(width: number, installedTeams: TuiState["installedTeams"]): string[] {

@@ -1,6 +1,6 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentId, AgentUiState } from "../../state";
-import { formatModelSegment, type TokenUsage } from "../elements";
+import { type ModelSegment, type TokenUsage } from "../elements";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, style } from "../themes";
 
 export type TeamTableColumn = "agent" | "ctx" | "tools" | "subscribe" | "model";
@@ -13,9 +13,11 @@ export interface TeamTableOptions {
 
 export class TeamTable {
   private readonly tokenUsage: TokenUsage;
+  private readonly modelSegment: ModelSegment;
 
-  constructor(tokenUsage: TokenUsage) {
+  constructor(tokenUsage: TokenUsage, modelSegment: ModelSegment) {
     this.tokenUsage = tokenUsage;
+    this.modelSegment = modelSegment;
   }
 
   render(
@@ -55,8 +57,12 @@ export class TeamTable {
       case "subscribe":
         return listCell(agent.subscribe);
       case "model":
-        return modelCell(agent);
+        return this.modelCell(agent);
     }
+  }
+
+  private modelCell(agent: AgentUiState): string {
+    return agent.model === null ? style("muted")(EMPTY_CELL) : this.modelSegment.format(agent.model);
   }
 }
 
@@ -82,10 +88,6 @@ function spinnerFrame(): string {
 
 function listCell(values: ReadonlyArray<string>): string {
   return style("muted")(values.length === 0 ? EMPTY_CELL : values.join(" "));
-}
-
-function modelCell(agent: AgentUiState): string {
-  return agent.model === null ? style("muted")(EMPTY_CELL) : formatModelSegment(agent.model);
 }
 
 function visibleColumns(
