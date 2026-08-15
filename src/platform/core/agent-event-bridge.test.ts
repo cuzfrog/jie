@@ -328,6 +328,15 @@ describe("AgentEventBridge — run lifecycle", () => {
     expect(errors[0]!.payload).toEqual({ error: "boom" });
   });
 
+  test("agent_end with an aborted final message does not publish system.error", () => {
+    makeBridge().handleEvent({
+      type: "agent_end",
+      messages: [makeAssistantMessage({ stopReason: "aborted", errorMessage: "Request aborted" })],
+    });
+    expect(envelopes("agent.idle")[0]!.payload).toBe("aborted");
+    expect(envelopes("system.error")).toHaveLength(0);
+  });
+
   test("agent_end fires the Stop hook, republishes the queue, and ends the run", () => {
     makeBridge().handleEvent({ type: "agent_end", messages: [] });
     expect(hookRunner.stop).toHaveBeenCalledWith({ identity: hookIdentity });

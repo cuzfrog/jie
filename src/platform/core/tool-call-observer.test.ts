@@ -1,4 +1,4 @@
-import type { AfterToolCallContext, BeforeToolCallContext } from "@earendil-works/pi-agent-core";
+import type { AgentMessage, AfterToolCallContext, BeforeToolCallContext } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { ToolCallObserverImpl, type ToolCallObserver } from "./tool-call-observer";
 import type { AgentSender, EventEnvelope, EventManager } from "../event";
@@ -19,6 +19,10 @@ const hookRunner = vi.mocked<HookRunner>({
 
 const hookIdentity: HookIdentity = { sessionId: "s1", cwd: "/work", teamId: "t1", agentKey: "general-1", role: "general" };
 const sender: AgentSender = { kind: "agent", teamId: "t1", agentKey: "general-1" };
+
+beforeEach(() => {
+  hookRunner.preToolUse.mockResolvedValue({ block: false, reason: null });
+});
 
 function makeObserver(): ToolCallObserver {
   return new ToolCallObserverImpl({ eventManager, hookRunner, hookIdentity, sender });
@@ -44,8 +48,12 @@ function makeAssistantMessage(): AssistantMessage {
   };
 }
 
-function makeAgentContext(): { systemPrompt: string; messages: [] } {
-  return { systemPrompt: "", messages: [] };
+function makeAgentContext(messages: AgentMessage[] = []): { systemPrompt: string; messages: AgentMessage[] } {
+  return { systemPrompt: "", messages };
+}
+
+function userMessage(content: string, timestamp: number): AgentMessage {
+  return { role: "user", content, timestamp };
 }
 
 function beforeCtx(overrides: Partial<BeforeToolCallContext> = {}): BeforeToolCallContext {
@@ -80,6 +88,18 @@ function toolResultEvents(): EventEnvelope<"agent.tool.result">[] {
   return eventManager.publish.mock.calls
     .map((call) => call[0])
     .filter((env): env is EventEnvelope<"agent.tool.result"> => env.topic === "agent.tool.result");
+}
+
+function systemErrors(): EventEnvelope<"system.error">[] {
+  return eventManager.publish.mock.calls
+    .map((call) => call[0])
+    .filter((env): env is EventEnvelope<"system.error"> => env.topic === "system.error");
+}
+
+function agentInterrupts(): EventEnvelope<"agent.interrupt">[] {
+  return eventManager.publish.mock.calls
+    .map((call) => call[0])
+    .filter((env): env is EventEnvelope<"agent.interrupt"> => env.topic === "agent.interrupt");
 }
 
 describe("ToolCallObserver — tool-call publication", () => {
@@ -188,5 +208,125 @@ describe("ToolCallObserver — hook gating", () => {
       toolInput: { command: "ls" },
       toolResponse: JSON.stringify({ content: "ok", details: {}, terminate: false }),
     });
+  });
+});
+
+describe("ToolCallObserver — loop guard", () => {
+  function makeLoopCtx(
+    args: Record<string, unknown>,
+    toolName = "ls",
+    messages: AgentMessage[] = [userMessage("loop", 1)],
+  ): BeforeToolCallContext {
+    return beforeCtx({
+      toolCall: { type: "toolCall", id: `call-${toolName}`, name: toolName, arguments: args },
+      args,
+      context: makeAgentContext(messages),
+    });
+  }
+
+  test("three identical calls pass through and the fourth returns a block with the tool name in the reason", async () => {
+    const observer = makeObserver();
+    for (let i = 0; i < 3; i += 1) {
+      expect(await observer.beforeToolCall(makeLoopCtx({}))).toBeUndefined();
+    }
+    const block = await observer.beforeToolCall(makeLoopCtx({}));
+    expect(block).toEqual(expect.objectContaining({ block: true }));
+    expect(block!.reason).toContain("ls");
+    expect(toolResultEvents()).toHaveLength(1);
+    expect(toolResultEvents()[0]!.payload.error).toContain("ls");
+    expect(systemErrors()).toHaveLength(0);
+    expect(agentInterrupts()).toHaveLength(0);
+  });
+
+  test("argument key order does not affect identity", async () => {
+    const observer = makeObserver();
+    for (let i = 0; i < 3; i += 1) {
+      expect(await observer.beforeToolCall(makeLoopCtx({ a: 1, b: 2 }))).toBeUndefined();
+    }
+    const block = await observer.beforeToolCall(makeLoopCtx({ b: 2, a: 1 }));
+    expect(block).toEqual(expect.objectContaining({ block: true }));
+  });
+
+  test("different arguments or a different tool name reset the counter", async () => {
+    const observer = makeObserver();
+    for (let i = 0; i < 3; i += 1) {
+      expect(await observer.beforeToolCall(makeLoopCtx({ command: "ls" }, "bash"))).toBeUndefined();
+    }
+    expect(await observer.beforeToolCall(makeLoopCtx({ command: "pwd" }, "bash"))).toBeUndefined();
+    for (let i = 0; i < 2; i += 1) {
+      expect(await observer.beforeToolCall(makeLoopCtx({ command: "pwd" }, "bash"))).toBeUndefined();
+    }
+    const block = await observer.beforeToolCall(makeLoopCtx({ command: "pwd" }, "bash"));
+    expect(block).toEqual(expect.objectContaining({ block: true }));
+    expect(block!.reason).toContain("bash");
+  });
+
+  test("a new user message in context.messages resets the counter mid-sequence", async () => {
+    const observer = makeObserver();
+    for (let i = 0; i < 3; i += 1) {
+      expect(await observer.beforeToolCall(makeLoopCtx({}))).toBeUndefined();
+    }
+    const resetCtx = makeLoopCtx({}, "ls", [userMessage("continue", 2)]);
+    expect(await observer.beforeToolCall(resetCtx)).toBeUndefined();
+    for (let i = 0; i < 2; i += 1) {
+      expect(await observer.beforeToolCall(resetCtx)).toBeUndefined();
+    }
+    const block = await observer.beforeToolCall(resetCtx);
+    expect(block).toEqual(expect.objectContaining({ block: true }));
+  });
+
+  test("escalation: after a blocked fourth call, a fifth identical call publishes system.error and agent.interrupt", async () => {
+    const observer = makeObserver();
+    for (let i = 0; i < 4; i += 1) {
+      await observer.beforeToolCall(makeLoopCtx({}));
+    }
+    const block = await observer.beforeToolCall(makeLoopCtx({}));
+    expect(block).toEqual(expect.objectContaining({ block: true, terminate: true }));
+    expect(systemErrors()).toHaveLength(1);
+    expect(systemErrors()[0]!.payload.error).toContain("ls");
+    expect(agentInterrupts()).toHaveLength(1);
+    expect(agentInterrupts()[0]!.payload).toEqual({ teamId: "t1", agentKey: "general-1" });
+  });
+
+  test("after a correction block, a different call resets escalation for the new identity", async () => {
+    const observer = makeObserver();
+    for (let i = 0; i < 4; i += 1) {
+      await observer.beforeToolCall(makeLoopCtx({}));
+    }
+    expect(await observer.beforeToolCall(makeLoopCtx({ path: "." }, "ls"))).toBeUndefined();
+    for (let i = 0; i < 2; i += 1) {
+      expect(await observer.beforeToolCall(makeLoopCtx({ path: "." }, "ls"))).toBeUndefined();
+    }
+    const block = await observer.beforeToolCall(makeLoopCtx({ path: "." }, "ls"));
+    expect(block).toEqual(expect.objectContaining({ block: true }));
+    expect(block!.reason).not.toContain("aborted");
+    expect(block!.reason).toContain("ls");
+  });
+
+  test("a fresh identical run in a new user-ingress epoch starts from zero", async () => {
+    const observer = makeObserver();
+    for (let i = 0; i < 4; i += 1) {
+      await observer.beforeToolCall(makeLoopCtx({}, "ls", [userMessage("first", 1)]));
+    }
+    const newEpochCtx = makeLoopCtx({}, "ls", [userMessage("second", 2)]);
+    expect(await observer.beforeToolCall(newEpochCtx)).toBeUndefined();
+    for (let i = 0; i < 2; i += 1) {
+      expect(await observer.beforeToolCall(newEpochCtx)).toBeUndefined();
+    }
+    const block = await observer.beforeToolCall(newEpochCtx);
+    expect(block).toEqual(expect.objectContaining({ block: true }));
+    expect(block!.reason).not.toContain("aborted");
+  });
+
+  test("guard check runs before the PreToolUse hook and counts hook-blocked attempts", async () => {
+    hookRunner.preToolUse.mockResolvedValue({ block: true, reason: "hook" });
+    const observer = makeObserver();
+    for (let i = 0; i < 3; i += 1) {
+      expect(await observer.beforeToolCall(makeLoopCtx({}))).toEqual({ block: true, reason: "hook" });
+    }
+    const block = await observer.beforeToolCall(makeLoopCtx({}));
+    expect(block!.reason).not.toBe("hook");
+    expect(block!.reason).toContain("ls");
+    expect(hookRunner.preToolUse).toHaveBeenCalledTimes(3);
   });
 });

@@ -17,6 +17,13 @@ const TOOL_SENDER: AgentSender = AGENT_SENDER;
 const MANAGER_SENDER: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "manager-1" };
 const WORKER_SENDER: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "worker-1" };
 
+describe("reduceSystemError", () => {
+  test("sets errorBanner from a system.error event", () => {
+    const state = reduce(loadedState(), Events.systemError(SYSTEM_SENDER, "guard error"));
+    expect(state.errorBanner).toBe("guard error");
+  });
+});
+
 function loadedState(): TuiState {
   return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
     id: "my-team",
