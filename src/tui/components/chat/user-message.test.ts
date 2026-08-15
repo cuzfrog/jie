@@ -2,7 +2,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import type { MessageTurn } from "../../state";
 import { UserMessage } from "./user-message";
 
-const ROW_BACKGROUND = "\x1b[100m";
+const ROW_BACKGROUND = "\x1b[40m";
 const ROW_BACKGROUND_END = "\x1b[49m";
 
 function turn(userPrompt: string): MessageTurn {

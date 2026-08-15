@@ -4,7 +4,7 @@ import { USER_PROMPT_PREFIX, style } from "../themes";
 
 const SKILL_PROMPT_PREFIX = "/skill:";
 const SKILL_INVOCATION_ICON = "⚡ ";
-const ROW_BACKGROUND = "\x1b[100m";
+const ROW_BACKGROUND = "\x1b[40m";
 const ROW_BACKGROUND_END = "\x1b[49m";
 
 export class UserMessage implements Component {
