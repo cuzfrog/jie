@@ -31,7 +31,7 @@ export class WorkingSpinner implements TuiComponent {
     if (mode !== "interrupted" && this.startedAt === null) this.startedAt = Date.now();
     if (mode === "interrupted") return ["", style("muted")(INTERRUPTED_LABEL)];
     const label = mode === "team" ? TEAM_WORKING_LABEL : WORKING_LABEL;
-    const elapsed = this.startedAt !== null ? ` (${(Math.max(0, Date.now() - this.startedAt) / 1000).toFixed(1)}s)` : "";
+    const elapsed = this.startedAt !== null ? ` (${Math.floor(Math.max(0, Date.now() - this.startedAt) / 1000)}s)` : "";
     const intervalMs = mode === "team" ? TEAM_SPINNER_INTERVAL_MS : SPINNER_INTERVAL_MS;
     const statusLine = `${style("accent")(spinnerFrame(Date.now(), intervalMs))} ${style("muted")(label + elapsed)}`;
     return ["", truncateToWidth(statusLine, Math.max(1, _width), "", false)];

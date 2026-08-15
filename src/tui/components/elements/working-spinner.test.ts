@@ -99,7 +99,7 @@ describe("WorkingSpinner.render", () => {
     vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinner(stateStore);
     spinner.update();
-    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.0s)\x1b[39m"]);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0s)\x1b[39m"]);
   });
 
   test("renders the team spinner with a slower frame interval and elapsed time", () => {
@@ -110,10 +110,22 @@ describe("WorkingSpinner.render", () => {
     vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinner(stateStore);
     spinner.update();
-    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mTeam working… (0.0s)\x1b[39m"]);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mTeam working… (0s)\x1b[39m"]);
   });
 
-  test("shows the elapsed time since the working state began", () => {
+  test("advances the team spinner frame at the slower interval and counts whole seconds", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy" })]]),
+    }));
+    const spy = vi.spyOn(Date, "now").mockReturnValue(0);
+    const spinner = new WorkingSpinner(stateStore);
+    spinner.update();
+    spy.mockReturnValue(1000);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠙\x1b[39m \x1b[90mTeam working… (1s)\x1b[39m"]);
+  });
+
+  test("shows the elapsed time in whole seconds", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
@@ -121,8 +133,8 @@ describe("WorkingSpinner.render", () => {
     const spy = vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinner(stateStore);
     spinner.update();
-    spy.mockReturnValue(800);
-    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.8s)\x1b[39m"]);
+    spy.mockReturnValue(1600);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (1s)\x1b[39m"]);
   });
 
   test("renders the interrupted label", () => {
@@ -138,7 +150,7 @@ describe("WorkingSpinner.render", () => {
       agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
-    expect(new WorkingSpinner(stateStore).render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0.0s)\x1b[39m"]);
+    expect(new WorkingSpinner(stateStore).render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0s)\x1b[39m"]);
   });
 
   test("never renders a line wider than the given width", () => {
