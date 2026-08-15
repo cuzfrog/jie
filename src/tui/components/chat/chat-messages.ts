@@ -14,10 +14,14 @@ export interface AssistantMessageComponent extends Component {
   update(turn: MessageTurn | null): void;
 }
 
+export interface CompactionMarkerComponent extends Component {
+  update(marker: CompactionMarker): void;
+}
+
 export interface ChatMessages {
   createUserMessage(userPrompt: string): UserMessageComponent;
   createAssistantMessage(turn: MessageTurn | null): AssistantMessageComponent;
-  createCompactionMarker(marker: CompactionMarker): Component;
+  createCompactionMarker(marker: CompactionMarker): CompactionMarkerComponent;
 }
 
 export class ChatMessagesImpl implements ChatMessages {
@@ -31,7 +35,7 @@ export class ChatMessagesImpl implements ChatMessages {
     return new AssistantMessage(turn, this.stateStore);
   }
 
-  createCompactionMarker(marker: CompactionMarker): Component {
+  createCompactionMarker(marker: CompactionMarker): CompactionMarkerComponent {
     return new CompactionMarkerMessage(marker);
   }
 }

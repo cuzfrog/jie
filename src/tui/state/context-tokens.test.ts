@@ -1,5 +1,5 @@
-import { estimateContextTokens } from "./context-tokens";
-import type { MessageCard, MessageBlock, MessageTurn } from "./state";
+import { contextHistory, estimateContextTokens } from "./context-tokens";
+import type { AgentUiState, MessageCard, MessageBlock, MessageTurn } from "./state";
 
 function card(input?: string, output?: string | null, error?: string | null): MessageCard {
   return { kind: "toolCall", callId: "c", name: "t", input, output, error };
@@ -46,5 +46,49 @@ describe("estimateContextTokens", () => {
   test("rounds up partial tokens (ceiling)", () => {
     expect(estimateContextTokens([], turn("abc"))).toBe(1);
     expect(estimateContextTokens([], turn("abcdefghij"))).toBe(3);
+  });
+});
+
+describe("contextHistory", () => {
+  function agentState(history: MessageTurn[], marker: AgentUiState["compactionMarker"] = null): AgentUiState {
+    return {
+      agentId: "t:1",
+      teamId: "t",
+      agentKey: "1",
+      role: "general",
+      isLeader: true,
+      tools: [],
+      subscribe: [],
+      skills: [],
+      status: "idle",
+      model: null,
+      queue: [],
+      history,
+      currentTurn: null,
+      compactionMarker: marker,
+      compactionInProgress: false,
+      lastStopReason: null,
+      contextTokensUsed: 0,
+      lastReportedTotalTokens: null,
+      uploadTokens: 0,
+      downloadTokens: 0,
+    };
+  }
+
+  test("returns the full history when there is no compaction marker", () => {
+    const history = [turn("a"), turn("b")];
+    expect(contextHistory(agentState(history))).toEqual(history);
+  });
+
+  test("returns the history suffix after the marker", () => {
+    const history = [turn("a"), turn("b"), turn("c")];
+    const marker = { turnsBefore: 2, summary: "s", tokensBefore: 1 };
+    expect(contextHistory(agentState(history, marker))).toEqual([turn("c")]);
+  });
+
+  test("clamps a marker beyond the history length", () => {
+    const history = [turn("a"), turn("b")];
+    const marker = { turnsBefore: 10, summary: "s", tokensBefore: 1 };
+    expect(contextHistory(agentState(history, marker))).toEqual([]);
   });
 });

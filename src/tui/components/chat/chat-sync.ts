@@ -1,6 +1,6 @@
-import { Container, type Component } from "@earendil-works/pi-tui";
+import { Container } from "@earendil-works/pi-tui";
 import { TuiState, type AgentId, type AgentUiState, type MessageTurn, type StateStore } from "../../state";
-import type { AssistantMessageComponent, ChatMessages, UserMessageComponent } from "./chat-messages";
+import type { AssistantMessageComponent, ChatMessages, CompactionMarkerComponent, UserMessageComponent } from "./chat-messages";
 import type { TuiComponent } from "../..";
 
 export interface ChatSync extends TuiComponent {}
@@ -18,7 +18,7 @@ type ChatEntry =
 
 type SyncedEntry =
   | { readonly kind: "turn"; readonly seq: number; readonly pair: TurnPair }
-  | { readonly kind: "compaction"; readonly seq: number; readonly component: Component };
+  | { readonly kind: "compaction"; readonly marker: CompactionMarker; readonly component: CompactionMarkerComponent };
 
 export class ChatSyncImpl implements ChatSync {
   private readonly stateStore: StateStore;
@@ -104,13 +104,15 @@ export class ChatSyncImpl implements ChatSync {
       if (existing.kind === "turn" && entry.kind === "turn") {
         existing.pair.user.update(entry.turn);
         existing.pair.assistant.update(entry.turn);
+      } else if (existing.kind === "compaction" && entry.kind === "compaction") {
+        existing.component.update(entry.marker);
       }
     }
   }
 
   private createEntry(entry: ChatEntry): SyncedEntry {
     if (entry.kind === "compaction") {
-      return { kind: "compaction", seq: entry.marker.seq, component: this.chatMessages.createCompactionMarker(entry.marker) };
+      return { kind: "compaction", marker: entry.marker, component: this.chatMessages.createCompactionMarker(entry.marker) };
     }
     const pair: TurnPair = {
       user: this.chatMessages.createUserMessage(entry.turn.userPrompt),
@@ -142,20 +144,18 @@ function mergeEntries(agent: AgentUiState | null): ChatEntry[] {
   const entries: ChatEntry[] = [];
   if (agent !== null) {
     for (const turn of turnsOf(agent)) entries.push({ kind: "turn", turn });
-    if (agent.compactionMarker !== null) entries.push({ kind: "compaction", marker: agent.compactionMarker });
+    if (agent.compactionMarker !== null) {
+      const position = Math.max(0, Math.min(agent.compactionMarker.turnsBefore, entries.length));
+      entries.splice(position, 0, { kind: "compaction", marker: agent.compactionMarker });
+    }
   }
-  return entries.sort((a, b) => seqOf(a) - seqOf(b));
-}
-
-function seqOf(entry: ChatEntry): number {
-  if (entry.kind === "turn") return entry.turn.seq;
-  return entry.marker.seq;
+  return entries;
 }
 
 function sameEntry(synced: SyncedEntry, entry: ChatEntry): boolean {
-  if (synced.kind !== entry.kind) return false;
-  if (entry.kind === "turn") return synced.seq === entry.turn.seq;
-  return synced.seq === entry.marker.seq;
+  if (synced.kind === "turn" && entry.kind === "turn") return synced.seq === entry.turn.seq;
+  if (synced.kind === "compaction" && entry.kind === "compaction") return synced.marker.turnsBefore === entry.marker.turnsBefore;
+  return false;
 }
 
 function turnsOf(agent: AgentUiState): MessageTurn[] {

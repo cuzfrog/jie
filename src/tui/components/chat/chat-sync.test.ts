@@ -1,6 +1,5 @@
-import { type Component } from "@earendil-works/pi-tui";
 import { type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../../state";
-import { type AssistantMessageComponent, type ChatMessages, type UserMessageComponent } from ".";
+import { type AssistantMessageComponent, type ChatMessages, type CompactionMarkerComponent, type UserMessageComponent } from ".";
 import { makeAgentUiState, makeTuiState } from "../../test";
 import { ChatSyncImpl, type ChatSync } from "./chat-sync";
 
@@ -32,7 +31,7 @@ interface SyncHarness {
   readonly createCompactionMarker: ReturnType<typeof vi.fn>;
   readonly userMessages: UserMessageComponent[];
   readonly assistantMessages: AssistantMessageComponent[];
-  readonly compactionMarkers: Component[];
+  readonly compactionMarkers: CompactionMarkerComponent[];
   readonly update: (state: TuiState) => boolean;
   readonly render: (width: number) => string[];
 }
@@ -45,7 +44,7 @@ function bootSync(): SyncHarness {
   });
   const userMessages: UserMessageComponent[] = [];
   const assistantMessages: AssistantMessageComponent[] = [];
-  const compactionMarkers: Component[] = [];
+  const compactionMarkers: CompactionMarkerComponent[] = [];
   const createUserMessage = vi.fn((prompt: string) => {
     const component: UserMessageComponent = {
       render: vi.fn(() => [`USER:${prompt}`]),
@@ -65,9 +64,10 @@ function bootSync(): SyncHarness {
     return component;
   });
   const createCompactionMarker = vi.fn((marker: CompactionMarker) => {
-    const component: Component = {
-      render: vi.fn(() => [`MARKER:${marker.seq}`]),
+    const component: CompactionMarkerComponent = {
+      render: vi.fn(() => [`MARKER:${marker.turnsBefore}`]),
       invalidate: vi.fn(),
+      update: vi.fn(),
     };
     compactionMarkers.push(component);
     return component;
@@ -179,7 +179,7 @@ describe("ChatSyncImpl", () => {
 
   test("a compaction marker renders before the turns that follow it", () => {
     const { update, render, createCompactionMarker } = bootSync();
-    const marker = { seq: 0, summary: "the summary", tokensBefore: 500 };
+    const marker: CompactionMarker = { turnsBefore: 0, summary: "the summary", tokensBefore: 500 };
     const agent = makeAgentUiState(AGENT_ID, { isLeader: true, compactionMarker: marker, currentTurn: makeTurn("kept", null, 1) });
     expect(update(teamState([agent], AGENT_ID))).toBe(true);
     expect(createCompactionMarker).toHaveBeenCalledWith(marker);
@@ -190,7 +190,7 @@ describe("ChatSyncImpl", () => {
     const { update, createCompactionMarker } = bootSync();
     const agent = makeAgentUiState(AGENT_ID, {
       isLeader: true,
-      compactionMarker: { seq: 0, summary: "s", tokensBefore: 1 },
+      compactionMarker: { turnsBefore: 0, summary: "s", tokensBefore: 1 },
       currentTurn: makeTurn("kept", null, 1),
     });
     const state = teamState([agent], AGENT_ID);
@@ -199,26 +199,47 @@ describe("ChatSyncImpl", () => {
     expect(createCompactionMarker).toHaveBeenCalledTimes(1);
   });
 
-  test("a re-compaction replaces the marker and the renumbered turns", () => {
+  test("a re-compaction moves the marker and keeps the turn lines intact", () => {
     const { update, render, createCompactionMarker, createUserMessage, createAssistantMessage } = bootSync();
+    const kept = makeTurn("kept", null, 1);
+    const live = makeTurn("live", null, 2);
     const before = makeAgentUiState(AGENT_ID, {
       isLeader: true,
-      compactionMarker: { seq: 0, summary: "first", tokensBefore: 100 },
-      history: [makeTurn("kept", null, 1)],
-      currentTurn: makeTurn("live", null, 2),
+      compactionMarker: { turnsBefore: 0, summary: "first", tokensBefore: 100 },
+      history: [kept],
+      currentTurn: live,
     });
     expect(update(teamState([before], AGENT_ID))).toBe(true);
     expect(render(80)).toEqual(["MARKER:0", "USER:kept", "ASSISTANT:1", "USER:live", "ASSISTANT:2"]);
     const after = makeAgentUiState(AGENT_ID, {
       isLeader: true,
-      compactionMarker: { seq: 3, summary: "second", tokensBefore: 200 },
-      currentTurn: makeTurn("live", null, 4),
+      compactionMarker: { turnsBefore: 1, summary: "second", tokensBefore: 200 },
+      history: [kept],
+      currentTurn: live,
     });
     expect(update(teamState([after], AGENT_ID))).toBe(true);
-    expect(render(80)).toEqual(["MARKER:3", "USER:live", "ASSISTANT:4"]);
+    expect(render(80)).toEqual(["USER:kept", "ASSISTANT:1", "MARKER:1", "USER:live", "ASSISTANT:2"]);
     expect(createCompactionMarker).toHaveBeenCalledTimes(2);
-    expect(createUserMessage).toHaveBeenCalledTimes(3);
-    expect(createAssistantMessage).toHaveBeenCalledTimes(3);
+    expect(createUserMessage).toHaveBeenCalledTimes(4);
+    expect(createAssistantMessage).toHaveBeenCalledTimes(4);
+  });
+
+  test("a same-position marker update calls update on the existing component", () => {
+    const { update, createCompactionMarker, compactionMarkers } = bootSync();
+    const agent1 = makeAgentUiState(AGENT_ID, {
+      isLeader: true,
+      compactionMarker: { turnsBefore: 0, summary: "first", tokensBefore: 100 },
+      currentTurn: makeTurn("kept", null, 1),
+    });
+    expect(update(teamState([agent1], AGENT_ID))).toBe(true);
+    const agent2 = makeAgentUiState(AGENT_ID, {
+      isLeader: true,
+      compactionMarker: { turnsBefore: 0, summary: "second", tokensBefore: 200 },
+      currentTurn: makeTurn("kept", null, 1),
+    });
+    expect(update(teamState([agent2], AGENT_ID))).toBe(true);
+    expect(createCompactionMarker).toHaveBeenCalledTimes(1);
+    expect(compactionMarkers[0]!.update).toHaveBeenCalledWith(agent2.compactionMarker);
   });
 
   test("toggling thinking or tool-card expansion is dirty without changing the message list", () => {

@@ -50,7 +50,7 @@ export interface AgentUiState {
   readonly queue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer"; readonly chained: boolean }>;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
-  readonly compactionMarker: { readonly seq: number; readonly summary: string; readonly tokensBefore: number } | null;
+  readonly compactionMarker: { readonly turnsBefore: number; readonly summary: string; readonly tokensBefore: number } | null;
   readonly compactionInProgress: boolean;
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;

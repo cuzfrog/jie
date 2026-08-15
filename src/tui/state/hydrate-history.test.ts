@@ -220,16 +220,27 @@ describe("hydrateHistory", () => {
     expect(result.currentTurn).toEqual({ userPrompt: "pending", cards: [], blocks: [], streamId: null, seq: 0 });
   });
 
-  test("a leading compaction summary becomes the marker consuming the first seq, turns number after it", () => {
+  test("a leading compaction summary becomes the marker and turns number after it", () => {
     const result = hydrateHistory([
       compactionSummary("the summary", 500),
       user("kept"), assistantText("a1"),
       user("kept2"), assistantText("a2"),
     ], 7);
-    expect(result.compactionMarker).toEqual({ seq: 7, summary: "the summary", tokensBefore: 500 });
-    expect(result.history[0]?.seq).toBe(8);
-    expect(result.currentTurn?.seq).toBe(9);
-    expect(result.nextSeq).toBe(10);
+    expect(result.compactionMarker).toEqual({ turnsBefore: 0, summary: "the summary", tokensBefore: 500 });
+    expect(result.history[0]?.seq).toBe(7);
+    expect(result.currentTurn?.seq).toBe(8);
+    expect(result.nextSeq).toBe(9);
+  });
+
+  test("a summary between completed turns records the turnsBefore count", () => {
+    const result = hydrateHistory([
+      user("first"), assistantText("a1"),
+      compactionSummary("the summary", 500),
+      user("kept"), assistantText("a2"),
+    ], 0);
+    expect(result.compactionMarker).toEqual({ turnsBefore: 1, summary: "the summary", tokensBefore: 500 });
+    expect(result.history[0]?.userPrompt).toBe("first");
+    expect(result.currentTurn?.userPrompt).toBe("kept");
   });
 
   test("a summary-only transcript yields just the marker", () => {
@@ -237,8 +248,8 @@ describe("hydrateHistory", () => {
     expect(result).toEqual({
       history: [],
       currentTurn: null,
-      compactionMarker: { seq: 3, summary: "the summary", tokensBefore: 500 },
-      nextSeq: 4,
+      compactionMarker: { turnsBefore: 0, summary: "the summary", tokensBefore: 500 },
+      nextSeq: 3,
     });
   });
 });
