@@ -336,3 +336,7 @@ function restoreLang(prevLang: string | undefined, prevLangAll: string | undefin
   if (prevLangAll === undefined) delete process.env.LC_ALL;
   else process.env.LC_ALL = prevLangAll;
 }
+
+export function cardsOfTurns(turns: ReadonlyArray<MessageTurn>): MessageCard[] {
+  return turns.flatMap((turn) => turn.cards);
+}

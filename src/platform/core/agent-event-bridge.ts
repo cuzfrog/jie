@@ -63,7 +63,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       case "agent_end": {
         const final = readFinalStopReason(event);
         this.eventManager.publish(Events.agentIdle(this.sender, final.stopReason));
-        if (final.isError && final.errorMessage !== null) {
+        if (final.stopReason === "error" && final.errorMessage !== null) {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
         } else if (isBudgetTruncated(final.message, final.stopReason)) {
           this.eventManager.publish(Events.systemError({ kind: "system" }, TRUNCATION_MESSAGE));

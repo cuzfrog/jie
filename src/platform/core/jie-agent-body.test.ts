@@ -7,6 +7,7 @@ import {
   type Agent as PiAgent,
   type AgentEvent as PiAgentEvent,
   type AgentMessage,
+  type BeforeToolCallContext,
   type PrepareNextTurnContext,
   type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
@@ -2512,6 +2513,45 @@ describe("JieAgentBody — context overhead", () => {
       model: makeModel("anthropic", "claude-sonnet-4"),
     });
     expect(body.identity.model?.contextWindow).toBe(60_000);
+  });
+});
+
+describe("JieAgentBody — loop guard integration", () => {
+  function makeUserMessage(content: string): AgentMessage {
+    return { role: "user", content, timestamp: 1 };
+  }
+
+  function loopCtx(toolCallId: string): BeforeToolCallContext {
+    const toolCall = { type: "toolCall" as const, id: toolCallId, name: "ls", arguments: {} };
+    return {
+      assistantMessage: makeAssistantMessage({ content: [toolCall] }),
+      toolCall,
+      args: {},
+      context: { systemPrompt: "", messages: [makeUserMessage("loop guard test")] },
+    };
+  }
+
+  test("the observer escalates repeated identical tool calls through agent.interrupt and system.error", async () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    await body.start();
+    const beforeToolCall = h.cap.capturedOptions?.beforeToolCall;
+    if (beforeToolCall === undefined) throw new Error("beforeToolCall not wired");
+    const systemErrors: EventEnvelope<"system.error">[] = [];
+    const agentInterrupts: EventEnvelope<"agent.interrupt">[] = [];
+    h.subscribeSubject("system.error", (env) => systemErrors.push(env));
+    h.subscribeSubject("agent.interrupt", (env) => agentInterrupts.push(env));
+    h.state.isStreaming = true;
+    for (let i = 0; i < 4; i += 1) {
+      await beforeToolCall(loopCtx(`ls-guard-${i}`));
+    }
+    expect(h.abort).not.toHaveBeenCalled();
+    await beforeToolCall(loopCtx("ls-guard-escalate"));
+    expect(h.abort).toHaveBeenCalledTimes(1);
+    expect(systemErrors).toHaveLength(1);
+    expect(systemErrors[0]!.payload.error).toContain("ls");
+    expect(agentInterrupts).toHaveLength(1);
+    expect(agentInterrupts[0]!.payload).toEqual({ teamId: "t1", agentKey: "general-1" });
     body.stop();
   });
 });
