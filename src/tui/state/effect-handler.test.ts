@@ -23,6 +23,7 @@ class StubTerminal implements Terminal {
   columns = 80;
   rows = 30;
   writeCalls: string[] = [];
+  clearScreenCalls = 0;
   start(): void {}
   stop(): void {}
   drainInput(): Promise<void> { return Promise.resolve(); }
@@ -33,7 +34,7 @@ class StubTerminal implements Terminal {
   showCursor(): void {}
   clearLine(): void {}
   clearFromCursor(): void {}
-  clearScreen(): void {}
+  clearScreen(): void { this.clearScreenCalls += 1; }
   setTitle(): void {}
   setProgress(): void {}
 }
@@ -98,15 +99,17 @@ interface EffectHarness {
   readonly platform: PlatformHarness;
   readonly commandHandler: { handle: ReturnType<typeof vi.fn> };
   readonly terminal: StubTerminal;
+  readonly screen: { requestRender: ReturnType<typeof vi.fn> };
   readonly quitTui: ReturnType<typeof vi.fn>;
 }
 
 function makeEffectHarness(platform: PlatformHarness, state: StateStoreImpl): EffectHarness {
   const commandHandler = { handle: vi.fn() };
   const terminal = new StubTerminal();
+  const screen = { requestRender: vi.fn() };
   const quitTui = vi.fn();
-  const handler = new EffectHandlerImpl(platform.platform, state, commandHandler, terminal, quitTui);
-  return { handler, stateStore: state, platform, commandHandler, terminal, quitTui };
+  const handler = new EffectHandlerImpl(platform.platform, state, commandHandler, terminal, screen, quitTui);
+  return { handler, stateStore: state, platform, commandHandler, terminal, screen, quitTui };
 }
 
 async function runAsync(): Promise<void> {
@@ -162,6 +165,16 @@ describe("EffectHandlerImpl", () => {
     state.dispatch(Actions.requestQuit());
     await runAsync();
     expect(quitTui).toHaveBeenCalled();
+  });
+
+  test("CLEAR_TUI_STATE clears the screen and scrollback and forces a render", () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    const { terminal, screen } = makeEffectHarness(platform, state);
+    state.dispatch(Actions.clearTuiState());
+    expect(terminal.clearScreenCalls).toBe(1);
+    expect(terminal.writeCalls).toContain("\x1b[3J");
+    expect(screen.requestRender).toHaveBeenCalledWith(true);
   });
 });
 

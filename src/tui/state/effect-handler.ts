@@ -1,4 +1,4 @@
-import type { Terminal } from "@earendil-works/pi-tui";
+import type { Terminal, TUI } from "@earendil-works/pi-tui";
 import { type AnyEventEnvelope, type JiePlatform, type QuestionAnswer } from "../../platform";
 import { logger } from "../../utils";
 import type { CommandHandler } from "../command";
@@ -16,6 +16,7 @@ export class EffectHandlerImpl implements EffectHandler {
   private readonly platform: JiePlatform;
   private readonly stateStore: StateStore;
   private readonly terminal: Terminal;
+  private readonly screen: Pick<TUI, "requestRender">;
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
 
@@ -24,11 +25,13 @@ export class EffectHandlerImpl implements EffectHandler {
     stateStore: StateStore,
     commandHandler: CommandHandler,
     terminal: Terminal,
+    screen: Pick<TUI, "requestRender">,
     quitTui: () => Promise<void>,
   ) {
     this.platform = platform;
     this.stateStore = stateStore;
     this.terminal = terminal;
+    this.screen = screen;
     this.unsubscribeBus = subscribeToBus(platform, (env) => {
       this.stateStore.dispatch(Actions.receiveEvent(env));
       if (env.type === "agent.idle" || env.type === "agent.question.ask") {
@@ -63,6 +66,9 @@ export class EffectHandlerImpl implements EffectHandler {
           return;
         case ActionTypes.CANCEL_QUESTION:
           this.answerUserQuestion(beforeState, action.payload.requestId, true);
+          return;
+        case ActionTypes.CLEAR_TUI_STATE:
+          this.resetScreen();
           return;
         default:
           return;
@@ -130,6 +136,12 @@ export class EffectHandlerImpl implements EffectHandler {
     } catch (error: unknown) {
       log.error(`failed to read notification sound setting: ${String(error)}`);
     }
+  }
+
+  private resetScreen(): void {
+    this.terminal.clearScreen();
+    this.terminal.write("\x1b[3J");
+    this.screen.requestRender(true);
   }
 }
 
