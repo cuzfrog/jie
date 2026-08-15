@@ -1,6 +1,6 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentId, AgentUiState } from "../../state";
-import { type ModelSegment, type TokenUsage } from "../elements";
+import { type CompactingIndicator, type ModelSegment, type TokenUsage } from "../elements";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, style } from "../themes";
 
 export type TeamTableColumn = "agent" | "ctx" | "tools" | "subscribe" | "model";
@@ -14,10 +14,12 @@ export interface TeamTableOptions {
 export class TeamTable {
   private readonly tokenUsage: TokenUsage;
   private readonly modelSegment: ModelSegment;
+  private readonly compactingIndicator: CompactingIndicator;
 
-  constructor(tokenUsage: TokenUsage, modelSegment: ModelSegment) {
+  constructor(tokenUsage: TokenUsage, modelSegment: ModelSegment, compactingIndicator: CompactingIndicator) {
     this.tokenUsage = tokenUsage;
     this.modelSegment = modelSegment;
+    this.compactingIndicator = compactingIndicator;
   }
 
   render(
@@ -49,7 +51,7 @@ export class TeamTable {
   private cell(column: TeamTableColumn, agent: AgentUiState, pointed: AgentId | null, focused: AgentId | null): string {
     switch (column) {
       case "agent":
-        return identityCell(agent, pointed, focused);
+        return identityCell(agent, pointed, focused, this.compactingIndicator);
       case "ctx":
         return this.tokenUsage.format(agent);
       case "tools":
@@ -66,17 +68,19 @@ export class TeamTable {
   }
 }
 
-function identityCell(agent: AgentUiState, pointed: AgentId | null, focused: AgentId | null): string {
+function identityCell(agent: AgentUiState, pointed: AgentId | null, focused: AgentId | null, compactingIndicator: CompactingIndicator): string {
   const isPointed = agent.agentId === pointed;
   const isFocused = agent.agentId === focused;
   const pointer = isPointed ? style("accent")(POINTER_GLYPH) : " ";
   const key = isPointed || isFocused ? style("accent")(agent.agentKey) : agent.agentKey;
   const leader = agent.isLeader ? ` ${style("dim")(LEADER_LABEL)}` : "";
   const queue = agent.queue.length > 0 ? ` ${style("muted")(`q${agent.queue.length}`)}` : "";
-  return `${pointer}${key}${leader}${statusGlyph(agent)}${queue}`;
+  return `${pointer}${key}${leader}${statusGlyph(agent, compactingIndicator)}${queue}`;
 }
 
-function statusGlyph(agent: AgentUiState): string {
+function statusGlyph(agent: AgentUiState, compactingIndicator: CompactingIndicator): string {
+  const compacting = compactingIndicator.format(agent);
+  if (compacting !== null) return ` ${compacting}`;
   if (agent.status === "busy") return ` ${style("accent")(spinnerFrame())}`;
   if (agent.lastStopReason === "error") return ` ${style("error")("✗")}`;
   return "";

@@ -1,7 +1,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { TuiState, type AgentUiState, type StateStore } from "../../state";
 import { type TuiComponent } from "../..";
-import { type ModelSegment, type TokenUsage } from "../elements";
+import { type CompactingIndicator, type ModelSegment, type TokenUsage } from "../elements";
 import { style } from "../themes";
 import { type QueueIndicator } from "./queue-indicator";
 
@@ -10,6 +10,7 @@ export class Footer implements TuiComponent {
   private readonly tokenUsage: TokenUsage;
   private readonly modelSegment: ModelSegment;
   private readonly queueIndicator: QueueIndicator;
+  private readonly compactingIndicator: CompactingIndicator;
   private focused: AgentUiState | null = null;
   private gitBranch: string | null = null;
   private gitDirty = false;
@@ -20,11 +21,12 @@ export class Footer implements TuiComponent {
   private kanbanView: TuiState["kanban"]["view"] = "hidden";
   private editorCursorAtStart = false;
 
-  constructor(stateStore: StateStore, tokenUsage: TokenUsage, modelSegment: ModelSegment, queueIndicator: QueueIndicator) {
+  constructor(stateStore: StateStore, tokenUsage: TokenUsage, modelSegment: ModelSegment, queueIndicator: QueueIndicator, compactingIndicator: CompactingIndicator) {
     this.stateStore = stateStore;
     this.tokenUsage = tokenUsage;
     this.modelSegment = modelSegment;
     this.queueIndicator = queueIndicator;
+    this.compactingIndicator = compactingIndicator;
   }
 
   update(): boolean {
@@ -65,7 +67,8 @@ export class Footer implements TuiComponent {
     const stats: string[] = [this.tokenUsage.format(focused)];
     const queue = this.queueIndicator.format(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));
-    if (focused !== null && focused.compactionInProgress) stats.push(style("warning")("Compacting..."));
+    const compacting = this.compactingIndicator.format(focused);
+    if (compacting !== null) stats.push(compacting);
     stats.push(footerHelpInfo(state));
     const modelInfo = focused === null ? null : focused.model;
     const model = modelInfo === null ? style("muted")("—") : this.modelSegment.format(modelInfo);

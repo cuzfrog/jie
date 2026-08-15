@@ -1,5 +1,6 @@
 import { asClass, type AwilixContainer } from "awilix";
 import type { TuiCradle } from "../../container";
+import { CompactingIndicatorImpl } from "./compacting-indicator";
 import { KeyHintsImpl } from "./key-hints";
 import { ModelSegmentImpl } from "./model-segment";
 import { QueuedPrompts } from "./queued-prompts";
@@ -17,5 +18,6 @@ export function registerElementsModule(container: AwilixContainer<TuiCradle>): v
     tokenUsage: asClass(TokenUsageImpl).singleton(),
     keyHints: asClass(KeyHintsImpl).singleton(),
     modelSegment: asClass(ModelSegmentImpl).singleton(),
+    compactingIndicator: asClass(CompactingIndicatorImpl).singleton(),
   });
 }

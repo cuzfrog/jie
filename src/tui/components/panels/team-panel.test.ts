@@ -1,14 +1,15 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { type AgentId, type AgentUiState, type StateStore, type TuiState } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
-import { type ModelSegment, type TokenUsage } from "../elements";
+import { type CompactingIndicator, type ModelSegment, type TokenUsage } from "../elements";
 import { TeamPanel } from "./team-panel";
 import { TeamTable } from "./team-table";
 import { SPINNER_FRAMES, style } from "../themes";
 
 const tokenUsage: TokenUsage = { format: (agent) => agent === null || agent.model === null ? "—" : "25%/128k" };
 const modelSegment: ModelSegment = { format: (m) => `(${m.provider}) ${m.id} | ${m.effort}` };
-const teamTable = new TeamTable(tokenUsage, modelSegment);
+const compactingIndicator: CompactingIndicator = { format: () => null };
+const teamTable = new TeamTable(tokenUsage, modelSegment, compactingIndicator);
 
 const LEADER_ID: AgentId = "my-team:general-1";
 const WORKER_ID: AgentId = "my-team:coder-1";

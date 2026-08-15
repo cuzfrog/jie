@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { makeAgentUiState } from "../../test";
-import { type ModelSegment, type TokenUsage } from "../elements";
+import { type CompactingIndicator, type ModelSegment, type TokenUsage } from "../elements";
 import { TeamTable, type TeamTableColumn, type TeamTableOptions } from "./team-table";
 
 function agent(id: string, overrides: Parameters<typeof makeAgentUiState>[1] = {}) {
@@ -12,7 +12,8 @@ describe("TeamTable", () => {
   const defaultOptions: TeamTableOptions = { pointed: null, focused: null };
   const tokenUsage: TokenUsage = { format: (a) => a === null || a.model === null ? "—" : `50%/${a.model.contextWindow}` };
   const modelSegment: ModelSegment = { format: (m) => `(${m.provider}) ${m.id} | ${m.effort}` };
-  const table = new TeamTable(tokenUsage, modelSegment);
+  const compactingIndicator: CompactingIndicator = { format: () => null };
+  const table = new TeamTable(tokenUsage, modelSegment, compactingIndicator);
 
   test("renders a header and one row per agent", () => {
     const agents = [agent("t1:general-1", { isLeader: true, tools: ["bash", "read_file"] })];
@@ -63,5 +64,13 @@ describe("TeamTable", () => {
     for (const line of lines) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(25);
     }
+  });
+
+  test("shows the compacting indicator in the agent column when an agent is compacting", () => {
+    const compacting: CompactingIndicator = { format: () => "Compacting..." };
+    const compactingTable = new TeamTable(tokenUsage, modelSegment, compacting);
+    const agents = [agent("t1:general-1", { compactionInProgress: true })];
+    const lines = compactingTable.render(agents, ["agent"], 80, defaultOptions);
+    expect(lines[1]).toContain("Compacting...");
   });
 });
