@@ -68,6 +68,33 @@ describe("QuestionPanel", () => {
     expect(panel.update()).toBe(false);
   });
 
+  test("Other option uses a checkbox marker", () => {
+    const panel = questionPanel(makeTuiState({ question: makeQuestionState() }));
+    panel.update();
+    const text = panel.render(40).map((line) => stripAnsi(line)).join("\n");
+    expect(text).toContain("[ ] Other");
+    expect(text).not.toContain("( ) Other");
+  });
+
+  test("shows the input when the cursor lands on Other", () => {
+    const state = makeTuiState({ question: makeQuestionState({ optionCursor: 1 }) });
+    const stateStore = makeStateStore(state);
+    const panel = new QuestionPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ question: makeQuestionState({ optionCursor: 2, editingOther: true }) }));
+    panel.handleInput("\x1b[B");
+    panel.update();
+    const text = panel.render(40).map((line) => stripAnsi(line)).join("\n");
+    expect(text).toContain("Other:");
+  });
+
+  test("Other option shows a checked marker when other text is set", () => {
+    const panel = questionPanel(makeTuiState({ question: makeQuestionState({ otherText: ["custom", null] }) }));
+    panel.update();
+    const text = panel.render(40).map((line) => stripAnsi(line)).join("\n");
+    expect(text).toContain("[x] Other");
+  });
+
   test("renders the question, options, and Other row", () => {
     const panel = questionPanel(makeTuiState({ question: makeQuestionState() }));
     panel.update();

@@ -59,7 +59,9 @@ function moveQuestionCursor(state: TuiState, direction: "up" | "down"): TuiState
   const total = currentQuestion(q).options.length + 1;
   const delta = direction === "up" ? -1 : 1;
   const optionCursor = (q.optionCursor + delta + total) % total;
-  return { ...state, question: { ...q, optionCursor } };
+  const other = otherIndex(q);
+  const editingOther = optionCursor === other && q.otherText[q.questionIndex] === null;
+  return { ...state, question: { ...q, optionCursor, editingOther } };
 }
 
 function selectQuestionOptionAndAdvance(state: TuiState, optionIndex: number): TuiState {
@@ -122,6 +124,9 @@ function toggleQuestionOption(state: TuiState, optionIndex: number): TuiState {
     selections[q.questionIndex] = sorted;
   } else {
     selections[q.questionIndex] = [optionIndex];
+    const otherText = [...q.otherText];
+    otherText[q.questionIndex] = null;
+    return { ...state, question: { ...q, selections, otherText } };
   }
   return { ...state, question: { ...q, selections } };
 }

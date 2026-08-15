@@ -196,10 +196,9 @@ function renderOption(item: QuestionItem, index: number, question: QuestionState
 }
 
 function renderOtherOption(question: QuestionState, otherIndex: number, inner: number): string {
-  const item = question.questions[question.questionIndex];
   const selected = question.otherText[question.questionIndex] !== null;
   const cursor = question.optionCursor === otherIndex ? style("accent")("> ") : "  ";
-  const marker = item.multiSelect ? (selected ? "[x]" : "[ ]") : (selected ? "(•)" : "( )");
+  const marker = selected ? "[x]" : "[ ]";
   const otherText = question.otherText[question.questionIndex];
   const text = otherText === null
     ? `${cursor}${marker} ${OTHER_LABEL}`

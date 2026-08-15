@@ -51,7 +51,7 @@ describe("reduceQuestionAction", () => {
   });
 
   test("MOVE_QUESTION_CURSOR wraps up and down", () => {
-    const state = makeTuiState({ question: makeQuestionState() });
+    const state = makeTuiState({ question: makeQuestionState({ otherText: ["existing", null] }) });
     const down = reduceQuestionAction(state, Actions.moveQuestionCursor("down"));
     expect(down.question?.optionCursor).toBe(1);
     const down2 = reduceQuestionAction(down, Actions.moveQuestionCursor("down"));
@@ -60,6 +60,14 @@ describe("reduceQuestionAction", () => {
     expect(down3.question?.optionCursor).toBe(0);
     const up = reduceQuestionAction(down2, Actions.moveQuestionCursor("up"));
     expect(up.question?.optionCursor).toBe(1);
+  });
+
+  test("MOVE_QUESTION_CURSOR to Other starts editing when Other has no text", () => {
+    const state = makeTuiState({ question: makeQuestionState() });
+    const next = reduceQuestionAction(state, Actions.moveQuestionCursor("down"));
+    const next2 = reduceQuestionAction(next, Actions.moveQuestionCursor("down"));
+    expect(next2.question?.optionCursor).toBe(2);
+    expect(next2.question?.editingOther).toBe(true);
   });
 
   test("MOVE_QUESTION_CURSOR is a no-op while editing Other", () => {
@@ -97,6 +105,13 @@ describe("reduceQuestionAction", () => {
     const state = makeTuiState({ question: makeQuestionState({ selections: [[0], []] }) });
     const next = reduceQuestionAction(state, Actions.toggleQuestionOption(1));
     expect(next.question?.selections[0]).toEqual([1]);
+  });
+
+  test("TOGGLE_QUESTION_OPTION for single-select clears the Other text", () => {
+    const state = makeTuiState({ question: makeQuestionState({ otherText: ["custom"] }) });
+    const next = reduceQuestionAction(state, Actions.toggleQuestionOption(1));
+    expect(next.question?.selections[0]).toEqual([1]);
+    expect(next.question?.otherText[0]).toBeNull();
   });
 
   test("TOGGLE_QUESTION_OPTION on Other starts edit when otherText is empty", () => {

@@ -12,6 +12,7 @@ export class WelcomeBanner implements TuiComponent {
   private version = "";
   private installedTeams: InstalledTeams | null = null;
   private teamId: string | null = null;
+  private hasChatContent = false;
 
   constructor(stateStore: StateStore) {
     this.stateStore = stateStore;
@@ -19,16 +20,19 @@ export class WelcomeBanner implements TuiComponent {
 
   update(): boolean {
     const state = this.stateStore.getState();
+    const hasChat = TuiState.hasChatContent(state);
     if (
       state.agents === this.agents &&
       state.version === this.version &&
       state.installedTeams === this.installedTeams &&
-      state.teamId === this.teamId
+      state.teamId === this.teamId &&
+      hasChat === this.hasChatContent
     ) return false;
     this.agents = state.agents;
     this.version = state.version;
     this.installedTeams = state.installedTeams;
     this.teamId = state.teamId;
+    this.hasChatContent = hasChat;
     return true;
   }
 
