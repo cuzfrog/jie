@@ -175,7 +175,7 @@ interface RawFrontmatter {
   leader?: unknown;
   "additional-agents"?: unknown;
   description?: unknown;
-  target_context_window_size?: unknown;
+  target-context-window-size?: unknown;
 }
 
 interface TeamFileParseResult {
@@ -339,9 +339,9 @@ export function parseAgentManifest(
   }
 
   const targetContextWindowSize =
-    frontmatter.target_context_window_size === undefined
+    frontmatter.target-context-window-size === undefined
       ? undefined
-      : asPositiveInteger(frontmatter.target_context_window_size, "target_context_window_size", file);
+      : asPositiveInteger(frontmatter.target-context-window-size, "target-context-window-size", file);
 
   return {
     role,
