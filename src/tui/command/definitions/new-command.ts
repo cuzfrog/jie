@@ -13,4 +13,8 @@ export class NewCommand extends PositionalSlashCommand {
     if (teamId === null) return { kind: "error", text: "/new: no team loaded" };
     return { kind: "platform", slashName: "new", command: { name: "newSession", teamId }, transient: "starting new session" };
   }
+
+  protected override usageError(): ResolvedCommand {
+    return { kind: "error", text: "/new: takes no arguments" };
+  }
 }

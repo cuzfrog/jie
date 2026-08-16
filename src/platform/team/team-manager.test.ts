@@ -536,6 +536,8 @@ describe("TeamManagerImpl — full surface", () => {
       const team = await manager.newSession("setup-assistant");
       expect(team.id).toBe("setup-assistant");
       expect(team.currentSessionId).not.toBeNull();
+      expect(team.history[0]?.messages).toHaveLength(0);
+      expect(team.agents[0]?.sessionUsage).toBeNull();
       expect(teamLoadedEvents().map((e) => e.payload.id)).toContain("setup-assistant");
     });
 
@@ -547,10 +549,12 @@ describe("TeamManagerImpl — full surface", () => {
       await manager.load("alpha");
       eventManager.publish.mockClear();
       const alphaFirst = manager.currentSessionId("alpha");
-      await manager.newSession("setup-assistant");
+      const team = await manager.newSession("setup-assistant");
       expect(manager.currentSessionId("alpha")).toBe(alphaFirst);
       expect(agentBodyFactory.mock.calls.filter((call) => call[0]!.teamId === "alpha")).toHaveLength(1);
       expect(teamLoadedEvents().map((e) => e.payload.id)).toEqual(["setup-assistant"]);
+      expect(team.history[0]?.messages).toHaveLength(0);
+      expect(team.agents[0]?.sessionUsage).toBeNull();
     });
 
     test("newSession starts with empty transcript and usage for the new session", async () => {

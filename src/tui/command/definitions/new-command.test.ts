@@ -25,7 +25,7 @@ describe("NewCommand", () => {
   test("resolve rejects extra arguments", () => {
     const { platform } = makePlatform();
     const context = { state: teamState("my-team"), platform };
-    expect(command.resolve(context, ["extra"])).toEqual({ kind: "error", text: "/new" });
+    expect(command.resolve(context, ["extra"])).toEqual({ kind: "error", text: "/new: takes no arguments" });
   });
 
   test("complete returns null", async () => {
