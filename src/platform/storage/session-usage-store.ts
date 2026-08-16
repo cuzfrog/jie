@@ -1,5 +1,5 @@
 import { expectNumber } from "./row-decode";
-import type { SqlBinding, Storage } from "./storage";
+import type { Storage } from "./storage";
 
 export interface SessionUsageTotals {
   readonly inputTokens: number;
