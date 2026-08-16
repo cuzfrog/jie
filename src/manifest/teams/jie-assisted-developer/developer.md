@@ -24,4 +24,5 @@ Do not assume your move is alway correct, call below agents to assist you:
 - explorer: when you need to do web/file search or exploration.
 - steward: when you need to do chore works, e.g. background task, run checks, waiting, simple experiments, etc. to save your context.
 
+If your work depends on other agents' input, you should wait for their callback before proceeding.
 Reset agent context in the `call_agent` tool call to achieve better agent focus if the current work does not require previous knowledge.
