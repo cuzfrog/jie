@@ -15,6 +15,7 @@ function team(agents: ReadonlyArray<{
   subscribe?: ReadonlyArray<string>;
   skills?: ReadonlyArray<SkillInfo>;
   model: { provider: string; id: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null } | null;
+  sessionUsage?: { inputTokens: number; outputTokens: number } | null;
 }>, sessionName: string | null = null): TeamInfo {
   const leader = agents.find((a) => a.isLeader) ?? agents[0];
   return {
@@ -33,6 +34,7 @@ function team(agents: ReadonlyArray<{
       subscribe: a.subscribe ?? [],
       skills: a.skills ?? [],
       model: a.model,
+      sessionUsage: a.sessionUsage ?? null,
     })),
   };
 }
@@ -40,7 +42,7 @@ function team(agents: ReadonlyArray<{
 describe("teamLoadReducer", () => {
   test("seeds agents and focuses the leader", () => {
     const state = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     expect(state.teamId).toBe("my-team");
     expect(state.agents.size).toBe(1);
@@ -50,17 +52,17 @@ describe("teamLoadReducer", () => {
 
   test("carries the session name from the TeamInfo", () => {
     const state = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ], "my session"));
     expect(state.sessionName).toBe("my session");
   });
 
   test("switching teams replaces the previous session name", () => {
     const named = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ], "old name"));
     const switched = teamLoadReducer(named, {
-      ...team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]),
+      ...team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]),
       id: "other-team",
     });
     expect(switched.sessionName).toBeNull();
@@ -91,7 +93,7 @@ describe("teamLoadReducer", () => {
       { name: "deploy", description: "deploys", argumentHint: "<env>" },
     ];
     const state = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, skills, model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, skills, model: null, sessionUsage: null },
     ]));
     expect(state.agents.get("my-team:general-1")?.skills).toEqual(skills);
   });
@@ -101,10 +103,11 @@ describe("teamLoadReducer", () => {
       {
         role: "general", agentKey: "general-1", isLeader: true,
         skills: [{ name: "say-hello", description: "greets", argumentHint: null }], model: null,
+        sessionUsage: null,
       },
     ]));
     const second = teamLoadReducer(first, team([
-      { role: "general", agentKey: "general-1", isLeader: true, skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, skills: [], model: null, sessionUsage: null },
     ]));
     expect(second.agents.get("my-team:general-1")?.skills).toEqual([]);
   });
@@ -114,7 +117,7 @@ describe("teamLoadReducer", () => {
       { role: "general", agentKey: "general-1", isLeader: true, model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off", contextWindow: null } },
     ]));
     const second = teamLoadReducer(first, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     expect(second.agents.get("my-team:general-1")?.model).toEqual({
       provider: "lm-studio",
@@ -126,7 +129,7 @@ describe("teamLoadReducer", () => {
 
   test("team switch clears the agent map and leader focus from the prior team", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     const second = teamLoadReducer(first, {
       id: "my-team-2",
@@ -136,8 +139,8 @@ describe("teamLoadReducer", () => {
       kanbanCards: [],
       history: [],
       agents: [
-        { teamId: "my-team-2", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
-        { teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+        { teamId: "my-team-2", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
+        { teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
       ],
     });
     expect(second.teamId).toBe("my-team-2");
@@ -150,11 +153,11 @@ describe("teamLoadReducer", () => {
 
   test("same-team reload preserves agents that still exist", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
-      { role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
+      { role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     const second = teamLoadReducer(first, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     expect(second.agents.size).toBe(1);
     expect(second.agents.has("my-team:general-1")).toBe(true);
@@ -163,7 +166,7 @@ describe("teamLoadReducer", () => {
 
   test("team switch replaces the board with the new team's kanbanCards", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     const withBoard: TuiState = {
       ...first,
@@ -176,7 +179,7 @@ describe("teamLoadReducer", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     });
     expect(switched.kanban.board).toEqual([]);
     expect(switched.kanban.cursor).toBeNull();
@@ -184,7 +187,7 @@ describe("teamLoadReducer", () => {
 
   test("team load replaces the board from TeamInfo.kanbanCards", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     const staleBoard: TuiState = {
       ...first,
@@ -192,7 +195,7 @@ describe("teamLoadReducer", () => {
     };
     const second = teamLoadReducer(staleBoard, {
       ...team([
-        { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+        { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
       ]),
       kanbanCards: [{ id: "#1", content: "still here", status: "pending" }],
     });
@@ -201,7 +204,7 @@ describe("teamLoadReducer", () => {
   });
 
   test("team switch clears kanban edit and expand; a same-team reload preserves them", () => {
-    const agents = [{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }];
+    const agents = [{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }];
     const first = teamLoadReducer(INITIAL_TUI_STATE, team(agents));
     const engaged: TuiState = { ...first, kanban: { ...first.kanban, edit: "#1", expanded: true } };
     const switched = teamLoadReducer(engaged, {
@@ -211,7 +214,7 @@ describe("teamLoadReducer", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     });
     expect(switched.kanban.edit).toBeNull();
     expect(switched.kanban.expanded).toBe(false);
@@ -222,11 +225,11 @@ describe("teamLoadReducer", () => {
 
   test("team load clears the interrupted marker", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     const marked: TuiState = { ...first, interruptedAgentId: "my-team:general-1" };
     const second = teamLoadReducer(marked, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     expect(second.interruptedAgentId).toBeNull();
   });
@@ -254,7 +257,7 @@ function usage(): Usage {
 
 describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   test("non-empty messages hydrate the matching agent's currentTurn", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{ agentKey: "general-1", messages: [user("hello"), assistantText("world")] }],
@@ -270,7 +273,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   });
 
   test("earlier turns rotate into history on team load", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{
@@ -289,7 +292,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
 
   test("empty messages preserve an existing slot (switchTeam identity must not clobber live state)", () => {
     const seeded = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     const existing = seeded.agents.get("my-team:general-1");
     if (existing === undefined) throw new Error("seed missing");
@@ -297,13 +300,13 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     const liveAgents = new Map(seeded.agents);
     liveAgents.set("my-team:general-1", { ...existing, currentTurn: streamingTurn });
     const withLive: TuiState = { ...seeded, agents: liveAgents };
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]);
     const after = teamLoadReducer(withLive, { ...info, history: [{ agentKey: "general-1", messages: [] }] });
     expect(after.agents.get("my-team:general-1")?.currentTurn).toBe(streamingTurn);
   });
 
   test("history for an agentKey absent from the payload is skipped without creating a slot", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{ agentKey: "ghost-1", messages: [user("boo"), assistantText("gone")] }],
@@ -313,7 +316,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   });
 
   test("contextTokensUsed is estimated from the hydrated content", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{ agentKey: "general-1", messages: [user("count me"), assistantText("twelve chars")] }],
@@ -322,7 +325,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   });
 
   test("hydrated turns are numbered sequentially and nextEntrySeq advances past them", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{
@@ -337,7 +340,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   });
 
   test("a leading compaction summary wires the marker and numbers turns after it", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{
@@ -352,7 +355,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   });
 
   test("compacted turns before a summary place the marker mid-chat", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{
@@ -369,7 +372,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
 
   test("a fresh agent starts without a compaction marker", () => {
     const state = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ]));
     expect(state.agents.get("my-team:general-1")?.compactionMarker).toBeNull();
   });

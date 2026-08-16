@@ -178,7 +178,7 @@ const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   currentSessionId: null,
   kanbanCards: [],
   history: [],
-  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
 });
 
 const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
@@ -189,8 +189,8 @@ const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
   kanbanCards: [],
   history: [],
   agents: [
-    { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
-    { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
+    { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
+    { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
   ],
 });
 

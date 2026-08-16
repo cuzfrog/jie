@@ -539,7 +539,7 @@ describe("CommandHandlerImpl — /reload", () => {
     currentSessionId: null,
     kanbanCards: [],
     history: [],
-    agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+    agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
   };
 
   test("/reload while any agent is busy sets an error banner and does not call execute", () => {
@@ -629,7 +629,7 @@ describe("CommandHandlerImpl — /team", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     }));
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/team alpha");
@@ -644,7 +644,7 @@ describe("CommandHandlerImpl — /team", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     }));
   });
 
@@ -657,7 +657,7 @@ describe("CommandHandlerImpl — /team", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     } as const;
     execute.mockImplementation(async () => identity);
     const { handler, dispatch } = makeHandler(platform);
@@ -711,7 +711,7 @@ describe("CommandHandlerImpl — /resume", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("setup-assistant", true));
@@ -729,7 +729,7 @@ describe("CommandHandlerImpl — /resume", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("setup-assistant", true));

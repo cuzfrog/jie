@@ -176,6 +176,7 @@ describe("registerCoreModule", () => {
       tools: [],
       subscribe: [],
       skills: [],
+      sessionUsage: null,
       model: null,
     });
     body.stop();

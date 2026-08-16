@@ -51,7 +51,7 @@ function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: s
     sessionName: null,
     currentSessionId: null,
     kanbanCards: [],
-    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey, tools: [], subscribe: [], skills: [], model: null })),
+    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null })),
     history: [],
   };
 }

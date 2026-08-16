@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AgentBody, AgentBodyParams } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { KanbanStore, SessionSummary, TranscriptStore } from "../storage";
+import type { KanbanStore, SessionSummary, SessionUsageStore, TranscriptStore } from "../storage";
 import { type ModelRegistry, type Settings, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_SETUP_ASSISTANT_TEAM_ID } from "./types";
@@ -45,6 +45,7 @@ export class TeamManagerImpl implements TeamManager {
     private readonly settingsStore: SettingsStore,
     private readonly modelRegistry: ModelRegistry,
     private readonly transcriptStore: TranscriptStore,
+    private readonly sessionUsageStore: SessionUsageStore,
     private readonly kanbanStore: KanbanStore,
     private readonly skillManager: SkillManager,
     private readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody,
@@ -113,7 +114,7 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   agents(teamId: string): ReadonlyArray<AgentInfo> {
-    return (this.loadedTeams.get(teamId) ?? []).map((b) => b.identity);
+    return (this.loadedTeams.get(teamId) ?? []).map((b) => this.agentInfoWithSessionUsage(teamId, b));
   }
 
   bodies(teamId: string): ReadonlyArray<AgentBody> {
@@ -327,7 +328,7 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   private toTeamInfo(id: string, bodies: AgentBody[]): TeamInfo {
-    const identities = bodies.map((b) => b.identity);
+    const identities = bodies.map((b) => this.agentInfoWithSessionUsage(id, b));
     const leader = identities.find((a) => a.isLeader);
     if (leader === undefined) {
       throw new JiePlatformError("NO_LEADER", {
@@ -349,6 +350,12 @@ export class TeamManagerImpl implements TeamManager {
       kanbanCards,
       description: blueprint?.description,
     };
+  }
+
+  private agentInfoWithSessionUsage(teamId: string, body: AgentBody): AgentInfo {
+    const sessionId = this.sessionIds.get(teamId) ?? null;
+    const sessionUsage = sessionId === null ? null : this.sessionUsageStore.load(teamId, sessionId, body.identity.agentKey);
+    return { ...body.identity, sessionUsage };
   }
 
   private async buildAdHoc(teamId: string, sessionId: string, agentRef: string, isEphemeral: boolean): Promise<AgentBody | null> {

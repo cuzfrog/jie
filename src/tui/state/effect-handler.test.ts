@@ -89,7 +89,7 @@ function makeTeamInfo(teamId = "my-team", agentKey = "general-1"): TeamInfo {
     currentSessionId: null,
     kanbanCards: [],
     history: [],
-    agents: [{ teamId, role: "general", agentKey, isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+    agents: [{ teamId, role: "general", agentKey, isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
   };
 }
 

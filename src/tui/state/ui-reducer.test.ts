@@ -20,6 +20,7 @@ function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_l
     subscribe: [],
     skills: [],
     model: null,
+    sessionUsage: null,
   }));
   const leaderKey = agents.find((a) => a.isLeader)?.agentKey ?? agents[0]?.agentKey ?? "general-1";
   return reduceEvent(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {

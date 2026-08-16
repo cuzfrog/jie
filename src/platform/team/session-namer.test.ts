@@ -53,6 +53,7 @@ function agentInfo(overrides: Partial<AgentInfo> & { agentKey: string }): AgentI
     subscribe: [],
     skills: [],
     model: overrides.model ?? null,
+    sessionUsage: overrides.sessionUsage ?? null,
     ...overrides,
   };
 }

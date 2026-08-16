@@ -484,7 +484,7 @@ describe("CommandExecutorImpl", () => {
         currentSessionId: null,
         kanbanCards: [],
         history: [],
-        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
       };
       teamManager.load.mockResolvedValue(identity);
       const result = await executor.execute({ name: "team", teamId: "alpha" });

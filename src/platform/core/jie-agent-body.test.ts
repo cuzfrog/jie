@@ -464,6 +464,7 @@ describe("JieAgentBody — identity", () => {
       tools: ["notify", "read_file"],
       subscribe: ["task.recorded"],
       skills: [],
+      sessionUsage: null,
       model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 },
     });
   });
@@ -1364,7 +1365,7 @@ describe("JieAgentBody — pi-agent event bridging", () => {
   });
 
   test("start() seeds session usage from the store before any events are handled", async () => {
-    h.sessionUsageStore.load.mockReturnValue({ inputTokens: 30, outputTokens: 12 });
+    vi.spyOn(h.sessionUsageStore, "load").mockReturnValue({ inputTokens: 30, outputTokens: 12 });
     const body = h.makeBody();
     await body.start();
     const usage = {
@@ -1375,10 +1376,11 @@ describe("JieAgentBody — pi-agent event bridging", () => {
       totalTokens: 8,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     };
+    const usages: EventEnvelope<"agent.usage">[] = [];
+    h.subscribeSubject("agent.usage", (env) => usages.push(env));
     h.fireEvent({ type: "message_end", message: makeAssistantMessage({ usage }) });
-    const env = h.events.publish.mock.calls.map((call) => call[0]).find((env) => env.topic === "agent.usage");
-    expect(env).toBeDefined();
-    expect(env!.payload).toMatchObject({ session_input_tokens: 35, session_output_tokens: 15, partial: false });
+    expect(usages).toHaveLength(1);
+    expect(usages[0]!.payload).toMatchObject({ session_input_tokens: 35, session_output_tokens: 15, partial: false });
     body.stop();
   });
 

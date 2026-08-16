@@ -245,6 +245,7 @@ export class JieAgentBody implements AgentBody {
       subscribe: this.soul.subscribe,
       skills: this.resolvedSkills.map((skill) => ({ name: skill.name, description: skill.description, argumentHint: skill.argumentHint })),
       model: this.modelController.modelInfo,
+      sessionUsage: null,
     };
   }
 
