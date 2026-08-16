@@ -52,6 +52,16 @@ describe("TokenUsageImpl", () => {
     expect(tokenUsage.format(agent)).toContain("1k↓");
   });
 
+  test("rounds token counts to 0.1k granularity", () => {
+    const agent = makeAgentUiState("my-team:general-1", {
+      model: model(200000),
+      sessionInputTokens: 499,
+      sessionOutputTokens: 950,
+    });
+    expect(tokenUsage.format(agent)).toContain("0.5k↑");
+    expect(tokenUsage.format(agent)).toContain("1k↓");
+  });
+
   test("uses the warning color at exactly 70%", () => {
     const agent = makeAgentUiState("my-team:general-1", {
       model: model(1000),
