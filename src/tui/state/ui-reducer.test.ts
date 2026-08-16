@@ -1,9 +1,10 @@
 import { Events } from "../../platform";
 import { Actions } from "./actions";
-import type { AgentId, TuiState } from "./state";
+import type { AgentId, AgentUiState, TuiState } from "./state";
 import { StateStoreImpl } from "./state-store";
 import { reduce as reduceEvent } from "./event-reducer";
 import { reduceUiAction } from "./ui-reducer";
+import { makeAgentUiState, makeTuiState } from "../test";
 
 const INITIAL_TUI_STATE = new StateStoreImpl().getState();
 
@@ -370,17 +371,62 @@ describe("pendingQuit", () => {
 });
 
 describe("clear", () => {
-  test("resets agents, transient, and error", () => {
-    let state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
-    state = reduceUiAction(state, Actions.setErrorMessage("e"));
-    state = reduceUiAction(state, Actions.setTransientMessage("t"));
+  test("preserves team and agents but clears conversation state and banners", () => {
+    const model = { provider: "anthropic", id: "claude-opus-4", effort: "high" as const, contextWindow: 128000 };
+    const history = [{ userPrompt: "hi", entries: [{ kind: "text" as const, text: "hello" }], streamId: null, seq: 0 }];
+    const currentTurn = { userPrompt: "next", entries: [{ kind: "text" as const, text: "thinking" }], streamId: 1, seq: 1 };
+    const queue = [{ text: "queued", source: "user" as const, chained: false }];
+    const agent = makeAgentUiState("my-team:general-1", {
+      isLeader: true,
+      model,
+      queue,
+      history,
+      currentTurn,
+      compactionMarker: { turnsBefore: 1, summary: "old summary", tokensBefore: 100 },
+      compactionInProgress: true,
+      status: "busy",
+      lastStopReason: "stop" as AgentUiState["lastStopReason"],
+      contextTokensUsed: 1234,
+      lastReportedTotalTokens: 1234,
+      uploadTokens: 1000,
+      downloadTokens: 234,
+    });
+    const state = makeTuiState({
+      teamId: "my-team",
+      leaderAgentId: "my-team:general-1",
+      focusedAgentId: "my-team:general-1",
+      sessionName: "old",
+      transientMessage: "t",
+      transientSetAt: 12345,
+      errorBanner: "e",
+      interruptedAgentId: "my-team:general-1",
+      helpPanelVisible: true,
+      agents: new Map([["my-team:general-1", agent]]),
+    });
     const cleared = reduceUiAction(state, Actions.clearTuiState());
-    expect(cleared.agents.size).toBe(0);
-    expect(cleared.leaderAgentId).toBeNull();
-    expect(cleared.focusedAgentId).toBeNull();
+    expect(cleared.teamId).toBe("my-team");
+    expect(cleared.leaderAgentId).toBe("my-team:general-1");
+    expect(cleared.focusedAgentId).toBe("my-team:general-1");
+    expect(cleared.agents.size).toBe(1);
+    const clearedAgent = cleared.agents.get("my-team:general-1")!;
+    expect(clearedAgent.model).toEqual(model);
+    expect(clearedAgent.queue).toEqual(queue);
+    expect(clearedAgent.history).toEqual([]);
+    expect(clearedAgent.currentTurn).toBeNull();
+    expect(clearedAgent.compactionMarker).toBeNull();
+    expect(clearedAgent.compactionInProgress).toBe(false);
+    expect(clearedAgent.status).toBe("idle");
+    expect(clearedAgent.lastStopReason).toBeNull();
+    expect(clearedAgent.contextTokensUsed).toBe(0);
+    expect(clearedAgent.lastReportedTotalTokens).toBeNull();
+    expect(clearedAgent.uploadTokens).toBe(0);
+    expect(clearedAgent.downloadTokens).toBe(0);
+    expect(cleared.sessionName).toBeNull();
     expect(cleared.transientMessage).toBeNull();
     expect(cleared.transientSetAt).toBeNull();
     expect(cleared.errorBanner).toBeNull();
+    expect(cleared.interruptedAgentId).toBeNull();
+    expect(cleared.helpPanelVisible).toBe(false);
   });
 });
 

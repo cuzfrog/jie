@@ -1,6 +1,6 @@
 import { ActionTypes, type Action } from "./actions";
 import { teamLoadReducer } from "./team-load-reducer";
-import { TuiState } from "./state";
+import { TuiState, type AgentId, type AgentUiState } from "./state";
 import { kanbanReducer } from "./kanban-reducer";
 import { reduceQuestionAction } from "./question-reducer";
 
@@ -29,10 +29,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
     case ActionTypes.CLEAR_TUI_STATE:
       return {
         ...state,
-        agents: new Map(),
+        agents: clearAgents(state.agents),
         sessionName: null,
-        leaderAgentId: null,
-        focusedAgentId: null,
         teamCursorAgentId: null,
         interruptedAgentId: null,
         nextEntrySeq: 0,
@@ -133,4 +131,28 @@ function reduceTeamCursorCommit(state: TuiState): TuiState {
   if (!state.teamPanelVisible || cursor === null || cursor === state.focusedAgentId) return state;
   if (!state.agents.has(cursor)) return { ...state, teamCursorAgentId: null };
   return { ...state, focusedAgentId: cursor };
+}
+
+function clearAgents(agents: ReadonlyMap<AgentId, AgentUiState>): Map<AgentId, AgentUiState> {
+  const cleared = new Map<AgentId, AgentUiState>();
+  for (const [agentId, agent] of agents) {
+    cleared.set(agentId, clearAgent(agent));
+  }
+  return cleared;
+}
+
+function clearAgent(agent: AgentUiState): AgentUiState {
+  return {
+    ...agent,
+    status: "idle",
+    history: [],
+    currentTurn: null,
+    compactionMarker: null,
+    compactionInProgress: false,
+    lastStopReason: null,
+    contextTokensUsed: 0,
+    lastReportedTotalTokens: null,
+    uploadTokens: 0,
+    downloadTokens: 0,
+  };
 }
