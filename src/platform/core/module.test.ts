@@ -7,7 +7,7 @@ import { Events, type EventEnvelope, type EventManager, type EventType } from ".
 import type { HookRunner } from "../hooks";
 import type { LlmService } from "../llm";
 import type { MemoryManager } from "../memory";
-import type { ArtifactStore, TranscriptStore } from "../storage";
+import type { ArtifactStore, SessionUsageStore, TranscriptStore } from "../storage";
 import type { AgentSoul } from "../team";
 import type { SkillManager } from "../skills";
 import type { Tool, ToolRegistry } from "../tools";
@@ -25,6 +25,11 @@ const artifactStore = vi.mocked<ArtifactStore>({
   write: vi.fn(),
   read: vi.fn(),
   list: vi.fn(),
+});
+
+const sessionUsageStore = vi.mocked<SessionUsageStore>({
+  load: vi.fn(() => null),
+  accumulate: vi.fn(),
 });
 
 const transcriptStore = vi.mocked<TranscriptStore>({
@@ -96,6 +101,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     eventManager: asValue(eventManager),
     artifactStore: asValue(artifactStore),
     transcriptStore: asValue(transcriptStore),
+    sessionUsageStore: asValue(sessionUsageStore),
     toolRegistry: asValue(toolRegistry),
     skillManager: asValue(skillManager),
     loadSystemContextBlock: asValue(() => ""),

@@ -2,7 +2,7 @@ import { Agent, convertToLlm, estimateTokens, type AgentEvent, type AgentLoopTur
 import { lazyStream, type Api, type AuthResult, type Model, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { MemoryManager } from "../memory";
-import type { ArtifactStore, TranscriptStore } from "../storage";
+import type { ArtifactStore, SessionUsageStore, TranscriptStore } from "../storage";
 import { type ExecutionContext, parseToolSpec, type ToolRegistry, type ToolSpec } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
@@ -27,6 +27,7 @@ interface AgentBodyDeps {
   readonly eventManager: EventManager;
   readonly artifactStore: ArtifactStore;
   readonly transcriptStore: TranscriptStore;
+  readonly sessionUsageStore: SessionUsageStore;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
   readonly systemContextBlock: string;
@@ -51,7 +52,9 @@ export class JieAgentBody implements AgentBody {
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly transcriptStore: TranscriptStore;
+  private readonly sessionUsageStore: SessionUsageStore;
   private readonly hookRunner: HookRunner;
+  private readonly eventBridge: AgentEventBridgeImpl;
   private readonly hookIdentity: HookIdentity;
   private readonly compactor: Compactor;
   private readonly systemContextBlock: string;
@@ -81,6 +84,7 @@ export class JieAgentBody implements AgentBody {
     this.sessionId = params.sessionId;
     this.eventManager = deps.eventManager;
     this.transcriptStore = deps.transcriptStore;
+    this.sessionUsageStore = deps.sessionUsageStore;
     this.hookRunner = deps.hookRunner;
     this.compactor = deps.compactor;
     this.systemContextBlock = deps.systemContextBlock;
@@ -126,9 +130,10 @@ export class JieAgentBody implements AgentBody {
       memoryManager: this.memoryManager,
       getOverheadTokens: () => this.getOverheadTokens(),
     });
-    const eventBridge = new AgentEventBridgeImpl({
+    this.eventBridge = new AgentEventBridgeImpl({
       eventManager: deps.eventManager,
       transcriptStore: this.transcriptStore,
+      sessionUsageStore: this.sessionUsageStore,
       hookRunner: this.hookRunner,
       hookIdentity: this.hookIdentity,
       sender: this.sender,
@@ -224,7 +229,7 @@ export class JieAgentBody implements AgentBody {
     const unsubscribeAgent = this.agent.subscribe((event, _signal) => {
       logger?.log(event);
       this.onAgentEvent(event);
-      eventBridge.handleEvent(event);
+      this.eventBridge.handleEvent(event);
     });
     this.cleanups.push(unsubscribeAgent);
   }

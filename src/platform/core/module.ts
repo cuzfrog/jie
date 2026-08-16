@@ -18,6 +18,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
         eventManager: cradle.eventManager,
         artifactStore: cradle.artifactStore,
         transcriptStore: cradle.transcriptStore,
+        sessionUsageStore: cradle.sessionUsageStore,
         toolRegistry: cradle.toolRegistry,
         skillManager: cradle.skillManager,
         systemContextBlock: cradle.loadSystemContextBlock(),

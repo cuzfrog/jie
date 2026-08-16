@@ -19,7 +19,7 @@ import type { AgentBodyParams } from "./agent-body";
 import type { CompactionInput, CompactionResult, Compactor } from "./compaction";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { MemoryManager } from "../memory";
-import type { ArtifactStore, TranscriptStore } from "../storage";
+import type { ArtifactStore, SessionUsageStore, TranscriptStore } from "../storage";
 import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookRunner } from "../hooks";
@@ -275,6 +275,7 @@ interface Harness {
   hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
   memoryManager: ReturnType<typeof vi.mocked<MemoryManager>>;
   transcriptStore: TranscriptStore;
+  sessionUsageStore: SessionUsageStore;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   restoreDisplay: ReturnType<typeof vi.fn>;
@@ -338,6 +339,7 @@ function makeHarness(): Harness {
   });
   const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
   const agentDispatcher = vi.mocked<AgentDispatcher>({ call: vi.fn() });
+  const sessionUsageStore = vi.mocked<SessionUsageStore>({ load: vi.fn(() => null), accumulate: vi.fn() });
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>
     events.subscribe(topic, (env) => cb(env));
   const makeBody: Harness["makeBody"] = (overrides = {}) => {
@@ -357,6 +359,7 @@ function makeHarness(): Harness {
       eventManager: events,
       artifactStore,
       transcriptStore,
+      sessionUsageStore,
       toolRegistry,
       skillManager,
       systemContextBlock: overrides.systemContextBlock ?? "",
@@ -390,6 +393,7 @@ function makeHarness(): Harness {
     memoryManager,
     agentDispatcher,
     transcriptStore,
+    sessionUsageStore,
     persisted,
     restore,
     restoreDisplay,
