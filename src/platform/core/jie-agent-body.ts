@@ -196,7 +196,7 @@ export class JieAgentBody implements AgentBody {
     this.modelController = new ModelControllerImpl(params.model, params.effort, {
       eventManager: deps.eventManager,
       sender: this.sender,
-      soulPinsModel: params.soul.model !== "",
+      soulPinsModel: params.modelPinned,
       soulPinsEffort: params.soul.effort !== undefined,
       resolveModel: deps.resolveModel,
       targetContextWindowSize: this.soul.targetContextWindowSize,

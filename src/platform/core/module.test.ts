@@ -13,6 +13,7 @@ import type { SkillManager } from "../skills";
 import type { Tool, ToolRegistry } from "../tools";
 import type { AgentBodyParams } from "./agent-body";
 import type { AgentDispatcher } from "../types";
+import { isModelAlias } from "../types";
 import { registerCoreModule } from "./module";
 
 const eventManager = vi.mocked<EventManager>({
@@ -141,15 +142,17 @@ function makeModel(provider: string, id: string): Model<Api> {
 }
 
 function makeParams(overrides: Partial<AgentBodyParams> = {}): AgentBodyParams {
+  const soul = overrides.soul ?? makeSoul();
   return {
     agentKey: "general-1",
     teamId: "t1",
-    soul: makeSoul(),
+    soul,
     isLeader: false,
     isEphemeral: false,
     sessionId: "s1",
     model: undefined,
     effort: "off",
+    modelPinned: soul.model !== "" && !isModelAlias(soul.model),
     ...overrides,
   };
 }

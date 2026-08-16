@@ -552,6 +552,55 @@ describe("TeamManagerImpl — full surface", () => {
     });
   });
 
+  describe("model pin propagation", () => {
+    test("unset soul model is not pinned", async () => {
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(false);
+    });
+
+    test("concrete soul model is pinned", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: openai/gpt-4o\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(true);
+    });
+
+    test("mapped model alias is pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(true);
+    });
+
+    test("unmapped model alias is not pinned", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(false);
+    });
+
+    test("unmapped alias still resolves to the default model", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(modelRegistry.resolve).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
+    });
+  });
+
   describe("reload", () => {
     test("refreshes the model registry and skills before rebuilding teams", async () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);

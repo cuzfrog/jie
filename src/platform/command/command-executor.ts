@@ -103,6 +103,9 @@ export class CommandExecutorImpl implements CommandExecutor {
     if (!this.modelRegistry.providers().includes(command.provider)) {
       throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: command.provider });
     }
+    if (this.modelRegistry.resolve(command.provider, command.id) === undefined) {
+      throw new JiePlatformError("MODEL_UNRESOLVED", { detail: `${command.provider}/${command.id}` });
+    }
     this.settingsStore.setDefaultProvider(command.provider, command.id);
     this.eventManager.publish(Events.userModelUpdate({ kind: "user" }, command.provider, command.id));
     return null;

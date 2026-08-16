@@ -24,6 +24,7 @@ import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools"
 import type { Skill, SkillManager } from "../skills";
 import type { HookRunner } from "../hooks";
 import type { AgentSoul } from "../team";
+import { isModelAlias } from "../types";
 import type { AgentDispatcher, EffortLevel, UserIngressMessage } from "../types";
 
 async function flush(): Promise<void> {
@@ -257,6 +258,7 @@ interface MakeBodyOverrides {
   sessionId?: string;
   model?: Model<Api>;
   effort?: EffortLevel;
+  modelPinned?: boolean;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
   compactor?: Compactor;
@@ -339,15 +341,17 @@ function makeHarness(): Harness {
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>
     events.subscribe(topic, (env) => cb(env));
   const makeBody: Harness["makeBody"] = (overrides = {}) => {
+    const soul = overrides.soul ?? makeSoul();
     const params: AgentBodyParams = {
       agentKey: overrides.agentKey ?? "general-1",
       teamId: overrides.teamId ?? "t1",
-      soul: overrides.soul ?? makeSoul(),
+      soul,
       isLeader: overrides.isLeader ?? false,
       isEphemeral: overrides.isEphemeral ?? false,
       sessionId: overrides.sessionId ?? "s1",
       model: overrides.model,
       effort: overrides.effort ?? "off",
+      modelPinned: overrides.modelPinned ?? (soul.model !== "" && !isModelAlias(soul.model)),
     };
     return new JieAgentBody(params, {
       eventManager: events,
@@ -2015,6 +2019,34 @@ describe("JieAgentBody — user.model.update", () => {
     expect(h.state.model).toBe(pinned);
     expect(received).toHaveLength(0);
     expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("unmapped model alias follows user.model.update", async () => {
+    const nextModel = makeModel("lm-studio", "qwen3.5-2b");
+    h.resolveModel.mockReturnValue(nextModel);
+    const body = h.makeBody({ soul: makeSoul({ model: "large" }), model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(h.resolveModel).toHaveBeenCalledWith("lm-studio", "qwen3.5-2b");
+    expect(h.state.model).toBe(nextModel);
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({ provider: "lm-studio", model: "qwen3.5-2b", effort: "off", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("mapped model alias stays pinned", async () => {
+    const pinned = makeModel("anthropic", "claude-sonnet-4");
+    const body = h.makeBody({ soul: makeSoul({ model: "large" }), model: pinned, modelPinned: true });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(h.resolveModel).not.toHaveBeenCalled();
+    expect(h.state.model).toBe(pinned);
+    expect(received).toHaveLength(0);
     body.stop();
   });
 

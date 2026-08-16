@@ -173,6 +173,10 @@ describe("CommandExecutorImpl", () => {
   });
 
   describe("setDefaultModel", () => {
+    beforeEach(() => {
+      modelRegistry.resolve.mockImplementation((_, id) => (id === "no-such-model" ? undefined : fakeModel("anthropic", id, id)));
+    });
+
     test("accepts a custom provider registered in models.json", async () => {
       const result = await executor.execute({ name: "setDefaultModel", provider: "my-local", id: "qwen3.5-2b" });
       expect(result).toBeNull();
@@ -183,6 +187,14 @@ describe("CommandExecutorImpl", () => {
       const result = await executor.execute({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" });
       expect(result).toBeNull();
       expect(settingsStore.setDefaultProvider).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
+    });
+
+    test("throws MODEL_UNRESOLVED for a model id that does not resolve", async () => {
+      const pending = executor.execute({ name: "setDefaultModel", provider: "my-local", id: "no-such-model" });
+      await expect(pending).rejects.toThrow(JiePlatformError);
+      await expect(pending).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
+      expect(settingsStore.setDefaultProvider).not.toHaveBeenCalled();
+      expect(eventManager.publish).not.toHaveBeenCalled();
     });
 
     test("throws UNKNOWN_PROVIDER for a provider that is not in the registry", async () => {
@@ -908,6 +920,7 @@ describe("CommandExecutorImpl", () => {
       teamManager.listSessions.mockReturnValue([]);
       modelRegistry.listModels.mockReturnValue([]);
       modelRegistry.listProviders.mockReturnValue([]);
+      modelRegistry.resolve.mockReturnValue(fakeModel("anthropic", "claude-sonnet-4-5", "Claude"));
       kanbanStore.add.mockReturnValue({ id: "#1", content: "task", status: "pending" });
       kanbanStore.remove.mockReturnValue(true);
       kanbanStore.setStatus.mockReturnValue(true);

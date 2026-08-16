@@ -187,7 +187,7 @@ export class TeamManagerImpl implements TeamManager {
     const bodies: AgentBody[] = [];
     const blueprintKeys = new Set<string>();
     for (const soul of blueprint.roles) {
-      let resolved: { model: Model<Api>; effort: EffortLevel };
+      let resolved: { model: Model<Api>; effort: EffortLevel; modelPinned: boolean };
       try {
         resolved = this.resolveSoulModelAndEffort(soul, settings);
       } catch (error) {
@@ -208,6 +208,7 @@ export class TeamManagerImpl implements TeamManager {
           sessionId,
           model: resolved.model,
           effort: resolved.effort,
+          modelPinned: resolved.modelPinned,
         };
         this.bodyParams.set(`${teamId}:${agentKey}`, params);
         bodies.push(this.agentBodyFactory(params));
@@ -274,8 +275,8 @@ export class TeamManagerImpl implements TeamManager {
     return ulid();
   }
 
-  private resolveSoulModelAndEffort(soul: AgentSoul, settings: Settings): { model: Model<Api>; effort: EffortLevel } {
-    const { modelRef, aliasEffort } = this.resolveAliasedModel(soul, settings);
+  private resolveSoulModelAndEffort(soul: AgentSoul, settings: Settings): { model: Model<Api>; effort: EffortLevel; modelPinned: boolean } {
+    const { modelRef, aliasEffort, modelPinned } = this.resolveAliasedModel(soul, settings);
     const parsed = parseModelRef(modelRef);
     if (parsed === null) {
       throw new JiePlatformError("NO_MODEL_ERROR", { detail: `no model configured for role '${soul.role}'` });
@@ -292,15 +293,15 @@ export class TeamManagerImpl implements TeamManager {
       });
     }
     const effort = soul.effort ?? aliasEffort ?? settings.defaultEffort ?? "off";
-    return { model, effort };
+    return { model, effort, modelPinned };
   }
 
-  private resolveAliasedModel(soul: AgentSoul, settings: Settings): { modelRef: string; aliasEffort: EffortLevel | undefined } {
+  private resolveAliasedModel(soul: AgentSoul, settings: Settings): { modelRef: string; aliasEffort: EffortLevel | undefined; modelPinned: boolean } {
     if (soul.model === "") {
       if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
-        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined };
+        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined, modelPinned: false };
       }
-      return { modelRef: "", aliasEffort: undefined };
+      return { modelRef: "", aliasEffort: undefined, modelPinned: false };
     }
     if (isModelAlias(soul.model)) {
       const raw = settings.modelAliases?.[soul.model];
@@ -311,14 +312,14 @@ export class TeamManagerImpl implements TeamManager {
             detail: `model alias '${soul.model}' resolves to an invalid value '${raw}'`,
           });
         }
-        return { modelRef: parsed.model, aliasEffort: parsed.effort };
+        return { modelRef: parsed.model, aliasEffort: parsed.effort, modelPinned: true };
       }
       if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
-        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined };
+        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined, modelPinned: false };
       }
-      return { modelRef: "", aliasEffort: undefined };
+      return { modelRef: "", aliasEffort: undefined, modelPinned: false };
     }
-    return { modelRef: soul.model, aliasEffort: undefined };
+    return { modelRef: soul.model, aliasEffort: undefined, modelPinned: true };
   }
 
   private publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {
@@ -364,6 +365,7 @@ export class TeamManagerImpl implements TeamManager {
         sessionId,
         model: resolved.model,
         effort: resolved.effort,
+        modelPinned: resolved.modelPinned,
       };
       this.bodyParams.set(`${teamId}:${agentRef}`, params);
       return this.agentBodyFactory(params);
