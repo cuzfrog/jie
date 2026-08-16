@@ -913,6 +913,18 @@ describe("TeamManagerImpl — full surface", () => {
       expect(identities[0]?.agentKey).toBe("general-1");
     });
 
+    test("includes stored session usage in the returned identities", async () => {
+      sessionUsageStore.load.mockImplementation((_teamId, _sessionId, agentKey) => {
+        if (agentKey === "general-1") return { inputTokens: 111, outputTokens: 222 };
+        return null;
+      });
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      const identities = manager.agents("setup-assistant");
+      expect(identities).toHaveLength(1);
+      expect(identities[0]?.sessionUsage).toEqual({ inputTokens: 111, outputTokens: 222 });
+    });
+
     test("returns an empty array for a team that wasn't loaded", () => {
       const { manager } = makeManager(homeJieDir, null);
       expect(manager.agents("ghost")).toEqual([]);
