@@ -30,7 +30,7 @@ type EventDefinitions = {
   }>;
   "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_durations: ReadonlyArray<number> }>;
   // totalTokens is the context carried into the next turn; input + cacheRead + cacheWrite is the true prompt size (system prompt, tool schemas, messages - cached or not).
-  // partial: mid-stream progress, not yet persisted or folded into session totals.
+  // partial: true — input is the in-flight message's accumulated sent tokens (input+cacheRead+cacheWrite already folded); cacheRead and cacheWrite are 0. partial: false — fields carry the raw per-message pi usage.
   // session_input_tokens/session_output_tokens: cumulative session totals, excluding the in-flight message when partial is true and including it when false.
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; session_input_tokens: number; session_output_tokens: number; partial: boolean }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }> }>;

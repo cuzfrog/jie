@@ -10,9 +10,14 @@ import {
   waitForCompactionMarker,
   waitForErrorBanner,
   sendLine,
+  waitForTeam,
   type TuiHarness,
 } from "./harness";
 import expectations from "./scenario-context-accounting.llm.ts";
+
+function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
 
 describe("Scenario — context accounting", () => {
   let harness: TuiHarness;
@@ -50,6 +55,27 @@ describe("Scenario — context accounting", () => {
     await waitForErrorBanner(harness, "context_length_exceeded");
     const agent = harness.stateStore.getState().agents.get("limit-team:general-1");
     expect(agent?.status).toBe("idle");
+  });
+
+  test("token meter shows accumulated session totals in the footer", async () => {
+    seedTeam(harness.dir, "meter-team", "general", [{ role: "general", systemPrompt: "You answer briefly.", tools: [] }]);
+    await sendLine(harness.stdin, "/team meter-team");
+    await waitForTeam(harness, "meter-team");
+    await submitAndWaitForAgentIdle(harness, "meter tokens", "meter-team:general-1");
+
+    const agent = harness.stateStore.getState().agents.get("meter-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(12345);
+    expect(agent?.sessionOutputTokens).toBe(678);
+    expect(agent?.inflightInputTokens).toBe(0);
+    expect(agent?.inflightOutputTokens).toBe(0);
+
+    const footerComponent = harness.container.cradle.footer;
+    footerComponent.update();
+    const lines = footerComponent.render(120);
+    const text = stripAnsi(lines.join("\n"));
+    expect(text).toContain("12.3k↑");
+    expect(text).toContain("0.7k↓");
+    expect(text).not.toContain("0k↑");
   });
 
   test("compaction keeps overhead in reported context tokens", async () => {
