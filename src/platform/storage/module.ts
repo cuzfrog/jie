@@ -3,6 +3,7 @@ import { asClass, asFunction, type AwilixContainer } from "awilix";
 import type { PlatformCradle } from "../container";
 import { SqliteArtifactStore } from "./artifact-store";
 import { SqliteKanbanStore } from "./kanban-store";
+import { SqliteSessionUsageStore } from "./session-usage-store";
 import { SqliteTranscriptStore } from "./transcript-store";
 import { SqliteStorage } from "./sqlite-storage";
 
@@ -12,5 +13,6 @@ export function registerStorageModule(container: AwilixContainer<PlatformCradle>
     artifactStore: asClass(SqliteArtifactStore).singleton(),
     transcriptStore: asClass(SqliteTranscriptStore).singleton(),
     kanbanStore: asClass(SqliteKanbanStore).singleton(),
+    sessionUsageStore: asClass(SqliteSessionUsageStore).singleton(),
   });
 }

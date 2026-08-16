@@ -29,6 +29,7 @@ describe("initializeSchema", () => {
     expect(names).toContain("memory_atoms_fts");
     expect(names).toContain("kanban_tasks");
     expect(names).toContain("kanban_counters");
+    expect(names).toContain("session_agent_usage");
   });
 
   test("creates expected indexes", () => {

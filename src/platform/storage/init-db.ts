@@ -102,6 +102,18 @@ export function initializeSchema(storage: Storage): void {
     )
   `);
 
+  storage.exec(`
+    CREATE TABLE IF NOT EXISTS session_agent_usage (
+      team_id      TEXT    NOT NULL,
+      session_id   TEXT    NOT NULL,
+      agent_key    TEXT    NOT NULL,
+      input_tokens  INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      updated_at   TEXT    NOT NULL,
+      PRIMARY KEY (team_id, session_id, agent_key)
+    )
+  `);
+
   migrateKanban(storage);
 }
 

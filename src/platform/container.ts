@@ -14,7 +14,7 @@ import { registerMemoryModule, type MemoryManager } from "./memory";
 import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
 import { registerSkillsModule, type SkillManager } from "./skills";
-import { registerStorageModule, type ArtifactStore, type KanbanStore, type Storage, type TranscriptStore } from "./storage";
+import { registerStorageModule, type ArtifactStore, type KanbanStore, type SessionUsageStore, type Storage, type TranscriptStore } from "./storage";
 import { registerTeamModule, type AgentRegistry, type SessionNamer, type TeamManager } from "./team";
 import type { AgentDispatcher } from "./types";
 import { registerToolsModule, type QuestionBroker, type ToolRegistry } from "./tools";
@@ -33,6 +33,7 @@ export interface PlatformCradle {
   readonly artifactStore: ArtifactStore;
   readonly transcriptStore: TranscriptStore;
   readonly kanbanStore: KanbanStore;
+  readonly sessionUsageStore: SessionUsageStore;
   readonly authStore: AuthStore;
   readonly modelRegistry: ModelRegistry;
   readonly settingsStore: SettingsStore;
