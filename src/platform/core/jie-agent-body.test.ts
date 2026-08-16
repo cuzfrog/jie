@@ -1363,6 +1363,25 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     body.stop();
   });
 
+  test("start() seeds session usage from the store before any events are handled", async () => {
+    h.sessionUsageStore.load.mockReturnValue({ inputTokens: 30, outputTokens: 12 });
+    const body = h.makeBody();
+    await body.start();
+    const usage = {
+      input: 5,
+      output: 3,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 8,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    };
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage({ usage }) });
+    const env = h.events.publish.mock.calls.map((call) => call[0]).find((env) => env.topic === "agent.usage");
+    expect(env).toBeDefined();
+    expect(env!.payload).toMatchObject({ session_input_tokens: 35, session_output_tokens: 15, partial: false });
+    body.stop();
+  });
+
   test("the prompt queue dispatcher routes steer to agent.steer and the run continues when the agent has queued messages", async () => {
     const body = h.makeBody();
     await body.start();

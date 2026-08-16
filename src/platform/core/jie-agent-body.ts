@@ -300,6 +300,8 @@ export class JieAgentBody implements AgentBody {
     if (this.started) return;
     this.started = true;
 
+    const loaded = this.sessionUsageStore.load(this.teamId, this.sessionId, this.agentKey);
+    this.eventBridge.seedSessionUsage(loaded ?? { inputTokens: 0, outputTokens: 0 });
     this.registerSubscriptions();
     await this.hookRunner.sessionStart({ identity: this.hookIdentity });
 
