@@ -718,6 +718,18 @@ describe("TeamManagerImpl — full surface", () => {
       expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
+    test("alias with effort suffix and a space is pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o (high)" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("high");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
+    });
+
     test("alias without suffix is not pinned", async () => {
       settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o" } });
       const teamDir = join(homeJieDir, "teams", "dev");
@@ -736,6 +748,19 @@ describe("TeamManagerImpl — full surface", () => {
       await manager.load("setup-assistant");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("medium");
       expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
+    });
+
+    test("unmapped alias with soul effort suffix pins effort while model stays unpinned", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large(low)\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(modelRegistry.resolve).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(false);
     });
 
     test("no effort anywhere falls back to off and is not pinned", async () => {

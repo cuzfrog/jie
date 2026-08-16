@@ -202,7 +202,7 @@ export class TeamManagerImpl implements TeamManager {
     const bodies: AgentBody[] = [];
     const blueprintKeys = new Set<string>();
     for (const soul of blueprint.roles) {
-      let resolved: { model: Model<Api>; effort: EffortLevel; modelPinned: boolean };
+      let resolved: { model: Model<Api>; effort: EffortLevel; modelPinned: boolean; effortPinned: boolean };
       try {
         resolved = this.resolveSoulModelAndEffort(soul, settings);
       } catch (error) {
