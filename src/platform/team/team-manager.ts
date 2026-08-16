@@ -16,6 +16,7 @@ export interface TeamManager {
   load(teamId?: string): Promise<TeamInfo>;
   reload(): Promise<ReadonlyArray<TeamInfo>>;
   resumeSession(teamId: string, sessionId: string): Promise<TeamInfo>;
+  newSession(teamId: string): Promise<TeamInfo>;
   listInstalled(): string[];
   agentCount(teamId: string): number;
   getTeamDescription(teamId: string): string | undefined;
@@ -81,6 +82,12 @@ export class TeamManagerImpl implements TeamManager {
 
   async resumeSession(teamId: string, sessionId: string): Promise<TeamInfo> {
     return this.loadImpl(teamId, sessionId);
+  }
+
+  async newSession(teamId: string): Promise<TeamInfo> {
+    const requested = this.resolveTeamId(teamId);
+    this.unload(requested);
+    return this.buildTeam(requested, ulid());
   }
 
   listInstalled(): string[] {
@@ -159,17 +166,24 @@ export class TeamManagerImpl implements TeamManager {
     }
   }
 
+  private unload(teamId: string): void {
+    const existing = this.loadedTeams.get(teamId);
+    if (existing !== undefined) {
+      for (const body of existing) body.stop();
+      this.loadedTeams.delete(teamId);
+    }
+    this.loadedBlueprints.delete(teamId);
+    this.sessionIds.delete(teamId);
+  }
+
   private async loadImpl(teamId?: string, overrideSessionId?: string): Promise<TeamInfo> {
     const requested = this.resolveTeamId(teamId);
     const existing = this.loadedTeams.get(requested);
     if (existing !== undefined && overrideSessionId === undefined) {
       return this.toTeamInfo(requested, existing);
     }
-    if (existing !== undefined && overrideSessionId !== undefined) {
-      for (const body of existing) body.stop();
-      this.loadedTeams.delete(requested);
-      this.loadedBlueprints.delete(requested);
-      this.sessionIds.delete(requested);
+    if (overrideSessionId !== undefined) {
+      this.unload(requested);
     }
     const sessionId = this.resolveSessionId(requested, overrideSessionId);
     return this.buildTeam(requested, sessionId);

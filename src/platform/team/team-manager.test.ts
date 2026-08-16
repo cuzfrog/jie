@@ -515,6 +515,57 @@ describe("TeamManagerImpl — full surface", () => {
       expect(team.agents.every((a) => a.sessionUsage !== undefined)).toBe(true);
     });
 
+    test("newSession starts a fresh session, stops the old bodies, and publishes team loaded", async () => {
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      const first = await manager.load("setup-assistant");
+      const firstSessionId = first.currentSessionId;
+      expect(firstSessionId).not.toBeNull();
+      eventManager.publish.mockClear();
+      const second = await manager.newSession("setup-assistant");
+      expect(second.id).toBe("setup-assistant");
+      expect(second.currentSessionId).not.toBe(firstSessionId);
+      expect(second.currentSessionId).toMatch(/^[0-9A-Z]{26}$/);
+      expect(agentBodyFactory).toHaveBeenCalledTimes(2);
+      expect(agentBodyFactory.mock.calls[1]![0]!.sessionId).toBe(second.currentSessionId);
+      expect(teamLoadedEvents()).toHaveLength(1);
+      expect(teamLoadedEvents()[0]!.payload.currentSessionId).toBe(second.currentSessionId);
+    });
+
+    test("newSession on a team that is not loaded loads it fresh", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      const team = await manager.newSession("setup-assistant");
+      expect(team.id).toBe("setup-assistant");
+      expect(team.currentSessionId).not.toBeNull();
+      expect(teamLoadedEvents().map((e) => e.payload.id)).toContain("setup-assistant");
+    });
+
+    test("newSession leaves other loaded teams untouched", async () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      await manager.load("alpha");
+      eventManager.publish.mockClear();
+      const alphaFirst = manager.currentSessionId("alpha");
+      await manager.newSession("setup-assistant");
+      expect(manager.currentSessionId("alpha")).toBe(alphaFirst);
+      expect(agentBodyFactory.mock.calls.filter((call) => call[0]!.teamId === "alpha")).toHaveLength(1);
+      expect(teamLoadedEvents().map((e) => e.payload.id)).toEqual(["setup-assistant"]);
+    });
+
+    test("newSession starts with empty transcript and usage for the new session", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      const first = await manager.load("setup-assistant");
+      const firstSessionId = first.currentSessionId!;
+      sessionUsageStore.load.mockImplementation((_teamId, sessionId, _agentKey) =>
+        sessionId === firstSessionId ? { inputTokens: 100, outputTokens: 50 } : null,
+      );
+      transcriptStore.listAgentKeys.mockImplementation((_teamId, sessionId) => (sessionId === firstSessionId ? ["general-1"] : []));
+      const team = await manager.newSession("setup-assistant");
+      expect(team.history[0]?.messages).toHaveLength(0);
+      expect(team.agents[0]?.sessionUsage).toBeNull();
+    });
+
     test("resumeSession reloads an already-loaded team and re-publishes history (picker flow, not a cache hit)", async () => {
       transcriptStore.hasSession.mockReturnValue(true);
       const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "hello", timestamp: 1 }, assistantMessage("hi there", 2)];

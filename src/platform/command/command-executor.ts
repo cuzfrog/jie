@@ -51,6 +51,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       team: this.team.bind(this),
       reload: this.reload.bind(this),
       resumeSession: this.resumeSession.bind(this),
+      newSession: this.newSession.bind(this),
       renameSession: this.renameSession.bind(this),
       getTeamInfo: this.getTeamInfo.bind(this),
       getGitStatus: this.getGitStatus.bind(this),
@@ -218,6 +219,10 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private resumeSession(command: Command<"resumeSession">): Promise<CommandResult<"resumeSession">> {
     return this.teamManager.resumeSession(command.teamId, command.sessionId);
+  }
+
+  private newSession(command: Command<"newSession">): Promise<CommandResult<"newSession">> {
+    return this.teamManager.newSession(command.teamId);
   }
 
   private renameSession(command: Command<"renameSession">): CommandResult<"renameSession"> {

@@ -44,6 +44,7 @@ const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
   reload: vi.fn(),
   resumeSession: vi.fn(),
+  newSession: vi.fn(),
   renameSession: vi.fn(),
   listInstalled: vi.fn(),
   agentCount: vi.fn(),
@@ -513,6 +514,16 @@ describe("CommandExecutorImpl", () => {
       const result = await executor.execute({ name: "resumeSession", teamId: "alpha", sessionId: "s1" });
       expect(result).toBe(identity);
       expect(teamManager.resumeSession).toHaveBeenCalledWith("alpha", "s1");
+    });
+  });
+
+  describe("newSession", () => {
+    test("delegates to teamManager.newSession with the teamId", async () => {
+      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: "new-session", agents: [], history: [], kanbanCards: [] };
+      teamManager.newSession.mockResolvedValue(identity);
+      const result = await executor.execute({ name: "newSession", teamId: "alpha" });
+      expect(result).toBe(identity);
+      expect(teamManager.newSession).toHaveBeenCalledWith("alpha");
     });
   });
 
