@@ -159,6 +159,7 @@ function makeParams(overrides: Partial<AgentBodyParams> = {}): AgentBodyParams {
     model: undefined,
     effort: "off",
     modelPinned: soul.model !== "" && !isModelAlias(soul.model),
+    effortPinned: soul.effort !== undefined,
     ...overrides,
   };
 }

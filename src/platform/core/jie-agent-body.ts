@@ -202,7 +202,7 @@ export class JieAgentBody implements AgentBody {
       eventManager: deps.eventManager,
       sender: this.sender,
       soulPinsModel: params.modelPinned,
-      soulPinsEffort: params.soul.effort !== undefined,
+      soulPinsEffort: params.effortPinned,
       resolveModel: deps.resolveModel,
       targetContextWindowSize: this.soul.targetContextWindowSize,
       agentState: {

@@ -224,6 +224,7 @@ export class TeamManagerImpl implements TeamManager {
           model: resolved.model,
           effort: resolved.effort,
           modelPinned: resolved.modelPinned,
+          effortPinned: resolved.effortPinned,
         };
         this.bodyParams.set(`${teamId}:${agentKey}`, params);
         bodies.push(this.agentBodyFactory(params));
@@ -290,7 +291,7 @@ export class TeamManagerImpl implements TeamManager {
     return ulid();
   }
 
-  private resolveSoulModelAndEffort(soul: AgentSoul, settings: Settings): { model: Model<Api>; effort: EffortLevel; modelPinned: boolean } {
+  private resolveSoulModelAndEffort(soul: AgentSoul, settings: Settings): { model: Model<Api>; effort: EffortLevel; modelPinned: boolean; effortPinned: boolean } {
     const { modelRef, aliasEffort, modelPinned } = this.resolveAliasedModel(soul, settings);
     const parsed = parseModelRef(modelRef);
     if (parsed === null) {
@@ -308,7 +309,8 @@ export class TeamManagerImpl implements TeamManager {
       });
     }
     const effort = soul.effort ?? aliasEffort ?? settings.defaultEffort ?? "off";
-    return { model, effort, modelPinned };
+    const effortPinned = soul.effort !== undefined || aliasEffort !== undefined;
+    return { model, effort, modelPinned, effortPinned };
   }
 
   private resolveAliasedModel(soul: AgentSoul, settings: Settings): { modelRef: string; aliasEffort: EffortLevel | undefined; modelPinned: boolean } {
@@ -387,6 +389,7 @@ export class TeamManagerImpl implements TeamManager {
         model: resolved.model,
         effort: resolved.effort,
         modelPinned: resolved.modelPinned,
+        effortPinned: resolved.effortPinned,
       };
       this.bodyParams.set(`${teamId}:${agentRef}`, params);
       return this.agentBodyFactory(params);

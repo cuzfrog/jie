@@ -259,6 +259,7 @@ interface MakeBodyOverrides {
   model?: Model<Api>;
   effort?: EffortLevel;
   modelPinned?: boolean;
+  effortPinned?: boolean;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
   compactor?: Compactor;
@@ -354,6 +355,7 @@ function makeHarness(): Harness {
       model: overrides.model,
       effort: overrides.effort ?? "off",
       modelPinned: overrides.modelPinned ?? (soul.model !== "" && !isModelAlias(soul.model)),
+      effortPinned: overrides.effortPinned ?? (soul.effort !== undefined),
     };
     return new JieAgentBody(params, {
       eventManager: events,
@@ -1986,6 +1988,30 @@ describe("JieAgentBody — user.effort.update", () => {
     expect(h.state.thinkingLevel).toBe("low");
     expect(received).toHaveLength(0);
     expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "low", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("ignores the update when effortPinned is true even if soul.effort is undefined", async () => {
+    const body = h.makeBody({ soul: makeSoul({ model: "" }), effort: "low", effortPinned: true, model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("low");
+    expect(received).toHaveLength(0);
+    expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "low", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("applies the update when effortPinned is false", async () => {
+    const body = h.makeBody({ soul: makeSoul({ model: "" }), effort: "low", effortPinned: false, model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("high");
+    expect(received).toHaveLength(1);
+    expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
     body.stop();
   });
 

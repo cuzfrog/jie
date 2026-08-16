@@ -362,6 +362,7 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
     test("falls back to defaultEffort when the soul has no effort", async () => {
@@ -373,6 +374,7 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("medium");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
     });
 
     test("resolves a model alias with effort and keeps the effort", async () => {
@@ -385,6 +387,7 @@ describe("TeamManagerImpl — full surface", () => {
       await manager.load("dev");
       expect(modelRegistry.resolve).toHaveBeenCalledWith("openai", "gpt-4o");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
     test("uses the effort suffix in a model alias when the soul has no effort", async () => {
@@ -398,6 +401,7 @@ describe("TeamManagerImpl — full surface", () => {
       expect(modelRegistry.resolve).toHaveBeenCalledWith("openai", "gpt-4o");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
       expect(agentBodyFactory.mock.calls[0]![0]!.soul.effort).toBeUndefined();
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
     test("the soul's pinned effort overrides an alias effort suffix", async () => {
@@ -410,6 +414,7 @@ describe("TeamManagerImpl — full surface", () => {
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
       expect(agentBodyFactory.mock.calls[0]![0]!.soul.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
     test("uses defaultEffort when neither the soul nor the alias pin effort", async () => {
@@ -421,6 +426,7 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("medium");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
     });
 
     test("per-role effort is independent across souls", async () => {
@@ -435,8 +441,10 @@ describe("TeamManagerImpl — full surface", () => {
       const [lead, worker] = agentBodyFactory.mock.calls.map((call) => call[0]!);
       expect(lead!.soul.effort).toBe("low");
       expect(lead!.effort).toBe("low");
+      expect(lead!.effortPinned).toBe(true);
       expect(worker!.soul.effort).toBeUndefined();
       expect(worker!.effort).toBe("high");
+      expect(worker!.effortPinned).toBe(false);
     });
 
     test("skips a non-leader role whose pinned model does not resolve and loads the leader", async () => {
@@ -615,12 +623,14 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("setup-assistant");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("high");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
     });
 
     test("passes effort 'off' to the agent body factory when no defaultEffort is configured", async () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("setup-assistant");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("off");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
     });
 
     test("loads a second team without disturbing the first", async () => {
@@ -681,6 +691,70 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager } = makeManager(homeJieDir, null);
       await manager.load("dev");
       expect(modelRegistry.resolve).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
+    });
+  });
+
+  describe("effort pin propagation", () => {
+    test("concrete soul effort is pinned", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: openai/gpt-4o(low)\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
+    });
+
+    test("alias with effort suffix is pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o(low)" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
+    });
+
+    test("alias without suffix is not pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("off");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
+    });
+
+    test("defaultEffort only is not pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultEffort: "medium" });
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("medium");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
+    });
+
+    test("no effort anywhere falls back to off and is not pinned", async () => {
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("off");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
+    });
+
+    test("soul effort overrides alias effort suffix and stays pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o(high)" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large(low)\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
   });
 
