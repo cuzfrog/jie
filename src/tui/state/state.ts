@@ -89,6 +89,7 @@ export interface TuiState {
   readonly version: string;
   readonly installedTeams: InstalledTeams | null;
   readonly teamId: string | null;
+  readonly sessionId: string | null;
   readonly sessionName: string | null;
   readonly leaderAgentId: AgentId | null;
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;

@@ -16,13 +16,13 @@ function team(agents: ReadonlyArray<{
   skills?: ReadonlyArray<SkillInfo>;
   model: { provider: string; id: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null } | null;
   sessionUsage?: { inputTokens: number; outputTokens: number } | null;
-}>, sessionName: string | null = null): TeamInfo {
+}>, sessionName: string | null = null, currentSessionId: string | null = null): TeamInfo {
   const leader = agents.find((a) => a.isLeader) ?? agents[0];
   return {
     id: "my-team",
     leaderKey: leader?.agentKey ?? "general-1",
     sessionName,
-    currentSessionId: null,
+    currentSessionId,
     kanbanCards: [],
     history: [],
     agents: agents.map((a) => ({
@@ -251,6 +251,65 @@ describe("teamLoadReducer", () => {
     const reloaded = teamLoadReducer(engaged, team(agents));
     expect(reloaded.kanban.edit).toBe("#1");
     expect(reloaded.kanban.expanded).toBe(true);
+  });
+
+  test("same-session reload preserves the agent map and hydrates new totals", () => {
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: { inputTokens: 100, outputTokens: 50 } },
+    ], null, "s1"));
+    const second = teamLoadReducer(first, {
+      ...team([
+        { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: { inputTokens: 10, outputTokens: 5 } },
+      ], null, "s1"),
+      history: [{ agentKey: "general-1", messages: [user("hello"), assistantText("world")] }],
+    });
+    expect(second.sessionId).toBe("s1");
+    expect(second.agents.size).toBe(1);
+    const agent = second.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(10);
+    expect(agent?.sessionOutputTokens).toBe(5);
+    expect(agent?.history).toHaveLength(0);
+    expect(agent?.currentTurn?.userPrompt).toBe("hello");
+  });
+
+  test("session change on the same team resets agents and re-seeds from TeamInfo history and sessionUsage", () => {
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: { inputTokens: 100, outputTokens: 50 } },
+    ], null, "s1"));
+    const withTurn: TuiState = {
+      ...first,
+      agents: new Map([["my-team:general-1", { ...first.agents.get("my-team:general-1")!, history: [{ userPrompt: "previous", entries: [{ kind: "text" as const, text: "answer" }], streamId: null, seq: 0 }], currentTurn: null }]]),
+    };
+    const second = teamLoadReducer(withTurn, {
+      ...team([
+        { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: { inputTokens: 5, outputTokens: 1 } },
+      ], null, "s2"),
+      history: [{ agentKey: "general-1", messages: [user("resumed"), assistantText("value")] }],
+    });
+    expect(second.sessionId).toBe("s2");
+    const agent = second.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(5);
+    expect(agent?.sessionOutputTokens).toBe(1);
+    expect(agent?.history).toHaveLength(0);
+    expect(agent?.currentTurn?.userPrompt).toBe("resumed");
+  });
+
+  test("new session starts with zero totals and empty history", () => {
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: { inputTokens: 100, outputTokens: 50 } },
+    ], null, "s1"));
+    const second = teamLoadReducer(first, {
+      ...team([
+        { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: null },
+      ], null, "s2"),
+      history: [],
+    });
+    expect(second.sessionId).toBe("s2");
+    const agent = second.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(0);
+    expect(agent?.sessionOutputTokens).toBe(0);
+    expect(agent?.history).toHaveLength(0);
+    expect(agent?.currentTurn).toBeNull();
   });
 
   test("team load clears the interrupted marker", () => {
