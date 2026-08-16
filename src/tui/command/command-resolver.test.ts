@@ -43,10 +43,15 @@ describe("CommandResolverImpl", () => {
     expect(result).toEqual({ kind: "ui", action: "showHelp" });
   });
 
-  test("/clear resolves to a UI clear action", () => {
+  test("/new builds the newSession platform command", () => {
     const resolver = makeResolver(makeFakePlatform());
-    expect(resolver.resolve(makeTuiState(), "clear", [])).toEqual({ kind: "ui", action: "clearState" });
-    expect(resolver.resolve(makeTuiState(), "new", [])).toEqual({ kind: "ui", action: "clearState" });
+    expect(resolver.resolve(withTeam(), "new", [])).toEqual({
+      kind: "platform",
+      slashName: "new",
+      command: { name: "newSession", teamId: "t1" },
+      transient: "starting new session",
+    });
+    expect(resolver.resolve(makeTuiState(), "new", [])).toEqual({ kind: "error", text: "/new: no team loaded" });
   });
 
   test("/exit resolves to a UI stop action", () => {

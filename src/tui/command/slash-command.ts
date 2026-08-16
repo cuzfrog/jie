@@ -15,7 +15,7 @@ export interface ArgumentSpec {
   readonly greedy?: boolean;
 }
 
-export type UiAction = "clearState" | "showHelp" | "stop" | "cycleKanbanView";
+export type UiAction = "showHelp" | "stop" | "cycleKanbanView";
 
 export type ResolvedCommand =
   | { readonly kind: "ui"; readonly action: UiAction }

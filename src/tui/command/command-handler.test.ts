@@ -67,20 +67,23 @@ describe("CommandHandlerImpl", () => {
     expect(dispatch).not.toHaveBeenCalledWith(Actions.setTransientMessage(expect.anything()));
   });
 
-  test("handle('/clear') dispatches clearTuiState", () => {
+  test("handle('/new') dispatches newSession for the loaded team", () => {
     const { platform } = makePlatform();
-    const { handler, dispatch } = makeHandler(platform);
-    handler.handle("/clear");
+    const state = stateWithTeam("my-team", true);
+    const { handler, dispatch } = makeHandler(platform, state);
+    handler.handle("/new");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
-    expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("starting new session"));
+    expect(platform.execute).toHaveBeenCalledWith({ name: "newSession", teamId: "my-team" });
   });
 
-  test("handle('/new') dispatches clearTuiState as an alias of /clear", () => {
+  test("handle('/new') reports an error when no team is loaded", () => {
     const { platform } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/new");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
-    expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/new: no team loaded"));
+    expect(platform.execute).not.toHaveBeenCalled();
   });
 
   test("handle('/exit') dispatches requestQuit", () => {

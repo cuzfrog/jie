@@ -1,9 +1,9 @@
-import { ClearCommand } from "./clear-command";
 import { CompactCommand } from "./compact-command";
 import { EffortCommand } from "./effort-command";
 import { ExitCommand } from "./exit-command";
 import { HelpCommand } from "./help-command";
 import { KanbanCommand } from "./kanban-command";
+import { NewCommand } from "./new-command";
 import { SettingCommand } from "./setting-command";
 import { LoginCommand } from "./login-command";
 import { LogoutCommand } from "./logout-command";
@@ -19,7 +19,6 @@ import type { SlashCommandDefinition } from "../slash-command";
 
 export const SLASH_COMMANDS: ReadonlyArray<SlashCommandDefinition> = [
   new HelpCommand(),
-  new ClearCommand(),
   new ExitCommand(),
   new LoginCommand(),
   new LogoutCommand(),
@@ -30,6 +29,7 @@ export const SLASH_COMMANDS: ReadonlyArray<SlashCommandDefinition> = [
   new CompactCommand(),
   new ReloadCommand(),
   new TeamCommand(),
+  new NewCommand(),
   new ResumeCommand(),
   new RenameCommand(),
   new KanbanCommand(),

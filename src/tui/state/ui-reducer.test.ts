@@ -192,13 +192,6 @@ describe("team strip cursor", () => {
     expect(state2.teamCursorAgentId).toBe("my-team:manager-1");
   });
 
-  test("clearTuiState keeps the strip visible and clears the cursor", () => {
-    let opened = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
-    opened = reduceUiAction(opened, Actions.switchCycleAgent(1));
-    const cleared = reduceUiAction(opened, Actions.clearTuiState());
-    expect(cleared.teamPanelVisible).toBe(true);
-    expect(cleared.teamCursorAgentId).toBeNull();
-  });
 });
 
 describe("kanban view cycle", () => {
@@ -275,11 +268,6 @@ describe("kanban view cycle", () => {
     expect(team.kanban.view).toBe("list");
   });
 
-  test("clearTuiState keeps the kanban view", () => {
-    const list = reduceUiAction(twoAgent(), Actions.cycleKanbanView());
-    const cleared = reduceUiAction(list, Actions.clearTuiState());
-    expect(cleared.kanban.view).toBe("list");
-  });
 });
 
 describe("commit team cursor", () => {
@@ -364,75 +352,6 @@ describe("pendingQuit", () => {
     expect(state1).toBe(state0);
   });
 
-  test("clearTuiState does not touch pendingQuit", () => {
-    const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.requestQuit());
-    const state1 = reduceUiAction(state0, Actions.clearTuiState());
-    expect(state1.pendingQuit).toBe(true);
-  });
-});
-
-describe("clear", () => {
-  test("preserves team and agents but clears conversation state and banners", () => {
-    const model = { provider: "anthropic", id: "claude-opus-4", effort: "high" as const, contextWindow: 128000 };
-    const history = [{ userPrompt: "hi", entries: [{ kind: "text" as const, text: "hello" }], streamId: null, seq: 0 }];
-    const currentTurn = { userPrompt: "next", entries: [{ kind: "text" as const, text: "thinking" }], streamId: 1, seq: 1 };
-    const queue = [{ text: "queued", source: "user" as const, chained: false }];
-    const agent = makeAgentUiState("my-team:general-1", {
-      isLeader: true,
-      model,
-      queue,
-      history,
-      currentTurn,
-      compactionMarker: { turnsBefore: 1, summary: "old summary", tokensBefore: 100 },
-      compactionInProgress: true,
-      status: "busy",
-      lastStopReason: "stop" as AgentUiState["lastStopReason"],
-      contextTokensUsed: 1234,
-      lastReportedTotalTokens: 1234,
-      sessionInputTokens: 1000,
-      sessionOutputTokens: 234,
-      inflightInputTokens: 100,
-      inflightOutputTokens: 50,
-    });
-    const state = makeTuiState({
-      teamId: "my-team",
-      leaderAgentId: "my-team:general-1",
-      focusedAgentId: "my-team:general-1",
-      sessionName: "old",
-      transientMessage: "t",
-      transientSetAt: 12345,
-      errorBanner: "e",
-      interruptedAgentId: "my-team:general-1",
-      helpPanelVisible: true,
-      agents: new Map([["my-team:general-1", agent]]),
-    });
-    const cleared = reduceUiAction(state, Actions.clearTuiState());
-    expect(cleared.teamId).toBe("my-team");
-    expect(cleared.leaderAgentId).toBe("my-team:general-1");
-    expect(cleared.focusedAgentId).toBe("my-team:general-1");
-    expect(cleared.agents.size).toBe(1);
-    const clearedAgent = cleared.agents.get("my-team:general-1")!;
-    expect(clearedAgent.model).toEqual(model);
-    expect(clearedAgent.queue).toEqual(queue);
-    expect(clearedAgent.history).toEqual([]);
-    expect(clearedAgent.currentTurn).toBeNull();
-    expect(clearedAgent.compactionMarker).toBeNull();
-    expect(clearedAgent.compactionInProgress).toBe(false);
-    expect(clearedAgent.status).toBe("idle");
-    expect(clearedAgent.lastStopReason).toBeNull();
-    expect(clearedAgent.contextTokensUsed).toBe(0);
-    expect(clearedAgent.lastReportedTotalTokens).toBeNull();
-    expect(clearedAgent.sessionInputTokens).toBe(0);
-    expect(clearedAgent.sessionOutputTokens).toBe(0);
-    expect(clearedAgent.inflightInputTokens).toBe(0);
-    expect(clearedAgent.inflightOutputTokens).toBe(0);
-    expect(cleared.sessionName).toBeNull();
-    expect(cleared.transientMessage).toBeNull();
-    expect(cleared.transientSetAt).toBeNull();
-    expect(cleared.errorBanner).toBeNull();
-    expect(cleared.interruptedAgentId).toBeNull();
-    expect(cleared.helpPanelVisible).toBe(false);
-  });
 });
 
 describe("editorCursorAtStart", () => {
@@ -447,10 +366,6 @@ describe("editorCursorAtStart", () => {
     expect(back.editorCursorAtStart).toBe(true);
   });
 
-  test("clearTuiState does not touch the flag, as /clear does not move the cursor", () => {
-    const away = reduceUiAction(INITIAL_TUI_STATE, Actions.setEditorCursorAtStart(false));
-    expect(reduceUiAction(away, Actions.clearTuiState()).editorCursorAtStart).toBe(false);
-  });
 });
 
 describe("setSessionName", () => {
@@ -459,11 +374,6 @@ describe("setSessionName", () => {
     expect(state.sessionName).toBe("my session");
   });
 
-  test("clearTuiState resets the session name", () => {
-    const named = reduceUiAction(INITIAL_TUI_STATE, Actions.setSessionName("my session"));
-    const cleared = reduceUiAction(named, Actions.clearTuiState());
-    expect(cleared.sessionName).toBeNull();
-  });
 });
 
 describe("showHelp", () => {
@@ -488,11 +398,6 @@ describe("showHelp", () => {
     expect(state.kanban.view).toBe("hidden");
   });
 
-  test("clearTuiState hides the help panel", () => {
-    const opened = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());
-    const cleared = reduceUiAction(opened, Actions.clearTuiState());
-    expect(cleared.helpPanelVisible).toBe(false);
-  });
 });
 
 describe("interrupted marker", () => {
@@ -511,10 +416,6 @@ describe("interrupted marker", () => {
     expect(reduceUiAction(state, Actions.submitEditorText("x"))).toBe(state);
   });
 
-  test("clearTuiState clears interruptedAgentId", () => {
-    const state = reduceUiAction(markedTeam(), Actions.clearTuiState());
-    expect(state.interruptedAgentId).toBeNull();
-  });
 });
 
 describe("terminal focus", () => {

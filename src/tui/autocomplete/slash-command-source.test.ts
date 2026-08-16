@@ -76,7 +76,7 @@ describe("SlashCommandSource — slash commands", () => {
   test("bare '/' lists every command with its argument hint and description", async () => {
     const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(18);
+    expect(suggestions!.items).toHaveLength(17);
     const team = suggestions!.items.find((item) => item.value === "team");
     expect(team!.description).toBe("<teamId> — switch the active team");
     const help = suggestions!.items.find((item) => item.value === "help");

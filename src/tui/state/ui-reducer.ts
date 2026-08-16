@@ -26,20 +26,6 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return reduceTeamPanelToggle(state);
     case ActionTypes.COMMIT_TEAM_CURSOR:
       return reduceTeamCursorCommit(state);
-    case ActionTypes.CLEAR_TUI_STATE:
-      return {
-        ...state,
-        agents: clearAgents(state.agents),
-        sessionName: null,
-        teamCursorAgentId: null,
-        interruptedAgentId: null,
-        nextEntrySeq: 0,
-        transientMessage: null,
-        transientSetAt: null,
-        errorBanner: null,
-        helpPanelVisible: false,
-        requireUserAttention: false,
-      };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
       return { ...state, transientMessage: action.payload.text, transientSetAt: Date.now() };
     case ActionTypes.CLEAR_TRANSIENT_MESSAGE:
@@ -133,28 +119,4 @@ function reduceTeamCursorCommit(state: TuiState): TuiState {
   return { ...state, focusedAgentId: cursor };
 }
 
-function clearAgents(agents: ReadonlyMap<AgentId, AgentUiState>): Map<AgentId, AgentUiState> {
-  const cleared = new Map<AgentId, AgentUiState>();
-  for (const [agentId, agent] of agents) {
-    cleared.set(agentId, clearAgent(agent));
-  }
-  return cleared;
-}
 
-function clearAgent(agent: AgentUiState): AgentUiState {
-  return {
-    ...agent,
-    status: "idle",
-    history: [],
-    currentTurn: null,
-    compactionMarker: null,
-    compactionInProgress: false,
-    lastStopReason: null,
-    contextTokensUsed: 0,
-    lastReportedTotalTokens: null,
-    sessionInputTokens: 0,
-    sessionOutputTokens: 0,
-    inflightInputTokens: 0,
-    inflightOutputTokens: 0,
-  };
-}

@@ -111,7 +111,7 @@ Team and session selection ride the editor's autocomplete popup — drawn inside
 
 1. Load a team — the welcome splash shows the mark beside the wordmark + tagline, the gloss, and the team line, then a single hint line pointing to `/help`.
 2. Submit `/help` — the help panel opens below the footer: a boxed panel with the Commands section followed by the Shortcuts section and keybinding hints; the panel omits the splash's mark, identity, and team roster. The welcome splash stays visible (showing the hint) while there is no chat content.
-3. Continue the conversation — new turns render above the panel; the panel stays open until another `/help`, a team switch, or `/clear`.
+3. Continue the conversation — new turns render above the panel; the panel stays open until another `/help`, a team switch, or `/new`.
 
 **Observable outputs.** `state.helpPanelVisible` is `true`; the help panel contains the command list (e.g. `/resume`) and the keybinding hints; `state.transientMessage` stays `null`.
 
