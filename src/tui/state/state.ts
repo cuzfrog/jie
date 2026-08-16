@@ -54,8 +54,10 @@ export interface AgentUiState {
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;
   readonly lastReportedTotalTokens: number | null;
-  readonly uploadTokens: number;
-  readonly downloadTokens: number;
+  readonly sessionInputTokens: number;
+  readonly sessionOutputTokens: number;
+  readonly inflightInputTokens: number;
+  readonly inflightOutputTokens: number;
 }
 
 export type KanbanEditField = "content" | "description" | { readonly todoIndex: number };

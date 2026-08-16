@@ -389,8 +389,10 @@ describe("clear", () => {
       lastStopReason: "stop" as AgentUiState["lastStopReason"],
       contextTokensUsed: 1234,
       lastReportedTotalTokens: 1234,
-      uploadTokens: 1000,
-      downloadTokens: 234,
+      sessionInputTokens: 1000,
+      sessionOutputTokens: 234,
+      inflightInputTokens: 100,
+      inflightOutputTokens: 50,
     });
     const state = makeTuiState({
       teamId: "my-team",
@@ -420,8 +422,10 @@ describe("clear", () => {
     expect(clearedAgent.lastStopReason).toBeNull();
     expect(clearedAgent.contextTokensUsed).toBe(0);
     expect(clearedAgent.lastReportedTotalTokens).toBeNull();
-    expect(clearedAgent.uploadTokens).toBe(0);
-    expect(clearedAgent.downloadTokens).toBe(0);
+    expect(clearedAgent.sessionInputTokens).toBe(0);
+    expect(clearedAgent.sessionOutputTokens).toBe(0);
+    expect(clearedAgent.inflightInputTokens).toBe(0);
+    expect(clearedAgent.inflightOutputTokens).toBe(0);
     expect(cleared.sessionName).toBeNull();
     expect(cleared.transientMessage).toBeNull();
     expect(cleared.transientSetAt).toBeNull();

@@ -22,6 +22,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     incomingIds.add(agentId);
     const existing = newAgents.get(agentId);
     if (existing !== undefined) {
+      const sessionUsage = agent.sessionUsage;
       newAgents.set(agentId, {
         ...existing,
         role: agent.role,
@@ -30,6 +31,8 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
         subscribe: agent.subscribe,
         skills: agent.skills,
         model: agent.model ?? existing.model,
+        sessionInputTokens: sessionUsage?.inputTokens ?? existing.sessionInputTokens,
+        sessionOutputTokens: sessionUsage?.outputTokens ?? existing.sessionOutputTokens,
       });
     } else {
       newAgents.set(agentId, emptyAgent(agentId, teamId, agent));
@@ -83,6 +86,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
 }
 
 function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUiState {
+  const sessionUsage = agent.sessionUsage;
   return {
     agentId,
     teamId,
@@ -102,7 +106,9 @@ function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUi
     compactionInProgress: false,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,
-    uploadTokens: 0,
-    downloadTokens: 0,
+    sessionInputTokens: sessionUsage?.inputTokens ?? 0,
+    sessionOutputTokens: sessionUsage?.outputTokens ?? 0,
+    inflightInputTokens: 0,
+    inflightOutputTokens: 0,
   };
 }

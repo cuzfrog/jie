@@ -93,7 +93,7 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
     const currentTurn = { ...turn, userPrompt: prompt };
     const priorTokens = agent.lastReportedTotalTokens ?? estimateContextTokens(contextHistory(agent), null);
     const contextTokensUsed = priorTokens + estimateContextTokens([], currentTurn);
-    const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
+    const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed };
     return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention });
   }
   const completed = turn === null ? contextHistory(agent) : [...contextHistory(agent), turn];
@@ -101,7 +101,7 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const currentTurn = freshTurn(prompt, seq);
   const priorTokens = agent.lastReportedTotalTokens ?? estimateContextTokens(completed, null);
   const contextTokensUsed = priorTokens + estimateContextTokens([], currentTurn);
-  const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed, uploadTokens: 0, downloadTokens: 0 };
+  const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed };
   return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention, nextEntrySeq: seq + 1 });
 }
 
@@ -112,7 +112,7 @@ function reduceTurnContinue(state: TuiState, event: AnyEventEnvelope): TuiState 
   const { agentId, agent } = resolved;
   const interruptedAgentId = state.interruptedAgentId === agentId ? null : state.interruptedAgentId;
   const requireUserAttention = agentId === state.focusedAgentId ? false : state.requireUserAttention;
-  const next: AgentUiState = { ...agent, status: "busy", uploadTokens: 0, downloadTokens: 0 };
+  const next: AgentUiState = { ...agent, status: "busy" };
   return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention });
 }
 
@@ -122,7 +122,14 @@ function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type !== "agent.idle") return state;
   const { agentId, agent } = resolved;
   const contextTokensUsed = agent.lastReportedTotalTokens ?? estimateContextTokens(contextHistory(agent), agent.currentTurn);
-  const next: AgentUiState = { ...agent, status: "idle", lastStopReason: event.payload, contextTokensUsed };
+  const next: AgentUiState = {
+    ...agent,
+    status: "idle",
+    lastStopReason: event.payload,
+    contextTokensUsed,
+    inflightInputTokens: 0,
+    inflightOutputTokens: 0,
+  };
   const interruptedAgentId = agentId === state.focusedAgentId && event.payload === "aborted" ? agentId : state.interruptedAgentId;
   const requireUserAttention =
     agentId === state.focusedAgentId && !state.terminalFocused && TuiState.isAttentionStopReason(event.payload)
@@ -136,12 +143,21 @@ function reduceUsage(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   if (event.type !== "agent.usage") return state;
   const { agentId, agent } = resolved;
+  if (event.payload.partial) {
+    return withAgent(state, agentId, {
+      ...agent,
+      inflightInputTokens: event.payload.input + event.payload.cacheRead + event.payload.cacheWrite,
+      inflightOutputTokens: event.payload.output,
+    });
+  }
   return withAgent(state, agentId, {
     ...agent,
     contextTokensUsed: event.payload.totalTokens,
     lastReportedTotalTokens: event.payload.totalTokens,
-    uploadTokens: event.payload.input,
-    downloadTokens: event.payload.output,
+    sessionInputTokens: event.payload.session_input_tokens,
+    sessionOutputTokens: event.payload.session_output_tokens,
+    inflightInputTokens: 0,
+    inflightOutputTokens: 0,
   });
 }
 
@@ -159,8 +175,6 @@ function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
     compactionInProgress: false,
     contextTokensUsed: event.payload.tokens_after,
     lastReportedTotalTokens: event.payload.tokens_after,
-    uploadTokens: 0,
-    downloadTokens: 0,
   };
   return withAgent(state, agentId, next);
 }

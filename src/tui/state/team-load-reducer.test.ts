@@ -87,6 +87,36 @@ describe("teamLoadReducer", () => {
     expect(state.agents.get("my-team:general-1")?.model?.contextWindow).toBe(200000);
   });
 
+  test("seeds session token totals from AgentInfo.sessionUsage", () => {
+    const state = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: { inputTokens: 100, outputTokens: 50 } },
+    ]));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(100);
+    expect(agent?.sessionOutputTokens).toBe(50);
+  });
+
+  test("replaces session token totals from a same-team reload", () => {
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: { inputTokens: 100, outputTokens: 50 } },
+    ]));
+    const second = teamLoadReducer(first, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: { inputTokens: 10, outputTokens: 5 } },
+    ]));
+    const agent = second.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(10);
+    expect(agent?.sessionOutputTokens).toBe(5);
+  });
+
+  test("defaults session token totals to zero when AgentInfo.sessionUsage is null", () => {
+    const state = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null, sessionUsage: null },
+    ]));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(0);
+    expect(agent?.sessionOutputTokens).toBe(0);
+  });
+
   test("seeds the resolved skill metadata from TeamInfo", () => {
     const skills = [
       { name: "say-hello", description: "greets", argumentHint: null },

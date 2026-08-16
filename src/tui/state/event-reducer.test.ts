@@ -561,7 +561,7 @@ describe("reduceUsage", () => {
     expect(after).not.toBe(before);
   });
 
-  test("agent.usage stores upload and download token counts", () => {
+  test("agent.usage stores session input and output token counts", () => {
     const state = loadedState();
     const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
       input: 100,
@@ -569,10 +569,63 @@ describe("reduceUsage", () => {
       cacheRead: 0,
       cacheWrite: 0,
       totalTokens: 1234,
+      session_input_tokens: 250,
+      session_output_tokens: 120,
+      partial: false,
     }));
     const agent = state2.agents.get("my-team:general-1");
-    expect(agent?.uploadTokens).toBe(100);
-    expect(agent?.downloadTokens).toBe(50);
+    expect(agent?.sessionInputTokens).toBe(250);
+    expect(agent?.sessionOutputTokens).toBe(120);
+    expect(agent?.inflightInputTokens).toBe(0);
+    expect(agent?.inflightOutputTokens).toBe(0);
+  });
+
+  test("agent.usage partial sets inflight tokens and leaves session totals untouched", () => {
+    const state = loadedState();
+    const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10,
+      output: 5,
+      cacheRead: 2,
+      cacheWrite: 1,
+      totalTokens: 0,
+      session_input_tokens: 0,
+      session_output_tokens: 0,
+      partial: true,
+    }));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.inflightInputTokens).toBe(13);
+    expect(agent?.inflightOutputTokens).toBe(5);
+    expect(agent?.sessionInputTokens).toBe(0);
+    expect(agent?.sessionOutputTokens).toBe(0);
+  });
+
+  test("agent.usage final clears inflight tokens", () => {
+    const state = loadedState();
+    const withPartial = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10,
+      output: 5,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 100,
+      session_input_tokens: 0,
+      session_output_tokens: 0,
+      partial: true,
+    }));
+    const final = reduce(withPartial, Events.agentUsage(AGENT_SENDER, {
+      input: 10,
+      output: 5,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 100,
+      session_input_tokens: 15,
+      session_output_tokens: 5,
+      partial: false,
+    }));
+    const agent = final.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(15);
+    expect(agent?.sessionOutputTokens).toBe(5);
+    expect(agent?.inflightInputTokens).toBe(0);
+    expect(agent?.inflightOutputTokens).toBe(0);
   });
 
   test("rejects usage events from a foreign team", () => {
@@ -992,6 +1045,53 @@ describe("reduceToolCall + reduceToolResult", () => {
     const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "write_kanban", "ok", 5, null, { kind: "kanban", cards: [{ id: "#1", content: "x", status: "in_progress" }] }));
     expect(state2).toBe(state);
     expect(state2.kanban.board).toEqual([]);
+  });
+});
+
+describe("session token accounting", () => {
+  test("turn.start and turn.continue do not reset session token totals", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 100,
+      session_input_tokens: 15, session_output_tokens: 5, partial: false,
+    }));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "hi"));
+    let agent = state.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(15);
+    expect(agent?.sessionOutputTokens).toBe(5);
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    state = reduce(state, Events.agentTurnContinue(AGENT_SENDER));
+    agent = state.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(15);
+    expect(agent?.sessionOutputTokens).toBe(5);
+  });
+
+  test("compacted does not reset session token totals", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 100,
+      session_input_tokens: 15, session_output_tokens: 5, partial: false,
+    }));
+    state = reduce(state, Events.agentCompacted(AGENT_SENDER, "summary", 100, 50, 0));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(15);
+    expect(agent?.sessionOutputTokens).toBe(5);
+  });
+
+  test("agent.idle clears inflight token totals", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 8, output: 4, cacheRead: 0, cacheWrite: 0, totalTokens: 80,
+      session_input_tokens: 0, session_output_tokens: 0, partial: true,
+    }));
+    let agent = state.agents.get("my-team:general-1");
+    expect(agent?.inflightInputTokens).toBe(8);
+    expect(agent?.inflightOutputTokens).toBe(4);
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    agent = state.agents.get("my-team:general-1");
+    expect(agent?.inflightInputTokens).toBe(0);
+    expect(agent?.inflightOutputTokens).toBe(0);
   });
 });
 
