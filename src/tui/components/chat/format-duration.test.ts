@@ -1,4 +1,4 @@
-import { formatDuration } from "./format-duration";
+import { formatDuration, formatDurationAsSeconds } from "./format-duration";
 
 describe("formatDuration", () => {
   test("sub-second durations render as whole milliseconds", () => {
@@ -28,5 +28,32 @@ describe("formatDuration", () => {
     expect(formatDuration(119499)).toBe("1m 59s");
     expect(formatDuration(60499)).toBe("1m 0s");
     expect(formatDuration(3599500)).toBe("60m 0s");
+  });
+});
+
+describe("formatDurationAsSeconds", () => {
+  test("sub-second durations floor to 0s", () => {
+    expect(formatDurationAsSeconds(0)).toBe("0s");
+    expect(formatDurationAsSeconds(23)).toBe("0s");
+    expect(formatDurationAsSeconds(999)).toBe("0s");
+  });
+
+  test("sub-minute durations render as whole seconds", () => {
+    expect(formatDurationAsSeconds(1000)).toBe("1s");
+    expect(formatDurationAsSeconds(1234)).toBe("1s");
+    expect(formatDurationAsSeconds(1500)).toBe("1s");
+    expect(formatDurationAsSeconds(59999)).toBe("59s");
+  });
+
+  test("minute-scale durations render as minutes and seconds", () => {
+    expect(formatDurationAsSeconds(60000)).toBe("1m 0s");
+    expect(formatDurationAsSeconds(125000)).toBe("2m 5s");
+    expect(formatDurationAsSeconds(119499)).toBe("1m 59s");
+    expect(formatDurationAsSeconds(3599500)).toBe("59m 59s");
+  });
+
+  test("crosses minute boundaries at exactly 60 seconds", () => {
+    expect(formatDurationAsSeconds(119999)).toBe("1m 59s");
+    expect(formatDurationAsSeconds(3600000)).toBe("60m 0s");
   });
 });

@@ -68,7 +68,7 @@ describe("AssistantMessage — text blocks", () => {
 describe("AssistantMessage — thinking blocks", () => {
   test("collapsed by default: a streaming block folds into a live summary line", () => {
     const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering" }] }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[90mThinking... (0ms)\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (0s)\x1b[39m"]);
   });
 
   test("expanded after ctrl+t: label plus dim text", () => {
@@ -277,15 +277,15 @@ describe("summarizeWork", () => {
   });
 
   test("a live elapsed shows the thinking label with the running total", () => {
-    expect(_summarizeWork(1000, [], 500)).toBe("Thinking... (2s)");
+    expect(_summarizeWork(1000, [], 500)).toBe("Thinking... (1s)");
   });
 
   test("a live elapsed from zero prior thinking still counts up", () => {
-    expect(_summarizeWork(null, [], 500)).toBe("Thinking... (500ms)");
+    expect(_summarizeWork(null, [], 500)).toBe("Thinking... (0s)");
   });
 
   test("a live elapsed combines with tool usage", () => {
-    expect(_summarizeWork(1000, [card()], 500)).toBe("Thinking... (2s), used bash 1 time");
+    expect(_summarizeWork(1000, [card()], 500)).toBe("Thinking... (1s), used bash 1 time");
   });
 });
 
@@ -301,9 +301,9 @@ describe("AssistantMessage - live thinking counter", () => {
 
   test("starts at zero and grows with elapsed time", () => {
     const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering" }] }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[90mThinking... (0ms)\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (0s)\x1b[39m"]);
     vi.advanceTimersByTime(1500);
-    expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
   });
 
   test("accumulates with completed thinking", () => {
@@ -315,7 +315,7 @@ describe("AssistantMessage - live thinking counter", () => {
     }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
     vi.advanceTimersByTime(500);
-    expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
   });
 
   test("resets when a new in-progress block takes over", () => {
@@ -330,7 +330,7 @@ describe("AssistantMessage - live thinking counter", () => {
     }));
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
     vi.advanceTimersByTime(500);
-    expect(message.render(80)).toEqual(["\x1b[90mThinking... (3s)\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { Markdown, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { MessageBlock, MessageCard, MessageTurn, StateStore } from "../../state";
 import { ASSISTANT_PREFIX, jieMarkdownTheme, style, THINKING_LABEL } from "../themes";
-import { formatDuration } from "./format-duration";
+import { formatDuration, formatDurationAsSeconds } from "./format-duration";
 import { ThinkingBlock } from "./thinking-block";
 import { ToolCard } from "./tool-card";
 
@@ -173,7 +173,7 @@ function summarizeWork(thinkingMs: number | null, cards: ReadonlyArray<MessageCa
   if (thinkingMs === null && cards.length === 0 && liveElapsedMs === null) return null;
   const parts: string[] = [];
   if (liveElapsedMs !== null) {
-    parts.push(`${THINKING_LABEL} (${formatDuration((thinkingMs ?? 0) + liveElapsedMs)})`);
+    parts.push(`${THINKING_LABEL} (${formatDurationAsSeconds((thinkingMs ?? 0) + liveElapsedMs)})`);
   } else if (thinkingMs !== null) {
     parts.push(`Thought for ${formatDuration(thinkingMs)}`);
   }
