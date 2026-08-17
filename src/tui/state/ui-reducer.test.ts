@@ -375,6 +375,47 @@ describe("setSessionName", () => {
 
 });
 
+describe("mcp panel", () => {
+  test("toggle opens the mcp panel", () => {
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleMcpPanel());
+    expect(state.mcpPanelVisible).toBe(true);
+  });
+
+  test("a second toggle closes the mcp panel", () => {
+    let state = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleMcpPanel());
+    state = reduceUiAction(state, Actions.toggleMcpPanel());
+    expect(state.mcpPanelVisible).toBe(false);
+  });
+
+  test("opening the mcp panel closes an open team, help, or kanban panel", () => {
+    const withTeam = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
+    const withPanels = { ...withTeam, teamPanelVisible: true, teamCursorAgentId: "my-team:general-1" as AgentId, helpPanelVisible: true, kanban: { ...withTeam.kanban, view: "panel" as const } };
+    const state = reduceUiAction(withPanels, Actions.toggleMcpPanel());
+    expect(state.mcpPanelVisible).toBe(true);
+    expect(state.teamPanelVisible).toBe(false);
+    expect(state.teamCursorAgentId).toBeNull();
+    expect(state.helpPanelVisible).toBe(false);
+    expect(state.kanban.view).toBe("hidden");
+  });
+
+  test("opening the team or help panel closes an open mcp panel", () => {
+    const withTeam = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
+    const withMcp = { ...withTeam, mcpPanelVisible: true };
+    const teamOpen = reduceUiAction(withMcp, Actions.toggleTeamPanel());
+    expect(teamOpen.teamPanelVisible).toBe(true);
+    expect(teamOpen.mcpPanelVisible).toBe(false);
+    const helpOpen = reduceUiAction(withMcp, Actions.showHelp());
+    expect(helpOpen.helpPanelVisible).toBe(true);
+    expect(helpOpen.mcpPanelVisible).toBe(false);
+  });
+
+  test("setMcpServers stores the server list", () => {
+    const servers = [{ name: "github", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null }];
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.setMcpServers(servers));
+    expect(state.mcpServers).toEqual(servers);
+  });
+});
+
 describe("showHelp", () => {
   test("toggles the help panel on", () => {
     const state = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());

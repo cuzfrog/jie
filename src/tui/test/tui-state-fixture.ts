@@ -61,6 +61,8 @@ export function makeTuiState(
     toolCardsExpanded: false,
     teamPanelVisible: false,
     helpPanelVisible: false,
+    mcpPanelVisible: false,
+    mcpServers: [],
     kanban,
     question: null,
     pendingQuit: false,

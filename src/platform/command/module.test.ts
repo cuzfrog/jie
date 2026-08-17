@@ -7,6 +7,7 @@ import type { GitService, GitSnapshot } from "../services";
 import type { KanbanStore } from "../storage";
 import type { AgentRegistry, TeamManager } from "../team";
 import type { QuestionBroker } from "../tools";
+import type { McpManager } from "../mcp";
 import { registerCommandModule } from "./module";
 
 const authStore = vi.mocked<AuthStore>({
@@ -93,6 +94,12 @@ const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
 
 const questionBroker = vi.mocked<QuestionBroker>({ ask: vi.fn(), answer: vi.fn() });
 
+const mcpManager = vi.mocked<McpManager>({
+  connectAll: vi.fn(),
+  dispose: vi.fn(),
+  listServers: vi.fn(),
+});
+
 function bootedContainer(): AwilixContainer<PlatformCradle> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
@@ -106,6 +113,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     kanbanStore: asValue(kanbanStore),
     llmService: asValue(llmService),
     questionBroker: asValue(questionBroker),
+    mcpManager: asValue(mcpManager),
   });
   registerCommandModule(container);
   return container;

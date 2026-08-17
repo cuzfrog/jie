@@ -69,6 +69,13 @@ describe("Footer", () => {
     expect(lines[0]).toContain("/repo (dev)");
   });
 
+  test("renders only the identity line while the mcp panel is open", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), mcpPanelVisible: true }));
+    const lines = new Footer(stateStore, tokenUsage, modelSegment, queueIndicator, compactingIndicator, dynamicHint).render(80);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toContain("/repo (dev)");
+  });
+
   test("keeps both lines while the kanban list view is shown", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), kanbanView: "list" }));
     expect(new Footer(stateStore, tokenUsage, modelSegment, queueIndicator, compactingIndicator, dynamicHint).render(80).length).toBe(2);
@@ -161,6 +168,15 @@ describe("Footer.update", () => {
     const footer = new Footer(stateStore, tokenUsage, modelSegment, queueIndicator, compactingIndicator, dynamicHint);
     footer.update();
     stateStore.getState.mockReturnValue(makeTuiState({ ...base, teamPanelVisible: true }));
+    expect(footer.update()).toBe(true);
+  });
+
+  test("reports dirty when the mcp panel visibility changes", () => {
+    const base = seededState(false);
+    stateStore.getState.mockReturnValue(base);
+    const footer = new Footer(stateStore, tokenUsage, modelSegment, queueIndicator, compactingIndicator, dynamicHint);
+    footer.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ ...base, mcpPanelVisible: true }));
     expect(footer.update()).toBe(true);
   });
 

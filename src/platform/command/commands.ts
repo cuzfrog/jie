@@ -1,3 +1,4 @@
+import type { McpServerSummary } from "../mcp";
 import type { GitSnapshot } from "../services";
 import type { SessionSummary } from "../storage";
 import type { EffortLevel, KanbanCard, KanbanStatus, ModelAlias, ModelInfo, QuestionAnswer, TeamInfo } from "../types";
@@ -61,6 +62,7 @@ interface CommandTypeMap {
   kanbanToggleTodo: CommandDef<{ teamId: string; cardId: string; todo: string }, KanbanBoardResult>;
   compact: CommandDef<{ teamId: string; agentKey: string }, null>;
   answerUserQuestion: CommandDef<{ teamId: string; agentKey: string; requestId: string; cancelled: boolean; answers?: ReadonlyArray<QuestionAnswer> }, null>;
+  listMcpServers: CommandDef<{}, ReadonlyArray<McpServerSummary>>;
 }
 
 interface KanbanBoardResult {

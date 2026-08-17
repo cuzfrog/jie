@@ -1,4 +1,4 @@
-import type { AnyEventEnvelope, CommandResult, KanbanCard, QuestionAnswer, QuestionItem, TeamInfo } from "../../platform";
+import type { AnyEventEnvelope, CommandResult, KanbanCard, McpServerSummary, QuestionAnswer, QuestionItem, TeamInfo } from "../../platform";
 import type { AgentId, KanbanEditField } from "./state";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
@@ -33,6 +33,8 @@ export const ActionTypes = {
   TERMINAL_FOCUS_LOST: "[ui] terminal focus lost",
   SET_ENVIRONMENT: "[ui] set environment",
   SHOW_HELP: "[ui] toggle help panel",
+  TOGGLE_MCP_PANEL: "[ui] toggle mcp panel",
+  SET_MCP_SERVERS: "[ui] set mcp servers",
   SET_KANBAN_BOARD: "[ui] set kanban board",
   MOVE_KANBAN_CURSOR: "[ui] move kanban cursor",
   MOVE_KANBAN_EDIT_FIELD: "[ui] move kanban edit field",
@@ -71,6 +73,7 @@ const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
 const clearErrorMessage = createAction(ActionTypes.CLEAR_ERROR_MESSAGE);
 const clearBanners = createAction(ActionTypes.CLEAR_BANNERS);
 const showHelp = createAction(ActionTypes.SHOW_HELP);
+const toggleMcpPanel = createAction(ActionTypes.TOGGLE_MCP_PANEL);
 
 // If parameters are <= 3, do not use object.
 export const Actions = {
@@ -107,6 +110,8 @@ export const Actions = {
 	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean, version: string) =>
 		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty, version }),
 	showHelp: () => showHelp,
+	toggleMcpPanel: () => toggleMcpPanel,
+	setMcpServers: (servers: ReadonlyArray<McpServerSummary>) => createAction(ActionTypes.SET_MCP_SERVERS, { servers }),
 	setKanbanBoard: (board: ReadonlyArray<KanbanCard>) => createAction(ActionTypes.SET_KANBAN_BOARD, { board }),
 	moveKanbanCursor: (direction: "up" | "down" | "left" | "right") => createAction(ActionTypes.MOVE_KANBAN_CURSOR, { direction }),
 	moveKanbanEditField: (direction: "up" | "down") => createAction(ActionTypes.MOVE_KANBAN_EDIT_FIELD, { direction }),

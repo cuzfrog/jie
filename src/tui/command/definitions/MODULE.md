@@ -15,6 +15,8 @@ no-new-exports:
   - login-command.test.ts
   - logout-command.ts
   - logout-command.test.ts
+  - mcp-command.ts
+  - mcp-command.test.ts
   - model-command.ts
   - model-command.test.ts
   - model-filter-command.ts

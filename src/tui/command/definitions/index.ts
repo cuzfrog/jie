@@ -3,6 +3,7 @@ import { EffortCommand } from "./effort-command";
 import { ExitCommand } from "./exit-command";
 import { HelpCommand } from "./help-command";
 import { KanbanCommand } from "./kanban-command";
+import { McpCommand } from "./mcp-command";
 import { NewCommand } from "./new-command";
 import { SettingCommand } from "./setting-command";
 import { LoginCommand } from "./login-command";
@@ -19,6 +20,7 @@ import type { SlashCommandDefinition } from "../slash-command";
 
 export const SLASH_COMMANDS: ReadonlyArray<SlashCommandDefinition> = [
   new HelpCommand(),
+  new McpCommand(),
   new ExitCommand(),
   new LoginCommand(),
   new LogoutCommand(),

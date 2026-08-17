@@ -27,6 +27,7 @@ export class TuiViewImpl implements TuiView {
   private readonly teamPanel: TuiComponent;
   private readonly kanbanPanel: TuiComponent;
   private readonly helpPanel: TuiComponent;
+  private readonly mcpPanel: TuiComponent;
   private readonly questionPanel: TuiComponent & Focusable;
   private readonly kanbanList: TuiComponent;
   private readonly footer: TuiComponent;
@@ -46,6 +47,7 @@ export class TuiViewImpl implements TuiView {
     teamPanel: TuiComponent,
     kanbanPanel: TuiComponent,
     helpPanel: TuiComponent,
+    mcpPanel: TuiComponent,
     questionPanel: TuiComponent & Focusable,
     workingSpinner: TuiComponent,
   ) {
@@ -60,6 +62,7 @@ export class TuiViewImpl implements TuiView {
     this.teamPanel = teamPanel;
     this.kanbanPanel = kanbanPanel;
     this.helpPanel = helpPanel;
+    this.mcpPanel = mcpPanel;
     this.questionPanel = questionPanel;
     this.kanbanList = kanbanList;
     this.footer = footer;
@@ -75,6 +78,7 @@ export class TuiViewImpl implements TuiView {
     screen.addChild(this.teamPanel);
     screen.addChild(this.kanbanPanel);
     screen.addChild(this.helpPanel);
+    screen.addChild(this.mcpPanel);
     screen.addChild(this.questionPanel);
     screen.setFocus(this.editor);
     this.unsubscribeInput = screen.addInputListener((data) => this.handleInput(data));
@@ -89,6 +93,7 @@ export class TuiViewImpl implements TuiView {
     dirty = this.teamPanel.update() || dirty;
     dirty = this.kanbanPanel.update() || dirty;
     dirty = this.helpPanel.update() || dirty;
+    dirty = this.mcpPanel.update() || dirty;
     dirty = this.questionPanel.update() || dirty;
     dirty = this.kanbanList.update() || dirty;
     dirty = this.footer.update() || dirty;

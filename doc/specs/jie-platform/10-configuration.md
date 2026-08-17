@@ -322,7 +322,7 @@ A stale `defaultTeam` (set but not installed) is **not** a failure — it falls 
 
 `transport` is `stdio` (`command` + `args`) or `http` (`url`). Server names are restricted to `[A-Za-z0-9._-]{1,64}` so registry keys and `mcp:<server>:<glob>` tool specs stay unambiguous; `args` defaults to `[]` and `auth` to `null`.
 
-At startup the platform connects to every configured server and registers each catalog into the `ToolRegistry` as `mcp:<name>:<tool>`. The `Tool.name` the LLM sees is sanitized to `[a-zA-Z0-9_-]{1,64}` — provider tool-name APIs reject colons — while the human-facing `label` keeps the colon form.
+At startup the platform connects to every configured server and registers each catalog into the `ToolRegistry` as `mcp:<name>:<tool>`. The `Tool.name` the LLM sees is sanitized to `[a-zA-Z0-9_-]{1,64}` — provider tool-name APIs reject colons — while the human-facing `label` keeps the colon form. Boot connection outcomes and the advertised tool list for each server are retained and exposed through the `listMcpServers` command, which the TUI renders in the panel toggled by `/mcp`.
 
 Failure modes:
 - Malformed `mcp.json` (parse error, unknown transport, missing `command`/`url`, invalid server name): hard `INVALID_CONFIG` at startup, like `settings.json`.

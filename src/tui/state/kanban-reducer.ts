@@ -40,6 +40,7 @@ function reduceViewCycle(state: TuiState): TuiState {
       ...updateKanban(state, { view: "panel", cursor: clampCursor(TuiState.kanbanVisibleCards(state), state.kanban.cursor) }),
       teamPanelVisible: false,
       helpPanelVisible: false,
+      mcpPanelVisible: false,
       teamCursorAgentId: null,
     };
   }

@@ -1,5 +1,5 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { CommandResult, EffortLevel, KanbanCard, KanbanStatus, ModelInfo, QuestionItem, SkillInfo, ToolResultDetails } from "../../platform";
+import type { CommandResult, EffortLevel, KanbanCard, KanbanStatus, ModelInfo, McpServerSummary, QuestionItem, SkillInfo, ToolResultDetails } from "../../platform";
 
 export type AgentStatus = "idle" | "busy";
 export { type EffortLevel };
@@ -106,6 +106,8 @@ export interface TuiState {
   readonly toolCardsExpanded: boolean;
   readonly teamPanelVisible: boolean;
   readonly helpPanelVisible: boolean;
+  readonly mcpPanelVisible: boolean;
+  readonly mcpServers: ReadonlyArray<McpServerSummary>;
   readonly kanban: KanbanState;
   readonly question: QuestionState | null;
   readonly pendingQuit: boolean;
@@ -191,11 +193,12 @@ function kanbanVisibleCards(state: TuiState): ReadonlyArray<KanbanCard> {
 }
 
 function closeOtherPanels(state: TuiState): TuiState {
-  if (!state.teamPanelVisible && !state.helpPanelVisible && state.kanban.view === "hidden") return state;
+  if (!state.teamPanelVisible && !state.helpPanelVisible && !state.mcpPanelVisible && state.kanban.view === "hidden") return state;
   return {
     ...state,
     teamPanelVisible: false,
     helpPanelVisible: false,
+    mcpPanelVisible: false,
     teamCursorAgentId: null,
     kanban: { ...state.kanban, view: "hidden", expanded: false, edit: null, editField: "content" },
   };

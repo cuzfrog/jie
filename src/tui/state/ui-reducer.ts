@@ -67,6 +67,10 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       };
     case ActionTypes.SHOW_HELP:
       return reduceHelpPanelToggle(state);
+    case ActionTypes.TOGGLE_MCP_PANEL:
+      return reduceMcpPanelToggle(state);
+    case ActionTypes.SET_MCP_SERVERS:
+      return { ...state, mcpServers: action.payload.servers };
     case ActionTypes.SET_KANBAN_BOARD:
     case ActionTypes.MOVE_KANBAN_CURSOR:
     case ActionTypes.MOVE_KANBAN_EDIT_FIELD:
@@ -87,18 +91,26 @@ function reduceTeamPanelToggle(state: TuiState): TuiState {
   if (roster.length === 0) return state;
   if (state.teamPanelVisible) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
   const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[0]!.agentId;
-  const withoutOtherPanels: TuiState = state.kanban.view === "panel" || state.helpPanelVisible
-    ? { ...state, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false }, helpPanelVisible: false }
+  const withoutOtherPanels: TuiState = state.kanban.view === "panel" || state.helpPanelVisible || state.mcpPanelVisible
+    ? { ...state, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false }, helpPanelVisible: false, mcpPanelVisible: false }
     : state;
   return { ...withoutOtherPanels, teamPanelVisible: true, teamCursorAgentId: cursor };
 }
 
 function reduceHelpPanelToggle(state: TuiState): TuiState {
   if (state.helpPanelVisible) return { ...state, helpPanelVisible: false };
-  const withoutOtherPanels: TuiState = state.teamPanelVisible || state.kanban.view === "panel"
-    ? { ...state, teamPanelVisible: false, teamCursorAgentId: null, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false } }
+  const withoutOtherPanels: TuiState = state.teamPanelVisible || state.mcpPanelVisible || state.kanban.view === "panel"
+    ? { ...state, teamPanelVisible: false, teamCursorAgentId: null, mcpPanelVisible: false, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false } }
     : state;
   return { ...withoutOtherPanels, helpPanelVisible: true };
+}
+
+function reduceMcpPanelToggle(state: TuiState): TuiState {
+  if (state.mcpPanelVisible) return { ...state, mcpPanelVisible: false };
+  const withoutOtherPanels: TuiState = state.teamPanelVisible || state.helpPanelVisible || state.kanban.view === "panel"
+    ? { ...state, teamPanelVisible: false, teamCursorAgentId: null, helpPanelVisible: false, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false } }
+    : state;
+  return { ...withoutOtherPanels, mcpPanelVisible: true };
 }
 
 function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {

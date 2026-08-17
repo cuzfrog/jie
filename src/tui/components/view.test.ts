@@ -198,6 +198,7 @@ describe("TuiViewImpl", () => {
     const stateStore = makeStateStore(state);
     const editor = stubEditor(popupOpen);
     const kanbanPanel = stubComponent();
+    const mcpPanel = stubComponent();
     const questionPanel = stubQuestionPanel();
     const welcomeBanner = stubComponent();
     const kanbanList = stubComponent();
@@ -216,10 +217,11 @@ describe("TuiViewImpl", () => {
       stubComponent(),
       kanbanPanel,
       stubComponent(),
+      mcpPanel,
       questionPanel,
       workingSpinner,
     );
-    return { screen, stateStore, editor, kanbanPanel, questionPanel, welcomeBanner, kanbanList, queuedPrompts, workingSpinner, view };
+    return { screen, stateStore, editor, kanbanPanel, mcpPanel, questionPanel, welcomeBanner, kanbanList, queuedPrompts, workingSpinner, view };
   }
 
   test("constructor focuses the editor", () => {

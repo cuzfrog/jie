@@ -249,6 +249,28 @@ describe("CommandHandlerImpl — skill invocation", () => {
   });
 });
 
+describe("CommandHandlerImpl — /mcp", () => {
+  test("/mcp dispatches listMcpServers, stores the result, and toggles the panel", async () => {
+    const { platform, execute } = makePlatform();
+    const servers = [{ name: "github", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null }];
+    execute.mockImplementation(async (cmd) => (cmd.name === "listMcpServers" ? servers : null));
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/mcp");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledWith({ name: "listMcpServers" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setMcpServers(servers));
+    expect(dispatch).toHaveBeenCalledWith(Actions.toggleMcpPanel());
+  });
+
+  test("/mcp with an argument sets a usage error", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/mcp list");
+    expect(platform.execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/mcp")));
+  });
+});
+
 describe("CommandHandlerImpl — /login", () => {
   test("/login <provider> <apiKey> dispatches login command and replies", () => {
     const { platform, execute } = makePlatform();
