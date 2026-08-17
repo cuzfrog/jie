@@ -199,14 +199,16 @@ describe("TuiViewImpl", () => {
     const editor = stubEditor(popupOpen);
     const kanbanPanel = stubComponent();
     const questionPanel = stubQuestionPanel();
+    const welcomeBanner = stubComponent();
+    const kanbanList = stubComponent();
     const view = new TuiViewImpl(
       screen as unknown as TUI,
       stateStore,
       stubChatSync(),
-      stubComponent(),
+      kanbanList,
       stubComponent(),
       editor as unknown as Editor & TuiComponent,
-      stubComponent(),
+      welcomeBanner,
       stubComponent(),
       stubComponent(),
       stubComponent(),
@@ -215,12 +217,22 @@ describe("TuiViewImpl", () => {
       questionPanel,
       stubComponent(),
     );
-    return { screen, stateStore, editor, kanbanPanel, questionPanel, view };
+    return { screen, stateStore, editor, kanbanPanel, questionPanel, welcomeBanner, kanbanList, view };
   }
 
   test("constructor focuses the editor", () => {
     const { screen } = bootView(makeTuiState());
     expect(screen.setFocus).toHaveBeenCalledTimes(1);
+  });
+
+  test("constructor adds welcome banner before the kanban list", () => {
+    const { screen, welcomeBanner, kanbanList } = bootView(makeTuiState());
+    const calls = screen.addChild.mock.calls.map(([component]) => component);
+    const welcomeIndex = calls.indexOf(welcomeBanner);
+    const kanbanIndex = calls.indexOf(kanbanList);
+    expect(welcomeIndex).toBeGreaterThan(-1);
+    expect(kanbanIndex).toBeGreaterThan(-1);
+    expect(welcomeIndex).toBeLessThan(kanbanIndex);
   });
 
   test("update focuses the kanban panel when it should receive keys", () => {

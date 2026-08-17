@@ -65,9 +65,9 @@ export class TuiViewImpl implements TuiView {
     this.footer = footer;
     this.focusedComponent = this.editor;
     screen.addChild(this.chatSync);
-    screen.addChild(this.kanbanList);
     screen.addChild(workingSpinner);
     screen.addChild(this.welcomeBanner);
+    screen.addChild(this.kanbanList);
     screen.addChild(this.statusLine);
     screen.addChild(this.queuedPrompts);
     screen.addChild(this.editor);
