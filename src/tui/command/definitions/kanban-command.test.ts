@@ -33,6 +33,16 @@ describe("KanbanCommand", () => {
     });
   });
 
+  test("resolve add with --team and --title sets both scope and title", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["add", "--team", "--title", "T", "desc"])).toEqual({
+      kind: "platform",
+      slashName: "kanban add",
+      command: { name: "kanbanAdd", teamId: "t1", title: "T", description: "desc", scope: "team" },
+    });
+  });
+
   test("resolve add with --team sets the team scope", () => {
     const { platform } = makePlatform();
     const context = { state: teamState(), platform };

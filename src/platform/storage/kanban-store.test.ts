@@ -195,6 +195,12 @@ describe("SqliteKanbanStore", () => {
     expect(cards[0]).toMatchObject({ content: "a", status: "completed", active_form: "Working" });
   });
 
+  test("replace with omitted scope creates session-scoped cards by default", () => {
+    const store = makeStore();
+    const cards = store.replace("t1", "s1", [{ content: "a", status: "pending" }]);
+    expect(cards[0]).toMatchObject({ content: "a", status: "pending", scope: "session" });
+  });
+
   test("the id counter is shared per team while default cards stay session-scoped", () => {
     const store = makeStore();
     store.add("t1", "s1", "a", undefined);
