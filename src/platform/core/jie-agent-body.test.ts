@@ -1609,7 +1609,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     body.stop();
   });
 
-  test("turn_start after a custom-source ingress carries a null prompt", async () => {
+  test("turn_start after a custom-source ingress carries the raw message as the prompt", async () => {
     const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.researched"] }) });
     await body.start();
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
@@ -1619,7 +1619,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
     expect(turnStart).toHaveLength(1);
-    expect(turnStart[0]!.payload).toBeNull();
+    expect(turnStart[0]!.payload).toBe("report");
     body.stop();
   });
 
@@ -1753,7 +1753,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     body.stop();
   });
 
-  test("a followUp-fed peer notification keeps a null turn.start payload", async () => {
+  test("a followUp-fed peer notification carries the raw message as the turn.start payload", async () => {
     const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.recorded"] }) });
     await body.start();
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
@@ -1770,7 +1770,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     const followUpMessage = h.followUp.mock.calls[0]![0] as AgentMessage;
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: followUpMessage });
-    expect(turnStart.map((env) => env.payload)).toEqual(["first", null]);
+    expect(turnStart.map((env) => env.payload)).toEqual(["first", "do X"]);
     body.stop();
   });
 
