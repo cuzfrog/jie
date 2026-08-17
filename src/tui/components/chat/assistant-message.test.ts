@@ -66,8 +66,16 @@ describe("AssistantMessage — text blocks", () => {
 });
 
 describe("AssistantMessage — thinking blocks", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: 0 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("collapsed by default: a streaming block folds into a live summary line", () => {
-    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering", startedAtMs: 0 }] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (0s)\x1b[39m"]);
   });
 
@@ -116,6 +124,14 @@ describe("AssistantMessage — tool cards", () => {
 });
 
 describe("AssistantMessage — work summary", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: 0 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("completed thinking blocks collapse into a single total line", () => {
     const message = new AssistantMessage(turn({
       entries: [
@@ -130,7 +146,7 @@ describe("AssistantMessage — work summary", () => {
     const message = new AssistantMessage(turn({
       entries: [
         { kind: "thinking", text: "a", durationMs: 1000 },
-        { kind: "thinking", text: "streaming" },
+        { kind: "thinking", text: "streaming", startedAtMs: 0 },
       ],
     }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
@@ -300,7 +316,7 @@ describe("AssistantMessage - live thinking counter", () => {
   });
 
   test("starts at zero and grows with elapsed time", () => {
-    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "pondering", startedAtMs: 0 }] }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (0s)\x1b[39m"]);
     vi.advanceTimersByTime(1500);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
@@ -310,7 +326,7 @@ describe("AssistantMessage - live thinking counter", () => {
     const message = new AssistantMessage(turn({
       entries: [
         { kind: "thinking", text: "a", durationMs: 1000 },
-        { kind: "thinking", text: "streaming" },
+        { kind: "thinking", text: "streaming", startedAtMs: 0 },
       ],
     }), stateStore);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
@@ -319,17 +335,60 @@ describe("AssistantMessage - live thinking counter", () => {
   });
 
   test("resets when a new in-progress block takes over", () => {
-    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "first" }] }), stateStore);
+    const message = new AssistantMessage(turn({ entries: [{ kind: "thinking", text: "first", startedAtMs: 0 }] }), stateStore);
     message.render(80);
     vi.advanceTimersByTime(2000);
     message.update(turn({
       entries: [
-        { kind: "thinking", text: "first", durationMs: 2000 },
-        { kind: "thinking", text: "second" },
+        { kind: "thinking", text: "first", durationMs: 2000, startedAtMs: 0 },
+        { kind: "thinking", text: "second", startedAtMs: 2000 },
       ],
     }));
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
     vi.advanceTimersByTime(500);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
+  });
+
+  test("live timer advances when a completed thinking block precedes text and the live block", () => {
+    const message = new AssistantMessage(turn({
+      entries: [
+        { kind: "thinking", text: "done", durationMs: 1000 },
+        { kind: "text", text: "here is some text" },
+        { kind: "thinking", text: "live", startedAtMs: 0 },
+      ],
+    }), stateStore);
+    const first = message.render(80);
+    expect(first.some((line) => line.includes("Thinking... (0s)"))).toBe(true);
+    vi.advanceTimersByTime(3000);
+    const second = message.render(80);
+    expect(second.some((line) => line.includes("Thinking... (3s)"))).toBe(true);
+  });
+
+  test("live timer advances when an aggregated tool result precedes the live block", () => {
+    const message = new AssistantMessage(turn({
+      entries: [
+        { kind: "thinking", text: "done", durationMs: 500 },
+        card({ kind: "toolCall" }),
+        card({ output: "ok", durationMs: 10 }),
+        { kind: "thinking", text: "live", startedAtMs: 0 },
+      ],
+    }), stateStore);
+    const first = message.render(80);
+    expect(first.some((line) => line.includes("Thinking... (0s), used bash 1 time"))).toBe(true);
+    vi.advanceTimersByTime(3000);
+    const second = message.render(80);
+    expect(second.some((line) => line.includes("Thinking... (3s), used bash 1 time"))).toBe(true);
+  });
+
+  test("repeated renders with no state change still advance the timer", () => {
+    const message = new AssistantMessage(turn({
+      entries: [
+        { kind: "thinking", text: "a", durationMs: 1000 },
+        { kind: "thinking", text: "streaming", startedAtMs: 0 },
+      ],
+    }), stateStore);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
+    vi.advanceTimersByTime(1000);
     expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
   });
 });

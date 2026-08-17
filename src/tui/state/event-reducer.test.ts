@@ -388,7 +388,7 @@ describe("reduceTurnStart", () => {
     expect(agent?.currentTurn?.seq).toBe(0);
     expect(state.nextEntrySeq).toBe(1);
     expect(agent?.currentTurn?.entries).toEqual([
-      { kind: "thinking", text: "ponder", durationMs: 300 },
+      expect.objectContaining({ kind: "thinking", text: "ponder", durationMs: 300 }),
       { kind: "toolResult", callId: "c1", name: "bash", input: "ls", inputTruncated: false, output: "out", outputTruncated: false, durationMs: 10, error: null, details: null },
     ]);
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 0, "thinking", "more"));
@@ -397,8 +397,8 @@ describe("reduceTurnStart", () => {
     expect(agent?.currentTurn?.entries.length).toBe(3);
     const thinkingEntries = agent?.currentTurn?.entries.filter((e) => e.kind === "thinking");
     expect(thinkingEntries).toEqual([
-      { kind: "thinking", text: "ponder", durationMs: 300 },
-      { kind: "thinking", text: "more", durationMs: 500 },
+      expect.objectContaining({ kind: "thinking", text: "ponder", durationMs: 300 }),
+      expect.objectContaining({ kind: "thinking", text: "more", durationMs: 500 }),
     ]);
   });
 
@@ -782,7 +782,7 @@ describe("reduceStreamChunk", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 3, "thinking", "I think"));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.entries.length).toBe(2);
-    expect(agent?.currentTurn?.entries[1]).toEqual({ kind: "thinking", text: "I think" });
+    expect(agent?.currentTurn?.entries[1]).toEqual(expect.objectContaining({ kind: "thinking", text: "I think" }));
   });
 
   test("opens a new block when stream_id changes", () => {
@@ -802,6 +802,72 @@ describe("reduceStreamChunk", () => {
     const state2 = reduce(state, Events.agentStreamChunk(foreign, 1, 1, "text", "x"));
     expect(state2).toBe(state);
   });
+
+  describe("thinking block startedAtMs", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ now: 1000 });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test("stamps the clock on the first thinking chunk of a stream", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "hmm"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([{ kind: "thinking", text: "hmm", startedAtMs: 1000 }]);
+    });
+
+    test("preserves the original stamp on subsequent thinking chunks", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "hmm"));
+      vi.advanceTimersByTime(500);
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "thinking", " more"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([{ kind: "thinking", text: "hmm more", startedAtMs: 1000 }]);
+    });
+
+    test("stamps a fresh thinking block when the block type changes within a stream", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "answer"));
+      vi.advanceTimersByTime(200);
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "thinking", "hmm"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([
+        { kind: "text", text: "answer" },
+        { kind: "thinking", text: "hmm", startedAtMs: 1200 },
+      ]);
+    });
+
+    test("stamps a fresh thinking block when the stream id changes", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "first"));
+      vi.advanceTimersByTime(300);
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 0, "thinking", "second"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([
+        { kind: "thinking", text: "first", startedAtMs: 1000 },
+        { kind: "thinking", text: "second", startedAtMs: 1300 },
+      ]);
+    });
+
+    test("text entries do not carry startedAtMs", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "hello"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([{ kind: "text", text: "hello" }]);
+    });
+
+    test("stream end leaves the startedAtMs stamp intact and only adds durationMs", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "hmm"));
+      vi.advanceTimersByTime(400);
+      state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, [100]));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([{ kind: "thinking", text: "hmm", durationMs: 100, startedAtMs: 1000 }]);
+    });
+  });
 });
 
 describe("reduceStreamEnd", () => {
@@ -811,7 +877,7 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 2, [350]));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
-      { kind: "thinking", text: "ponder", durationMs: 350 },
+      expect.objectContaining({ kind: "thinking", text: "ponder", durationMs: 350 }),
       { kind: "text", text: "answer" },
     ]);
   });
@@ -823,8 +889,8 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, [100, 250]));
     const blocks = state.agents.get("my-team:general-1")?.currentTurn?.entries;
-    expect(blocks?.[0]).toEqual({ kind: "thinking", text: "a", durationMs: 100 });
-    expect(blocks?.[2]).toEqual({ kind: "thinking", text: "b", durationMs: 250 });
+    expect(blocks?.[0]).toEqual(expect.objectContaining({ kind: "thinking", text: "a", durationMs: 100 }));
+    expect(blocks?.[2]).toEqual(expect.objectContaining({ kind: "thinking", text: "b", durationMs: 250 }));
   });
 
   test("extra durations beyond the thinking blocks are ignored", () => {
@@ -832,7 +898,7 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "a"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, [100, 250]));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
-      { kind: "thinking", text: "a", durationMs: 100 },
+      expect.objectContaining({ kind: "thinking", text: "a", durationMs: 100 }),
     ]);
   });
 
@@ -843,9 +909,9 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, [100]));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
-      { kind: "thinking", text: "a", durationMs: 100 },
+      expect.objectContaining({ kind: "thinking", text: "a", durationMs: 100 }),
       { kind: "text", text: "mid" },
-      { kind: "thinking", text: "b" },
+      expect.objectContaining({ kind: "thinking", text: "b" }),
     ]);
   });
 

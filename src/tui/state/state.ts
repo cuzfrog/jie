@@ -24,6 +24,7 @@ export interface MessageBlock {
   readonly kind: "text" | "thinking";
   readonly text: string;
   readonly durationMs?: number;
+  readonly startedAtMs?: number;
 }
 
 export interface MessageTurn {
