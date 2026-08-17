@@ -201,6 +201,8 @@ describe("TuiViewImpl", () => {
     const questionPanel = stubQuestionPanel();
     const welcomeBanner = stubComponent();
     const kanbanList = stubComponent();
+    const queuedPrompts = stubComponent();
+    const workingSpinner = stubComponent();
     const view = new TuiViewImpl(
       screen as unknown as TUI,
       stateStore,
@@ -210,14 +212,14 @@ describe("TuiViewImpl", () => {
       editor as unknown as Editor & TuiComponent,
       welcomeBanner,
       stubComponent(),
-      stubComponent(),
+      queuedPrompts,
       stubComponent(),
       kanbanPanel,
       stubComponent(),
       questionPanel,
-      stubComponent(),
+      workingSpinner,
     );
-    return { screen, stateStore, editor, kanbanPanel, questionPanel, welcomeBanner, kanbanList, view };
+    return { screen, stateStore, editor, kanbanPanel, questionPanel, welcomeBanner, kanbanList, queuedPrompts, workingSpinner, view };
   }
 
   test("constructor focuses the editor", () => {
@@ -233,6 +235,19 @@ describe("TuiViewImpl", () => {
     expect(welcomeIndex).toBeGreaterThan(-1);
     expect(kanbanIndex).toBeGreaterThan(-1);
     expect(welcomeIndex).toBeLessThan(kanbanIndex);
+  });
+
+  test("constructor adds the working spinner between queued prompts and the editor", () => {
+    const { screen, queuedPrompts, workingSpinner, editor } = bootView(makeTuiState());
+    const calls = screen.addChild.mock.calls.map(([component]) => component);
+    const queuedIndex = calls.indexOf(queuedPrompts);
+    const spinnerIndex = calls.indexOf(workingSpinner);
+    const editorIndex = calls.indexOf(editor);
+    expect(queuedIndex).toBeGreaterThan(-1);
+    expect(spinnerIndex).toBeGreaterThan(-1);
+    expect(editorIndex).toBeGreaterThan(-1);
+    expect(queuedIndex).toBeLessThan(spinnerIndex);
+    expect(spinnerIndex).toBeLessThan(editorIndex);
   });
 
   test("update focuses the kanban panel when it should receive keys", () => {
