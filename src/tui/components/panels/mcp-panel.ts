@@ -1,15 +1,17 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { McpServerStatus, McpServerSummary, McpToolSummary } from "../../../platform";
-import { type StateStore, type TuiState } from "../../state";
+import { Actions, type StateStore, type TuiState } from "../../state";
 import { type TuiComponent } from "../..";
 import { Panel } from "./panel";
 import { style } from "../themes";
 
-const HINT = "Type /mcp to close.";
+const HINT = "esc close · tab expand · ↑↓ move";
 const HEADING = "MCP Servers";
 const NO_SERVERS = "no mcp servers configured (define servers in .jie/mcp.json)";
 const TOOL_INDENT = "    ";
 const SERVER_INDENT = "  ";
+const CURSOR = "▸ ";
+const NO_CURSOR = "  ";
 
 const STATUS_COLORS: { readonly [K in McpServerStatus]: "muted" | "warning" | "error" } = {
   connected: "muted",
@@ -20,6 +22,8 @@ const STATUS_COLORS: { readonly [K in McpServerStatus]: "muted" | "warning" | "e
 export class McpPanel extends Panel implements TuiComponent {
   private mcpPanelVisible = false;
   private mcpServers: ReadonlyArray<McpServerSummary> = [];
+  private mcpCursorIndex: number | null = null;
+  private mcpExpanded: ReadonlySet<string> = new Set<string>();
 
   constructor(stateStore: StateStore) {
     super(stateStore);
@@ -27,10 +31,35 @@ export class McpPanel extends Panel implements TuiComponent {
 
   update(): boolean {
     const state = this.stateStore.getState();
-    if (state.mcpPanelVisible === this.mcpPanelVisible && state.mcpServers === this.mcpServers) return false;
+    if (
+      state.mcpPanelVisible === this.mcpPanelVisible &&
+      state.mcpServers === this.mcpServers &&
+      state.mcpCursorIndex === this.mcpCursorIndex &&
+      state.mcpExpanded === this.mcpExpanded
+    ) return false;
     this.mcpPanelVisible = state.mcpPanelVisible;
     this.mcpServers = state.mcpServers;
+    this.mcpCursorIndex = state.mcpCursorIndex;
+    this.mcpExpanded = state.mcpExpanded;
     return true;
+  }
+
+  handleInput(data: string): void {
+    if (matchesKey(data, "esc")) {
+      this.stateStore.dispatch(Actions.toggleMcpPanel());
+      return;
+    }
+    if (matchesKey(data, "up")) {
+      this.stateStore.dispatch(Actions.moveMcpCursor(-1));
+      return;
+    }
+    if (matchesKey(data, "down")) {
+      this.stateStore.dispatch(Actions.moveMcpCursor(1));
+      return;
+    }
+    if (matchesKey(data, "tab")) {
+      this.stateStore.dispatch(Actions.toggleMcpExpand());
+    }
   }
 
   protected override isVisible(state: TuiState): boolean {
@@ -38,7 +67,7 @@ export class McpPanel extends Panel implements TuiComponent {
   }
 
   protected override body(state: TuiState, inner: number): string[] {
-    return mcpPanelLines(inner, state.mcpServers);
+    return mcpPanelLines(inner, state.mcpServers, state.mcpCursorIndex, state.mcpExpanded);
   }
 
   protected override topBorder(_state: TuiState, _width: number): string | null {
@@ -50,21 +79,26 @@ export class McpPanel extends Panel implements TuiComponent {
   }
 }
 
-function mcpPanelLines(width: number, servers: ReadonlyArray<McpServerSummary>): string[] {
+function mcpPanelLines(width: number, servers: ReadonlyArray<McpServerSummary>, cursor: number | null, expanded: ReadonlySet<string>): string[] {
   const w = Math.max(1, width);
   if (servers.length === 0) return [style("muted")(truncateToWidth(NO_SERVERS, w))];
   const lines: string[] = [style("text")(HEADING)];
-  for (const server of servers) {
-    lines.push(serverLine(w, server));
-    for (const tool of server.tools) {
-      lines.push(toolLine(w, tool));
+  for (let index = 0; index < servers.length; index += 1) {
+    const server = servers[index]!;
+    const selected = index === cursor;
+    lines.push(serverLine(w, server, selected));
+    if (selected || expanded.has(server.name)) {
+      for (const tool of server.tools) {
+        lines.push(toolLine(w, tool));
+      }
     }
   }
   return lines;
 }
 
-function serverLine(width: number, server: McpServerSummary): string {
-  const text = `${SERVER_INDENT}${style("accent")(server.name)} ${style(STATUS_COLORS[server.status])(serverStatusText(server))}`;
+function serverLine(width: number, server: McpServerSummary, selected: boolean): string {
+  const marker = selected ? style("accent")(CURSOR) : NO_CURSOR;
+  const text = `${SERVER_INDENT}${marker}${style("accent")(server.name)} ${style(STATUS_COLORS[server.status])(serverStatusText(server))}`;
   return truncateToWidth(text, width);
 }
 

@@ -63,6 +63,8 @@ export function makeTuiState(
     helpPanelVisible: false,
     mcpPanelVisible: false,
     mcpServers: [],
+    mcpCursorIndex: null,
+    mcpExpanded: new Set<string>(),
     kanban,
     question: null,
     pendingQuit: false,

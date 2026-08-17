@@ -108,6 +108,8 @@ export interface TuiState {
   readonly helpPanelVisible: boolean;
   readonly mcpPanelVisible: boolean;
   readonly mcpServers: ReadonlyArray<McpServerSummary>;
+  readonly mcpCursorIndex: number | null;
+  readonly mcpExpanded: ReadonlySet<string>;
   readonly kanban: KanbanState;
   readonly question: QuestionState | null;
   readonly pendingQuit: boolean;
@@ -199,6 +201,8 @@ function closeOtherPanels(state: TuiState): TuiState {
     teamPanelVisible: false,
     helpPanelVisible: false,
     mcpPanelVisible: false,
+    mcpCursorIndex: null,
+    mcpExpanded: new Set<string>(),
     teamCursorAgentId: null,
     kanban: { ...state.kanban, view: "hidden", expanded: false, edit: null, editField: "content" },
   };

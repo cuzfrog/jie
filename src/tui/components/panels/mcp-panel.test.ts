@@ -1,7 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { McpServerSummary } from "../../../platform";
 import { makeTuiState } from "../../test";
-import { type StateStore } from "../../state";
+import { Actions, type StateStore } from "../../state";
 import { McpPanel, _mcpPanelLines } from "./mcp-panel";
 import { style } from "../themes";
 
@@ -14,6 +14,7 @@ function connected(name: string, tools: { name: string; description: string | nu
 describe("McpPanel", () => {
   beforeEach(() => {
     stateStore.getState.mockReturnValue(makeTuiState());
+    stateStore.dispatch.mockClear();
   });
 
   test("renders nothing while the panel is hidden", () => {
@@ -21,24 +22,25 @@ describe("McpPanel", () => {
   });
 
   test("renders a boxed panel when visible", () => {
-    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("github", [{ name: "create_issue", description: "create an issue" }])] }));
+    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("github", [])] }));
     const lines = new McpPanel(stateStore).render(80);
     expect(lines[0]).toBe(style("borderMuted")(`┌${"─".repeat(78)}┐`));
     const text = lines.map(stripAnsi).join("\n");
     expect(text).toContain("MCP Servers");
     expect(text).toContain("github");
-    expect(text).toContain("create_issue");
   });
 
   test("renders the close hint below the box", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [] }));
     const lines = new McpPanel(stateStore).render(80);
-    expect(lines[lines.length - 1]).toBe(style("dim")("Type /mcp to close."));
+    expect(lines[lines.length - 1]).toBe(style("dim")("esc close · tab expand · ↑↓ move"));
   });
 
   test("every rendered line fits the given width", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       mcpPanelVisible: true,
+      mcpCursorIndex: 0,
+      mcpExpanded: new Set(["github"]),
       mcpServers: [connected("github", [
         { name: "create_issue", description: "create an issue in a repository" },
         { name: "get_file", description: "get a file's contents" },
@@ -53,56 +55,112 @@ describe("McpPanel", () => {
   });
 });
 
+describe("McpPanel.handleInput", () => {
+  beforeEach(() => {
+    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", []), connected("b", [])] }));
+    stateStore.dispatch.mockClear();
+  });
+
+  test("esc toggles the panel", () => {
+    const panel = new McpPanel(stateStore);
+    panel.handleInput("\x1b");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.toggleMcpPanel());
+  });
+
+  test("down moves the cursor forward", () => {
+    const panel = new McpPanel(stateStore);
+    panel.handleInput("\x1b[B");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.moveMcpCursor(1));
+  });
+
+  test("up moves the cursor backward", () => {
+    const panel = new McpPanel(stateStore);
+    panel.handleInput("\x1b[A");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.moveMcpCursor(-1));
+  });
+
+  test("tab toggles expand for the pointed server", () => {
+    const panel = new McpPanel(stateStore);
+    panel.handleInput("\t");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.toggleMcpExpand());
+  });
+});
+
 describe("McpPanel.update", () => {
-  test("reports dirty when the panel becomes visible", () => {
-    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: false }));
+  test("reports dirty when the cursor moves", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])], mcpCursorIndex: 0 }));
     const panel = new McpPanel(stateStore);
     panel.update();
-    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true }));
+    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])], mcpCursorIndex: 1 }));
     expect(panel.update()).toBe(true);
   });
 
-  test("reports dirty when the server list changes", () => {
-    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [] }));
+  test("reports dirty when the expanded set changes", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])], mcpCursorIndex: 0, mcpExpanded: new Set<string>() }));
     const panel = new McpPanel(stateStore);
     panel.update();
-    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("x", [])] }));
+    stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])], mcpCursorIndex: 0, mcpExpanded: new Set(["a"]) }));
     expect(panel.update()).toBe(true);
   });
 });
 
 describe("_mcpPanelLines", () => {
   test("shows an empty-config message when no servers are configured", () => {
-    const text = _mcpPanelLines(80, []).map(stripAnsi).join("\n");
+    const text = _mcpPanelLines(80, [], null, new Set<string>()).map(stripAnsi).join("\n");
     expect(text).toContain("no mcp servers configured");
   });
 
-  test("shows connected server with tool count and tools", () => {
-    const lines = _mcpPanelLines(80, [connected("github", [{ name: "create_issue", description: "create an issue" }])]);
+  test("shows only the server list when nothing is expanded", () => {
+    const lines = _mcpPanelLines(80, [connected("github", [{ name: "create_issue", description: "x" }])], null, new Set<string>());
     const text = lines.map(stripAnsi).join("\n");
     expect(text).toContain("github");
-    expect(text).toContain("(stdio, connected, 1 tool)");
+    expect(text).not.toContain("create_issue");
+  });
+
+  test("shows tools for the selected server without adding it to the expanded set", () => {
+    const lines = _mcpPanelLines(80, [connected("github", [{ name: "create_issue", description: "create an issue" }])], 0, new Set<string>());
+    const text = lines.map(stripAnsi).join("\n");
     expect(text).toContain("create_issue");
     expect(text).toContain("create an issue");
+  });
+
+  test("shows tools for an expanded non-selected server", () => {
+    const servers = [connected("github", [{ name: "a", description: null }]), connected("jira", [{ name: "b", description: null }])];
+    const lines = _mcpPanelLines(80, servers, 0, new Set(["jira"]));
+    const text = lines.map(stripAnsi).join("\n");
+    expect(text).toContain("a");
+    expect(text).toContain("b");
+  });
+
+  test("marks the cursor with a pointer", () => {
+    const lines = _mcpPanelLines(80, [connected("a", []), connected("b", [])], 1, new Set<string>());
+    const text = lines.map(stripAnsi).join("\n");
+    expect(text).toMatch(/▸ b/);
+  });
+
+  test("shows connected server with tool count", () => {
+    const lines = _mcpPanelLines(80, [connected("github", [{ name: "create_issue", description: "x" }])], 0, new Set<string>());
+    const text = lines.map(stripAnsi).join("\n");
+    expect(text).toContain("(stdio, connected, 1 tool)");
   });
 
   test("shows plural tools count", () => {
     const lines = _mcpPanelLines(80, [connected("github", [
       { name: "a", description: null },
       { name: "b", description: null },
-    ])]);
+    ])], 0, new Set<string>());
     expect(lines.map(stripAnsi).some((line) => line.includes("(stdio, connected, 2 tools)"))).toBe(true);
   });
 
   test("shows skipped server with reason", () => {
-    const lines = _mcpPanelLines(80, [{ name: "jira", transport: "http", status: "skipped", tools: [], detail: "http not supported" }]);
+    const lines = _mcpPanelLines(80, [{ name: "jira", transport: "http", status: "skipped", tools: [], detail: "http not supported" }], 0, new Set<string>());
     const text = lines.map(stripAnsi).join("\n");
     expect(text).toContain("jira");
     expect(text).toContain("(http, skipped: http not supported)");
   });
 
   test("shows failed server with message", () => {
-    const lines = _mcpPanelLines(80, [{ name: "db", transport: "stdio", status: "failed", tools: [], detail: "spawn ENOENT" }]);
+    const lines = _mcpPanelLines(80, [{ name: "db", transport: "stdio", status: "failed", tools: [], detail: "spawn ENOENT" }], 0, new Set<string>());
     const text = lines.map(stripAnsi).join("\n");
     expect(text).toContain("db");
     expect(text).toContain("(stdio, failed: spawn ENOENT)");
@@ -110,7 +168,7 @@ describe("_mcpPanelLines", () => {
 
   test("trims long tool descriptions to the panel width", () => {
     const longDescription = "x".repeat(200);
-    const lines = _mcpPanelLines(40, [connected("srv", [{ name: "tool", description: longDescription }])]);
+    const lines = _mcpPanelLines(40, [connected("srv", [{ name: "tool", description: longDescription }])], 0, new Set<string>());
     for (const line of lines) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(40);
     }

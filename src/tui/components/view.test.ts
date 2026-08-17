@@ -166,6 +166,14 @@ describe("resolveFocusTarget", () => {
     const question = makeActiveQuestion();
     expect(_resolveFocusTarget(makeTuiState({ kanbanView: "panel", question }))).toBe("question");
   });
+
+  test("mcp when the mcp panel is visible", () => {
+    expect(_resolveFocusTarget(makeTuiState({ mcpPanelVisible: true }))).toBe("mcp");
+  });
+
+  test("mcp takes priority over a visible kanban panel", () => {
+    expect(_resolveFocusTarget(makeTuiState({ mcpPanelVisible: true, kanbanView: "panel" }))).toBe("mcp");
+  });
 });
 
 describe("TuiViewImpl", () => {

@@ -41,6 +41,8 @@ function reduceViewCycle(state: TuiState): TuiState {
       teamPanelVisible: false,
       helpPanelVisible: false,
       mcpPanelVisible: false,
+      mcpCursorIndex: null,
+      mcpExpanded: new Set<string>(),
       teamCursorAgentId: null,
     };
   }

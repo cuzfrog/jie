@@ -135,7 +135,11 @@ export class TuiViewImpl implements TuiView {
 
   private reconcileFocus(state: TuiState): void {
     const targetName = resolveFocusTarget(state);
-    const target = targetName === "question" ? this.questionPanel : targetName === "kanban" ? this.kanbanPanel : this.editor;
+    const target =
+      targetName === "question" ? this.questionPanel :
+      targetName === "kanban" ? this.kanbanPanel :
+      targetName === "mcp" ? this.mcpPanel :
+      this.editor;
     if (target === this.focusedComponent) return;
     this.focusedComponent = target;
     this.screen.setFocus(target);
@@ -147,7 +151,7 @@ function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Ac
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
   if (data === CTRL_K && state.kanban.edit === null && state.kanban.board.length > 0) return Actions.cycleKanbanView();
-  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanban.view !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
+  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanban.view !== "panel" && !state.mcpPanelVisible && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }
 
@@ -162,8 +166,9 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
   return state.teamPanelVisible && state.teamCursorAgentId !== null && state.teamCursorAgentId !== state.focusedAgentId;
 }
 
-function resolveFocusTarget(state: TuiState): "question" | "kanban" | "editor" {
+function resolveFocusTarget(state: TuiState): "question" | "kanban" | "mcp" | "editor" {
   if (state.question !== null) return "question";
+  if (state.mcpPanelVisible) return "mcp";
   return state.kanban.view === "panel" && state.kanban.edit === null ? "kanban" : "editor";
 }
 
