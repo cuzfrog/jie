@@ -358,10 +358,10 @@ describe("AssistantMessage - live thinking counter", () => {
       ],
     }), stateStore);
     const first = message.render(80);
-    expect(first.some((line) => line.includes("Thinking... (0s)"))).toBe(true);
+    expect(first[first.length - 1]).toBe("\x1b[90mThinking... (0s)\x1b[39m");
     vi.advanceTimersByTime(3000);
     const second = message.render(80);
-    expect(second.some((line) => line.includes("Thinking... (3s)"))).toBe(true);
+    expect(second[second.length - 1]).toBe("\x1b[90mThinking... (3s)\x1b[39m");
   });
 
   test("live timer advances when an aggregated tool result precedes the live block", () => {
@@ -374,10 +374,10 @@ describe("AssistantMessage - live thinking counter", () => {
       ],
     }), stateStore);
     const first = message.render(80);
-    expect(first.some((line) => line.includes("Thinking... (0s), used bash 1 time"))).toBe(true);
+    expect(first[first.length - 1]).toBe("\x1b[90mThinking... (0s), used bash 1 time\x1b[39m");
     vi.advanceTimersByTime(3000);
     const second = message.render(80);
-    expect(second.some((line) => line.includes("Thinking... (3s), used bash 1 time"))).toBe(true);
+    expect(second[second.length - 1]).toBe("\x1b[90mThinking... (3s), used bash 1 time\x1b[39m");
   });
 
   test("repeated renders with no state change still advance the timer", () => {
