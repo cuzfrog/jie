@@ -22,7 +22,7 @@ describe("SqliteStorage", () => {
     expect(() => initializeSchema(storage)).not.toThrow();
   });
 
-  test("initializeSchema migrates legacy kanban_cards to kanban_tasks", () => {
+  test("initializeSchema does not migrate legacy kanban_cards", () => {
     const storage = new SqliteStorage(":memory:");
     storage.exec("DROP TABLE IF EXISTS kanban_tasks");
     storage.exec("DROP TABLE IF EXISTS kanban_counters");
@@ -49,8 +49,10 @@ describe("SqliteStorage", () => {
     initializeSchema(storage);
     const tasks = storage.query("SELECT name FROM sqlite_master WHERE type='table' AND name='kanban_tasks'");
     expect(tasks).toEqual([["kanban_tasks"]]);
-    const cards = storage.query("SELECT id, content FROM kanban_tasks");
+    const cards = storage.query("SELECT id, content FROM kanban_cards");
     expect(cards).toEqual([["#1", "legacy"]]);
+    const newTasks = storage.query("SELECT id, content FROM kanban_tasks");
+    expect(newTasks).toEqual([]);
   });
 
   test("re-opening the same path is idempotent and tables persist", () => {

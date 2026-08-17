@@ -55,24 +55,12 @@ export function initializeSchema(storage: Storage): void {
     ON memory_atoms (team_id, priority DESC, updated_at DESC)
   `);
 
-  // Remove any duplicate (team, type, content) rows that may exist from older
-  // schema versions before we add the unique index below. One memory per team,
-  // type, and content is the intended invariant.
-  storage.exec(`
-    DELETE FROM memory_atoms
-    WHERE rowid NOT IN (
-      SELECT MIN(rowid) FROM memory_atoms GROUP BY team_id, type, content
-    )
-  `);
-
   storage.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_atoms_dedup
     ON memory_atoms (team_id, type, content)
   `);
 
-  migrateMemoryFts(storage);
   createMemoryFtsTableIfNotExists(storage);
-  maybeRebuildMemoryFts(storage);
 
   storage.exec(`
     CREATE TABLE IF NOT EXISTS kanban_tasks (
@@ -113,19 +101,6 @@ export function initializeSchema(storage: Storage): void {
       PRIMARY KEY (team_id, session_id, agent_key)
     )
   `);
-
-  migrateKanban(storage);
-}
-
-function migrateMemoryFts(storage: Storage): void {
-  const rows = storage.query(
-    `SELECT sql FROM sqlite_master WHERE name = 'memory_atoms_fts' AND type = 'table'`,
-  );
-  if (rows.length === 0) return;
-  const sql = rows[0]![0];
-  if (typeof sql !== "string") return;
-  if (sql.includes("tokenize='trigram'") || sql.includes("tokenize = 'trigram'")) return;
-  storage.exec("DROP TABLE IF EXISTS memory_atoms_fts");
 }
 
 function createMemoryFtsTableIfNotExists(storage: Storage): void {
@@ -134,61 +109,4 @@ function createMemoryFtsTableIfNotExists(storage: Storage): void {
       content, atom_id UNINDEXED, tokenize = 'trigram'
     )
   `);
-}
-
-function maybeRebuildMemoryFts(storage: Storage): void {
-  const ftsCount = countRows(storage, "memory_atoms_fts");
-  const memoryCount = countRows(storage, "memory_atoms");
-  if (ftsCount === 0 && memoryCount > 0) {
-    storage.exec("INSERT INTO memory_atoms_fts (content, atom_id) SELECT content, id FROM memory_atoms");
-  }
-}
-
-function countRows(storage: Storage, tableName: string): number {
-  const rows = storage.query(`SELECT COUNT(*) FROM ${tableName}`);
-  if (rows.length === 0) return 0;
-  const value = rows[0]![0];
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "bigint") return Number(value);
-  return 0;
-}
-
-function migrateKanban(storage: Storage): void {
-  const tasksInfo = storage.query("PRAGMA table_info(kanban_tasks)");
-
-  const cardsInfo = storage.query("PRAGMA table_info(kanban_cards)");
-  if (cardsInfo.length > 0) {
-    if (!cardsInfo.some((row) => row[1] === "scope")) {
-      storage.exec("ALTER TABLE kanban_cards ADD COLUMN scope TEXT NOT NULL DEFAULT 'team'");
-    }
-    if (tasksInfo.length > 0) {
-      storage.exec(`
-        INSERT OR IGNORE INTO kanban_tasks
-          (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, updated_at)
-        SELECT
-          team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, updated_at
-        FROM kanban_cards
-      `);
-      storage.exec("DROP TABLE kanban_cards");
-    } else {
-      storage.exec("ALTER TABLE kanban_cards RENAME TO kanban_tasks");
-    }
-  }
-
-  const finalInfo = storage.query("PRAGMA table_info(kanban_tasks)");
-  if (finalInfo.length > 0 && !finalInfo.some((row) => row[1] === "todos")) {
-    storage.exec("ALTER TABLE kanban_tasks ADD COLUMN todos TEXT");
-  }
-  if (finalInfo.length > 0 && !finalInfo.some((row) => row[1] === "assignee")) {
-    storage.exec("ALTER TABLE kanban_tasks ADD COLUMN assignee TEXT");
-  }
-  if (finalInfo.some((row) => row[1] === "scope")) {
-    storage.exec("PRAGMA user_version = 1");
-    return;
-  }
-
-  if (finalInfo.length > 0) {
-    storage.exec("ALTER TABLE kanban_tasks ADD COLUMN scope TEXT NOT NULL DEFAULT 'team'");
-    storage.exec("PRAGMA user_version = 1");
-  }
 }
