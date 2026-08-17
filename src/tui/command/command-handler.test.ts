@@ -879,6 +879,24 @@ describe("CommandHandlerImpl — /kanban", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
   });
 
+  test("/kanban clear executes kanbanClear and publishes the board", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [] });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban clear");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanClear", teamId: "my-team" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban clear with extra arguments reports usage", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban clear junk");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban clear takes no arguments"));
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   test("/kanban remove without a card id reports usage", () => {
     const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));

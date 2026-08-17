@@ -127,7 +127,10 @@ export class CommandHandlerImpl implements CommandHandler {
         return;
       }
       case "kanbanRemove":
+      case "kanbanClear":
       case "kanbanSetStatus":
+      case "kanbanEdit":
+      case "kanbanToggleTodo":
         this.stateStore.dispatch(Actions.setKanbanBoard((result as { readonly board: ReadonlyArray<KanbanCard> }).board));
         return;
       case "kanbanHandoff": {
