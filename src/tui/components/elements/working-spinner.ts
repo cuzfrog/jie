@@ -12,14 +12,11 @@ type WorkingMode = ReturnType<typeof TuiState.workingKind> | "interrupted";
 export class WorkingSpinner implements TuiComponent {
   private readonly stateStore: StateStore;
   private mode: WorkingMode = "none";
-  private startedAt: number | null = null;
 
   constructor(stateStore: StateStore) { this.stateStore = stateStore; }
 
   update(): boolean {
     const mode = workingMode(this.stateStore.getState());
-    if (mode === "none") this.startedAt = null;
-    else if (this.startedAt === null) this.startedAt = Date.now();
     if (mode === this.mode) return false;
     this.mode = mode;
     return true;
@@ -28,10 +25,12 @@ export class WorkingSpinner implements TuiComponent {
   render(_width: number): string[] {
     const mode = workingMode(this.stateStore.getState());
     if (mode === "none") return [];
-    if (mode !== "interrupted" && this.startedAt === null) this.startedAt = Date.now();
     if (mode === "interrupted") return ["", style("muted")(INTERRUPTED_LABEL)];
     const label = mode === "team" ? TEAM_WORKING_LABEL : WORKING_LABEL;
-    const elapsed = this.startedAt !== null ? ` (${Math.floor(Math.max(0, Date.now() - this.startedAt) / 1000)}s)` : "";
+    const startedAt = workingStartedAt(this.stateStore.getState(), mode);
+    const elapsed = startedAt !== null
+      ? ` (${Math.floor(Math.max(0, Date.now() - startedAt) / 1000)}s)`
+      : "";
     const intervalMs = mode === "team" ? TEAM_SPINNER_INTERVAL_MS : SPINNER_INTERVAL_MS;
     const statusLine = `${style("accent")(spinnerFrame(Date.now(), intervalMs))} ${style("muted")(label + elapsed)}`;
     return ["", truncateToWidth(statusLine, Math.max(1, _width), "", false)];
@@ -44,6 +43,19 @@ function workingMode(state: TuiState): WorkingMode {
   const kind = TuiState.workingKind(state);
   if (kind === "none" && TuiState.isInterrupted(state)) return "interrupted";
   return kind;
+}
+
+function workingStartedAt(state: TuiState, mode: WorkingMode): number | null {
+  if (mode === "focused") {
+    const focused = TuiState.getFocusedAgent(state);
+    return focused?.workStartedAt ?? null;
+  }
+  let min: number | null = null;
+  for (const agent of state.agents.values()) {
+    if (agent.status !== "busy" || agent.workStartedAt === null) continue;
+    if (min === null || agent.workStartedAt < min) min = agent.workStartedAt;
+  }
+  return min;
 }
 
 function spinnerFrame(now: number, intervalMs: number): string {

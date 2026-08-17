@@ -25,6 +25,7 @@ export function makeAgentUiState(agentId: AgentId, overrides: Partial<AgentUiSta
     sessionOutputTokens: 0,
     inflightInputTokens: 0,
     inflightOutputTokens: 0,
+    workStartedAt: null,
     ...overrides,
   };
 }

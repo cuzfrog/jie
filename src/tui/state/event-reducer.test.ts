@@ -431,6 +431,31 @@ describe("reduceTurnStart", () => {
     expect(state2).toBe(state);
   });
 
+  test("sets workStartedAt from the event timestamp when an idle agent starts a new prompt", () => {
+    const event = Events.agentTurnStart(AGENT_SENDER, "hello");
+    const state = reduce(loadedState(), event);
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.workStartedAt).toBe(Date.parse(event.timestamp));
+    expect(agent?.status).toBe("busy");
+  });
+
+  test("keeps workStartedAt when a busy agent receives another prompt", () => {
+    const seeded = { ...loadedState(), agents: new Map(loadedState().agents) };
+    const agent = seeded.agents.get("my-team:general-1")!;
+    seeded.agents.set(agent.agentId, { ...agent, status: "busy", workStartedAt: 42 });
+    const event = Events.agentTurnStart(AGENT_SENDER, "next");
+    const state = reduce(seeded, event);
+    expect(state.agents.get("my-team:general-1")?.workStartedAt).toBe(42);
+  });
+
+  test("keeps workStartedAt for a prompt-less continuation turn", () => {
+    const seeded = { ...loadedState(), agents: new Map(loadedState().agents) };
+    const agent = seeded.agents.get("my-team:general-1")!;
+    seeded.agents.set(agent.agentId, { ...agent, status: "busy", workStartedAt: 42 });
+    const state = reduce(seeded, Events.agentTurnStart(AGENT_SENDER, null));
+    expect(state.agents.get("my-team:general-1")?.workStartedAt).toBe(42);
+  });
+
   test("clears interruptedAgentId when the interrupted agent starts its next turn", () => {
     const state = reduce(interruptedState(), Events.agentTurnStart(AGENT_SENDER, null));
     expect(state.interruptedAgentId).toBeNull();
@@ -454,6 +479,15 @@ describe("reduceIdle", () => {
     const agent = state2.agents.get("my-team:general-1");
     expect(agent?.status).toBe("idle");
     expect(agent?.lastStopReason).toBe("stop");
+  });
+
+  test("leaves workStartedAt unchanged on idle", () => {
+    const seeded = { ...loadedState(), agents: new Map(loadedState().agents) };
+    const agent = seeded.agents.get("my-team:general-1")!;
+    seeded.agents.set(agent.agentId, { ...agent, status: "busy", workStartedAt: 42 });
+    const state = reduce(seeded, Events.agentIdle(AGENT_SENDER, "stop"));
+    expect(state.agents.get("my-team:general-1")?.workStartedAt).toBe(42);
+    expect(state.agents.get("my-team:general-1")?.status).toBe("idle");
   });
 
   test("keeps a populated currentTurn for the next turn to rotate (tui-state.md)", () => {
@@ -740,6 +774,16 @@ describe("reduceCompacted", () => {
     state = reduce(state, Events.agentCompactionStart(AGENT_SENDER));
     state = reduce(state, Events.agentCompacted(AGENT_SENDER, "s", 1, 100, 0));
     expect(state.agents.get("my-team:general-1")?.compactionInProgress).toBe(false);
+  });
+
+  test("compaction does not reset workStartedAt", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "do work"));
+    const startedAt = state.agents.get("my-team:general-1")?.workStartedAt;
+    expect(startedAt).not.toBeNull();
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "answer"));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    state = reduce(state, Events.agentCompacted(AGENT_SENDER, "summary", 100, 50, 1));
+    expect(state.agents.get("my-team:general-1")?.workStartedAt).toBe(startedAt);
   });
 
   test("a later compaction advances the marker and keeps all earlier turns", () => {

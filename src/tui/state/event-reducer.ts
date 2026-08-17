@@ -88,12 +88,13 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const seq = state.nextEntrySeq;
   const interruptedAgentId = state.interruptedAgentId === agentId ? null : state.interruptedAgentId;
   const requireUserAttention = agentId === state.focusedAgentId ? false : state.requireUserAttention;
+  const workStartedAt = computeWorkStartedAt(agent, prompt, event.timestamp);
   const turn = agent.currentTurn;
   if (turn !== null && !turnIsPopulated(turn) && turn.userPrompt === "") {
     const currentTurn = { ...turn, userPrompt: prompt };
     const priorTokens = agent.lastReportedTotalTokens ?? estimateContextTokens(contextHistory(agent), null);
     const contextTokensUsed = priorTokens + estimateContextTokens([], currentTurn);
-    const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed };
+    const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed, workStartedAt };
     return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention });
   }
   const completed = turn === null ? contextHistory(agent) : [...contextHistory(agent), turn];
@@ -101,7 +102,7 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const currentTurn = freshTurn(prompt, seq);
   const priorTokens = agent.lastReportedTotalTokens ?? estimateContextTokens(completed, null);
   const contextTokensUsed = priorTokens + estimateContextTokens([], currentTurn);
-  const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed };
+  const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed, workStartedAt };
   return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, requireUserAttention, nextEntrySeq: seq + 1 });
 }
 
@@ -344,6 +345,12 @@ function composeAgentId(teamId: string, agentKey: string): AgentId {
 
 function isToolCard(entry: MessageBlock | MessageCard): entry is MessageCard {
   return entry.kind === "toolCall" || entry.kind === "toolResult";
+}
+
+function computeWorkStartedAt(agent: AgentUiState, prompt: string, timestamp: string): number | null {
+  if (prompt === "" || agent.status === "busy") return agent.workStartedAt;
+  const parsed = Date.parse(timestamp);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 function displayOutput(output: string | null): string | null {

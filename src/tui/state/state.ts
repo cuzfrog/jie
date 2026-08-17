@@ -59,6 +59,7 @@ export interface AgentUiState {
   readonly sessionOutputTokens: number;
   readonly inflightInputTokens: number;
   readonly inflightOutputTokens: number;
+  readonly workStartedAt: number | null;
 }
 
 export type KanbanEditField = "content" | "description" | { readonly todoIndex: number };

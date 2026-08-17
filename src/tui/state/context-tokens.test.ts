@@ -74,6 +74,7 @@ describe("contextHistory", () => {
       sessionOutputTokens: 0,
       inflightInputTokens: 0,
       inflightOutputTokens: 0,
+      workStartedAt: null,
     };
   }
 

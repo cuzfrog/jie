@@ -113,5 +113,6 @@ function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUi
     sessionOutputTokens: sessionUsage?.outputTokens ?? 0,
     inflightInputTokens: 0,
     inflightOutputTokens: 0,
+    workStartedAt: null,
   };
 }
