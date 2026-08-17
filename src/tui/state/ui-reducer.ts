@@ -1,6 +1,6 @@
 import { ActionTypes, type Action } from "./actions";
 import { teamLoadReducer } from "./team-load-reducer";
-import { TuiState, type AgentId, type AgentUiState } from "./state";
+import { TuiState } from "./state";
 import { kanbanReducer } from "./kanban-reducer";
 import { reduceQuestionAction } from "./question-reducer";
 

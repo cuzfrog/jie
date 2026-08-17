@@ -81,6 +81,7 @@ function makeTeamManager() {
   return vi.mocked<TeamManager>({
     load: vi.fn(),
     reload: vi.fn(),
+    newSession: vi.fn(),
     resumeSession: vi.fn(),
     listInstalled: vi.fn(),
     agentCount: vi.fn(),

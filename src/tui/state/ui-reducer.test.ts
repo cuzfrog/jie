@@ -1,10 +1,9 @@
 import { Events } from "../../platform";
 import { Actions } from "./actions";
-import type { AgentId, AgentUiState, TuiState } from "./state";
+import type { AgentId, TuiState } from "./state";
 import { StateStoreImpl } from "./state-store";
 import { reduce as reduceEvent } from "./event-reducer";
 import { reduceUiAction } from "./ui-reducer";
-import { makeAgentUiState, makeTuiState } from "../test";
 
 const INITIAL_TUI_STATE = new StateStoreImpl().getState();
 

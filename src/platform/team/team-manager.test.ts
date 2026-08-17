@@ -534,7 +534,7 @@ describe("TeamManagerImpl — full surface", () => {
       expect(second.currentSessionId).not.toBe(firstSessionId);
       expect(second.currentSessionId).toMatch(/^[0-9A-Z]{26}$/);
       expect(agentBodyFactory).toHaveBeenCalledTimes(2);
-      expect(agentBodyFactory.mock.calls[1]![0]!.sessionId).toBe(second.currentSessionId);
+      expect(agentBodyFactory.mock.calls[1]![0]!.sessionId).toBe(second.currentSessionId!);
       expect(teamLoadedEvents()).toHaveLength(1);
       expect(teamLoadedEvents()[0]!.payload.currentSessionId).toBe(second.currentSessionId);
     });

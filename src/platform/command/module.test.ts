@@ -42,6 +42,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
   reload: vi.fn(),
+  newSession: vi.fn(),
   listInstalled: vi.fn(),
   agentCount: vi.fn(),
   getTeamDescription: vi.fn(),
