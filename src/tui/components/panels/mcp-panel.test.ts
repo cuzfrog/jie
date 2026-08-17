@@ -117,11 +117,10 @@ describe("_mcpPanelLines", () => {
     expect(text).not.toContain("create_issue");
   });
 
-  test("shows tools for the selected server without adding it to the expanded set", () => {
+  test("does not show tools for the selected server unless it is expanded", () => {
     const lines = _mcpPanelLines(80, [connected("github", [{ name: "create_issue", description: "create an issue" }])], 0, new Set<string>());
     const text = lines.map(stripAnsi).join("\n");
-    expect(text).toContain("create_issue");
-    expect(text).toContain("create an issue");
+    expect(text).not.toContain("create_issue");
   });
 
   test("shows tools for an expanded non-selected server", () => {

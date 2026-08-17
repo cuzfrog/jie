@@ -266,6 +266,12 @@ describe("TuiViewImpl", () => {
     expect(screen.setFocus).toHaveBeenLastCalledWith(kanbanPanel);
   });
 
+  test("update focuses the mcp panel over the kanban panel when both are visible", () => {
+    const { screen, view, mcpPanel } = bootView(makeTuiState({ mcpPanelVisible: true, kanbanView: "panel" }));
+    view.update();
+    expect(screen.setFocus).toHaveBeenLastCalledWith(mcpPanel);
+  });
+
   test("update focuses the question panel when a question is active", () => {
     const { screen, view, questionPanel } = bootView(makeTuiState({ question: makeActiveQuestion() }));
     view.update();

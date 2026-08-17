@@ -133,10 +133,11 @@ function reduceMcpExpand(state: TuiState): TuiState {
   if (!state.mcpPanelVisible || state.mcpCursorIndex === null) return state;
   const server = state.mcpServers[state.mcpCursorIndex];
   if (server === undefined) return state;
-  const expanded = new Set(state.mcpExpanded);
-  if (expanded.has(server.name)) expanded.delete(server.name);
-  else expanded.add(server.name);
-  return { ...state, mcpExpanded: expanded };
+  const expanded = new Set<string>(state.mcpExpanded);
+  if (state.mcpExpanded.has(server.name)) {
+    return { ...state, mcpExpanded: new Set([...expanded].filter((name) => name !== server.name)) };
+  }
+  return { ...state, mcpExpanded: new Set([...expanded, server.name]) };
 }
 
 function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {

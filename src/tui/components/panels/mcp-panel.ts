@@ -87,7 +87,7 @@ function mcpPanelLines(width: number, servers: ReadonlyArray<McpServerSummary>, 
     const server = servers[index]!;
     const selected = index === cursor;
     lines.push(serverLine(w, server, selected));
-    if (selected || expanded.has(server.name)) {
+    if (expanded.has(server.name)) {
       for (const tool of server.tools) {
         lines.push(toolLine(w, tool));
       }
