@@ -40,7 +40,7 @@ describe("Scenario 6 — queued prompts from agent", () => {
     expect(state0.leaderAgentId).toBe("my-team:manager-1");
     expect(state0.agents.get("my-team:worker-1")?.role).toBe("worker");
 
-    const waitForWorkerQueue = waitForAgentQueueNonEmpty(harness, "my-team:worker-1", 3000);
+    const waitForWorkerQueue = waitForAgentQueueNonEmpty(harness, "my-team:worker-1");
     await submitAndWaitForAgentIdle(harness, "send 5 math tasks to the worker 1 per message", "my-team:manager-1");
     await waitForWorkerQueue;
 
@@ -60,7 +60,7 @@ describe("Scenario 6 — queued prompts from agent", () => {
     // turn_end, but they remain visible in the TUI queue snapshot until the
     // corresponding user turn starts. waitForAgentQueueNonEmpty above proves
     // the worker has pending prompts; idle here means the whole batch drained.
-    await waitForAgentIdle(harness, "my-team:worker-1", 3000);
+    await waitForAgentIdle(harness, "my-team:worker-1");
 
     // agent.idle does not rotate currentTurn into history (tui-state.md); the
     // completed fifth turn stays currentTurn until the next turn arrives.
