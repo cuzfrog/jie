@@ -5,7 +5,7 @@ import { logger } from "../utils";
 import { Actions, registerStateModule, type EffectHandler, type StateStore } from "./state";
 import { registerAutocompleteModule, type JieAutocompleteProvider } from "./autocomplete";
 import { registerChatModule, type ChatMessages, type ChatSync } from "./components/chat";
-import { registerFooterModule } from "./components/footer";
+import { registerFooterModule, type DynamicHint } from "./components/footer";
 import { registerEditorModule } from "./components/editor";
 import { registerElementsModule } from "./components/elements";
 import { registerPanelsModule } from "./components/panels";
@@ -33,6 +33,7 @@ export interface TuiCradle {
   readonly chatMessages: ChatMessages;
   readonly kanbanList: TuiComponent;
   readonly footer: TuiComponent;
+  readonly dynamicHint: DynamicHint;
   readonly welcomeBanner: TuiComponent;
   readonly statusLine: TuiComponent;
   readonly queuedPrompts: TuiComponent;
