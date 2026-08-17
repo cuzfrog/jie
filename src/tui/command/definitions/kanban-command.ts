@@ -2,7 +2,12 @@ import type { KanbanCard } from "../../../platform";
 import { PositionalSlashCommand } from "../positional-slash-command";
 import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
 
-const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|clear|remove|complete|review|handoff|toggle>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
+const META = {
+  name: "kanban",
+  description: "toggle the kanban panel",
+  argumentHint: "<add|clear|remove|complete|review|handoff|toggle>",
+  arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }],
+} as const;
 
 const SUBCOMMAND_ITEMS = [
   { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
@@ -86,7 +91,11 @@ export class KanbanCommand extends PositionalSlashCommand {
   private resolveKanbanAdd(teamId: string, rest: string): ResolvedCommand {
     const parsed = parseKanbanAddArgs(rest);
     if (parsed.kind === "error") return { kind: "error", text: parsed.text };
-    return { kind: "platform", slashName: "kanban add", command: { name: "kanbanAdd", teamId, title: parsed.title, description: parsed.description, scope: parsed.scope } };
+    return {
+      kind: "platform",
+      slashName: "kanban add",
+      command: { name: "kanbanAdd", teamId, title: parsed.title, description: parsed.description, scope: parsed.scope },
+    };
   }
 
   private resolveKanbanClear(teamId: string, rest: string): ResolvedCommand {
@@ -132,7 +141,9 @@ export class KanbanCommand extends PositionalSlashCommand {
   }
 }
 
-function parseKanbanAddArgs(args: string): { kind: "ok"; title?: string; description: string; scope?: "team" } | { kind: "error"; text: string } {
+function parseKanbanAddArgs(args: string):
+  | { kind: "ok"; title?: string; description: string; scope?: "team" }
+  | { kind: "error"; text: string } {
   const words = args.split(/\s+/).filter((s) => s !== "");
   const flags: { title?: string; team: boolean } = { team: false };
   let index = 0;
