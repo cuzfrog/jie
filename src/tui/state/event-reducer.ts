@@ -205,7 +205,7 @@ function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
   const entries = [...agent.currentTurn.entries];
   const last = entries[entries.length - 1];
   if (agent.currentTurn.streamId !== stream_id) {
-    entries.push({ kind: block_type, text });
+    entries.push(newMessageBlock(block_type, text));
   } else if (
     last !== undefined &&
     (last.kind === "text" || last.kind === "thinking") &&
@@ -213,7 +213,7 @@ function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
   ) {
     entries[entries.length - 1] = { ...last, text: last.text + text };
   } else {
-    entries.push({ kind: block_type, text });
+    entries.push(newMessageBlock(block_type, text));
   }
   const nextTurn = { ...agent.currentTurn, entries, streamId: stream_id };
   const contextTokensUsed = estimateContextTokens(contextHistory(agent), nextTurn);
@@ -319,6 +319,11 @@ function withAgent(state: TuiState, agentId: AgentId, agent: AgentUiState, extra
   const agents = new Map(state.agents);
   agents.set(agentId, agent);
   return { ...state, ...extra, agents };
+}
+
+function newMessageBlock(kind: "text" | "thinking", text: string): MessageBlock {
+  if (kind === "thinking") return { kind: "thinking", text, startedAtMs: Date.now() };
+  return { kind: "text", text };
 }
 
 function freshTurn(userPrompt: string, seq: number): MessageTurn {
