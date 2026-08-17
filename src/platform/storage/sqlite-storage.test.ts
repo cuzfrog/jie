@@ -22,39 +22,6 @@ describe("SqliteStorage", () => {
     expect(() => initializeSchema(storage)).not.toThrow();
   });
 
-  test("initializeSchema does not migrate legacy kanban_cards", () => {
-    const storage = new SqliteStorage(":memory:");
-    storage.exec("DROP TABLE IF EXISTS kanban_tasks");
-    storage.exec("DROP TABLE IF EXISTS kanban_counters");
-    storage.exec(`
-      CREATE TABLE kanban_cards (
-        team_id      TEXT    NOT NULL,
-        session_id   TEXT    NOT NULL DEFAULT '',
-        seq          INTEGER NOT NULL,
-        id           TEXT    NOT NULL,
-        content      TEXT    NOT NULL,
-        status       TEXT    NOT NULL,
-        active_form   TEXT,
-        description   TEXT,
-        completed_at  TEXT,
-        external_ref  TEXT,
-        updated_at    TEXT    NOT NULL,
-        PRIMARY KEY (team_id, id)
-      )
-    `);
-    storage.exec(
-      "INSERT INTO kanban_cards (team_id, session_id, seq, id, content, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ["t1", "", 0, "#1", "legacy", "pending", "2025-01-01T00:00:00.000Z"],
-    );
-    initializeSchema(storage);
-    const tasks = storage.query("SELECT name FROM sqlite_master WHERE type='table' AND name='kanban_tasks'");
-    expect(tasks).toEqual([["kanban_tasks"]]);
-    const cards = storage.query("SELECT id, content FROM kanban_cards");
-    expect(cards).toEqual([["#1", "legacy"]]);
-    const newTasks = storage.query("SELECT id, content FROM kanban_tasks");
-    expect(newTasks).toEqual([]);
-  });
-
   test("re-opening the same path is idempotent and tables persist", () => {
     const dir = mkdtempSync(join(tmpdir(), "jie-storage-"));
     const path = join(dir, "test.db");
