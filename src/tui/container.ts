@@ -37,6 +37,7 @@ export interface TuiCradle {
   readonly welcomeBanner: TuiComponent;
   readonly statusLine: TuiComponent;
   readonly queuedPrompts: TuiComponent;
+  readonly workingSpinner: TuiComponent;
   readonly teamPanel: TuiComponent;
   readonly kanbanPanel: TuiComponent;
   readonly helpPanel: TuiComponent;
