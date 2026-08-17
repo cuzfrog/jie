@@ -1,7 +1,7 @@
 import { Markdown, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { MessageBlock, MessageCard, MessageTurn, StateStore } from "../../state";
 import { ASSISTANT_PREFIX, jieMarkdownTheme, style, THINKING_LABEL } from "../themes";
-import { formatDuration, formatDurationAsSeconds } from "./format-duration";
+import { formatDuration, formatDurationAsSeconds } from "../elements";
 import { ThinkingBlock } from "./thinking-block";
 import { ToolCard } from "./tool-card";
 

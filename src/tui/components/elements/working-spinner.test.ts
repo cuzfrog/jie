@@ -137,6 +137,18 @@ describe("WorkingSpinner.render", () => {
     expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (1s)\x1b[39m"]);
   });
 
+  test("formats elapsed time as minutes and seconds once it reaches 60s", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
+    }));
+    const spy = vi.spyOn(Date, "now").mockReturnValue(0);
+    const spinner = new WorkingSpinner(stateStore);
+    spinner.update();
+    spy.mockReturnValue(60000);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (1m 0s)\x1b[39m"]);
+  });
+
   test("renders the interrupted label", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ interruptedAgentId: AGENT_ID }));
     const spinner = new WorkingSpinner(stateStore);

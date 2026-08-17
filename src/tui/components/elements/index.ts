@@ -1,4 +1,5 @@
 export { Box } from "./box";
+export { formatDuration, formatDurationAsSeconds } from "./format-duration";
 export { singleLine } from "./single-line";
 export { type CompactingIndicator } from "./compacting-indicator";
 export { type KeyHints } from "./key-hints";

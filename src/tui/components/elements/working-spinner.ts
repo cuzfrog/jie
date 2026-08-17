@@ -2,6 +2,7 @@ import { truncateToWidth } from "@earendil-works/pi-tui";
 import { TuiState, type StateStore } from "../../state";
 import { type TuiComponent } from "../..";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "../themes";
+import { formatDurationAsSeconds } from "./format-duration";
 
 const TEAM_WORKING_LABEL = "Team working…";
 const TEAM_SPINNER_INTERVAL_MS = 1000;
@@ -29,7 +30,7 @@ export class WorkingSpinner implements TuiComponent {
     const label = mode === "team" ? TEAM_WORKING_LABEL : WORKING_LABEL;
     const startedAt = workingStartedAt(this.stateStore.getState(), mode);
     const elapsed = startedAt !== null
-      ? ` (${Math.floor(Math.max(0, Date.now() - startedAt) / 1000)}s)`
+      ? ` (${formatDurationAsSeconds(Math.max(0, Date.now() - startedAt))})`
       : "";
     const intervalMs = mode === "team" ? TEAM_SPINNER_INTERVAL_MS : SPINNER_INTERVAL_MS;
     const statusLine = `${style("accent")(spinnerFrame(Date.now(), intervalMs))} ${style("muted")(label + elapsed)}`;
