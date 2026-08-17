@@ -14,7 +14,7 @@ describe("KanbanCommand", () => {
   test("meta", () => {
     expect(command.meta.name).toBe("kanban");
     expect(command.meta.description).toBe("toggle the kanban panel");
-    expect(command.meta.argumentHint).toBe("<add|remove|complete|review|handoff|toggle>");
+    expect(command.meta.argumentHint).toBe("<add|clear|remove|complete|review|handoff|toggle>");
   });
 
   test("resolve with no subcommand cycles the kanban view", () => {
@@ -167,6 +167,25 @@ describe("KanbanCommand", () => {
     });
   });
 
+  test("resolve clear builds the kanbanClear command", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["clear"])).toEqual({
+      kind: "platform",
+      slashName: "kanban clear",
+      command: { name: "kanbanClear", teamId: "t1" },
+    });
+  });
+
+  test("resolve clear with extra arguments reports usage", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["clear", "junk"])).toEqual({
+      kind: "error",
+      text: "/kanban clear takes no arguments",
+    });
+  });
+
   test("resolve add requires a loaded team", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
@@ -180,6 +199,7 @@ describe("KanbanCommand", () => {
     expect(result).toEqual({
       items: [
         { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
+        { value: "clear", label: "clear", description: "remove all session-scoped cards" },
         { value: "remove", label: "remove", description: "<cardId>" },
         { value: "complete", label: "complete", description: "<cardId>" },
         { value: "review", label: "review", description: "<cardId>" },
@@ -194,7 +214,10 @@ describe("KanbanCommand", () => {
     const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     const result = await command.complete("c", context);
     expect(result).toEqual({
-      items: [{ value: "complete", label: "complete", description: "<cardId>" }],
+      items: [
+        { value: "clear", label: "clear", description: "remove all session-scoped cards" },
+        { value: "complete", label: "complete", description: "<cardId>" },
+      ],
     });
   });
 

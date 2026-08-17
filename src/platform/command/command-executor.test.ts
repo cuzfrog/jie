@@ -81,6 +81,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
+  clearSession: vi.fn(),
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
@@ -749,6 +750,22 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.remove.mockReturnValue(false);
       const pending = executor.execute({ name: "kanbanRemove", teamId: "alpha", cardId: "#9" });
       await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+  });
+
+  describe("kanbanClear", () => {
+    test("clears the current session and returns the remaining board", async () => {
+      const board: KanbanCard[] = [{ id: "#1", content: "team task", status: "pending" }];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanClear", teamId: "alpha" });
+      expect(kanbanStore.clearSession).toHaveBeenCalledWith("alpha", "session-1");
+      expect(result).toEqual({ board });
+    });
+
+    test("throws NO_TEAM when the team has no loaded session", async () => {
+      teamManager.currentSessionId.mockReturnValueOnce(null);
+      const pending = executor.execute({ name: "kanbanClear", teamId: "ghost" });
+      await expect(pending).rejects.toMatchObject({ code: "NO_TEAM" });
     });
   });
 

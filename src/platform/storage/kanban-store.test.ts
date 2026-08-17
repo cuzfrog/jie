@@ -89,6 +89,25 @@ describe("SqliteKanbanStore", () => {
     expect(store.load("t1", "s1")[0]).toMatchObject({ content: "build the feature", description: "the full description", status: "pending" });
   });
 
+  test("clearSession removes only the current session's cards and leaves team and other sessions alone", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [
+      write("team-a", "pending", undefined, "team"),
+      write("s1-a", "pending", undefined, "session"),
+    ]);
+    store.add("t1", "s2", "s2-a", undefined, "session");
+    store.clearSession("t1", "s1");
+    expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
+    expect(ids(store.load("t1", "s2"))).toEqual(["#1", "#3"]);
+  });
+
+  test("clearSession on an empty session is a no-op", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("team-a", "pending", undefined, "team")]);
+    store.clearSession("t1", "s1");
+    expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
+  });
+
   test("add returns null when the content already exists and leaves the board unchanged", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first")]);

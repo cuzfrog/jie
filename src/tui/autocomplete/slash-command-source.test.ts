@@ -570,9 +570,9 @@ describe("SlashCommandSource — /kanban arguments", () => {
     const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanb"], 0, 5, { signal: signal() });
     expect(suggestions!.prefix).toBe("/kanb");
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban remove", "kanban complete", "kanban review", "kanban handoff", "kanban toggle"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban clear", "kanban remove", "kanban complete", "kanban review", "kanban handoff", "kanban toggle"]);
     expect(suggestions!.items[0]!.description).toBe("[--team] [--title <title>] <description>");
-    expect(suggestions!.items[1]!.description).toBe("<cardId>");
+    expect(suggestions!.items[1]!.description).toBe("remove all session-scoped cards");
   });
 
   test("suggests subcommands after '/kanban ' with their argument hints", async () => {
@@ -580,6 +580,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
       .getSuggestions(["/kanban "], 0, 8, { signal: signal() });
     expect(suggestions!.items).toEqual([
       { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
+      { value: "clear", label: "clear", description: "remove all session-scoped cards" },
       { value: "remove", label: "remove", description: "<cardId>" },
       { value: "complete", label: "complete", description: "<cardId>" },
       { value: "review", label: "review", description: "<cardId>" },
@@ -591,7 +592,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
   test("filters subcommands by the typed prefix", async () => {
     const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban r"], 0, 9, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove", "review"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["clear", "remove", "review"]);
   });
 
   test("a fully typed add yields no suggestions so the user can type the description", async () => {

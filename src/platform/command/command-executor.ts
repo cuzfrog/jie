@@ -62,6 +62,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       compact: this.compact.bind(this),
       kanbanAdd: this.kanbanAdd.bind(this),
       kanbanRemove: this.kanbanRemove.bind(this),
+      kanbanClear: this.kanbanClear.bind(this),
       kanbanSetStatus: this.kanbanSetStatus.bind(this),
       kanbanEdit: this.kanbanEdit.bind(this),
       kanbanHandoff: this.kanbanHandoff.bind(this),
@@ -294,6 +295,12 @@ export class CommandExecutorImpl implements CommandExecutor {
     if (!this.kanbanStore.remove(command.teamId, sessionId, command.cardId)) {
       throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
     }
+    return { board: this.kanbanStore.load(command.teamId, sessionId) };
+  }
+
+  private kanbanClear(command: Command<"kanbanClear">): CommandResult<"kanbanClear"> {
+    const sessionId = this.sessionIdFor(command.teamId);
+    this.kanbanStore.clearSession(command.teamId, sessionId);
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
   }
 

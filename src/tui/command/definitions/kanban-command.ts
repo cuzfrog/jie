@@ -2,10 +2,11 @@ import type { KanbanCard } from "../../../platform";
 import { PositionalSlashCommand } from "../positional-slash-command";
 import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
 
-const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review|handoff|toggle>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
+const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|clear|remove|complete|review|handoff|toggle>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
 
 const SUBCOMMAND_ITEMS = [
   { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
+  { value: "clear", label: "clear", description: "remove all session-scoped cards" },
   { value: "remove", label: "remove", description: "<cardId>" },
   { value: "complete", label: "complete", description: "<cardId>" },
   { value: "review", label: "review", description: "<cardId>" },
@@ -27,6 +28,8 @@ export class KanbanCommand extends PositionalSlashCommand {
     switch (subcommand.toLowerCase()) {
       case "add":
         return this.resolveKanbanAdd(teamId, rest);
+      case "clear":
+        return this.resolveKanbanClear(teamId, rest);
       case "remove":
         return this.resolveKanbanRemove(teamId, rest);
       case "complete":
@@ -84,6 +87,11 @@ export class KanbanCommand extends PositionalSlashCommand {
     const parsed = parseKanbanAddArgs(rest);
     if (parsed.kind === "error") return { kind: "error", text: parsed.text };
     return { kind: "platform", slashName: "kanban add", command: { name: "kanbanAdd", teamId, title: parsed.title, description: parsed.description, scope: parsed.scope } };
+  }
+
+  private resolveKanbanClear(teamId: string, rest: string): ResolvedCommand {
+    if (rest.trim() !== "") return { kind: "error", text: "/kanban clear takes no arguments" };
+    return { kind: "platform", slashName: "kanban clear", command: { name: "kanbanClear", teamId } };
   }
 
   private resolveKanbanRemove(teamId: string, rest: string): ResolvedCommand {
