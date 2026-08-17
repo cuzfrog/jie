@@ -33,20 +33,29 @@ describe("KanbanCommand", () => {
     });
   });
 
-  test("resolve add with --ephemeral sets the session scope", () => {
+  test("resolve add with --team sets the team scope", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["add", "--team", "task"])).toEqual({
+      kind: "platform",
+      slashName: "kanban add",
+      command: { name: "kanbanAdd", teamId: "t1", description: "task", scope: "team" },
+    });
+  });
+
+  test("resolve add with --ephemeral reports an unknown flag", () => {
     const { platform } = makePlatform();
     const context = { state: teamState(), platform };
     expect(command.resolve(context, ["add", "--ephemeral", "task"])).toEqual({
-      kind: "platform",
-      slashName: "kanban add",
-      command: { name: "kanbanAdd", teamId: "t1", description: "task", scope: "session" },
+      kind: "error",
+      text: "/kanban add: unknown flag '--ephemeral'",
     });
   });
 
   test("resolve add without a description reports usage", () => {
     const { platform } = makePlatform();
     const context = { state: teamState(), platform };
-    expect(command.resolve(context, ["add"])).toEqual({ kind: "error", text: "/kanban add [--ephemeral] [--title <title>] <description>" });
+    expect(command.resolve(context, ["add"])).toEqual({ kind: "error", text: "/kanban add [--team] [--title <title>] <description>" });
   });
 
   test("resolve remove requires a card id", () => {
@@ -170,7 +179,7 @@ describe("KanbanCommand", () => {
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [
-        { value: "add", label: "add", description: "[--title <title>] <description>" },
+        { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
         { value: "remove", label: "remove", description: "<cardId>" },
         { value: "complete", label: "complete", description: "<cardId>" },
         { value: "review", label: "review", description: "<cardId>" },

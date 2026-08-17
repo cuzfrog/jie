@@ -5,7 +5,7 @@ import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashCo
 const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review|handoff|toggle>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
 
 const SUBCOMMAND_ITEMS = [
-  { value: "add", label: "add", description: "[--title <title>] <description>" },
+  { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
   { value: "remove", label: "remove", description: "<cardId>" },
   { value: "complete", label: "complete", description: "<cardId>" },
   { value: "review", label: "review", description: "<cardId>" },
@@ -124,24 +124,24 @@ export class KanbanCommand extends PositionalSlashCommand {
   }
 }
 
-function parseKanbanAddArgs(args: string): { kind: "ok"; title?: string; description: string; scope?: "session" } | { kind: "error"; text: string } {
+function parseKanbanAddArgs(args: string): { kind: "ok"; title?: string; description: string; scope?: "team" } | { kind: "error"; text: string } {
   const words = args.split(/\s+/).filter((s) => s !== "");
-  const flags: { title?: string; ephemeral: boolean } = { ephemeral: false };
+  const flags: { title?: string; team: boolean } = { team: false };
   let index = 0;
   while (index < words.length && words[index]!.startsWith("--")) {
     const flag = words[index]!;
     if (flag === "--title") {
-      if (words[index + 1] === undefined) return { kind: "error", text: "/kanban add [--title <title>] <description>" };
+      if (words[index + 1] === undefined) return { kind: "error", text: "/kanban add [--team] [--title <title>] <description>" };
       flags.title = words[index + 1]!;
       index += 2;
-    } else if (flag === "--ephemeral") {
-      flags.ephemeral = true;
+    } else if (flag === "--team") {
+      flags.team = true;
       index += 1;
     } else {
       return { kind: "error", text: `/kanban add: unknown flag '${flag}'` };
     }
   }
   const description = words.slice(index).join(" ");
-  if (description.trim() === "") return { kind: "error", text: "/kanban add [--ephemeral] [--title <title>] <description>" };
-  return { kind: "ok", title: flags.title, description, ...(flags.ephemeral ? { scope: "session" as const } : {}) };
+  if (description.trim() === "") return { kind: "error", text: "/kanban add [--team] [--title <title>] <description>" };
+  return { kind: "ok", title: flags.title, description, ...(flags.team ? { scope: "team" as const } : {}) };
 }

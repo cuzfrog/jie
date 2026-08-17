@@ -46,7 +46,7 @@ export class SqliteKanbanStore implements KanbanStore {
     return this.load(teamId, sessionId);
   }
 
-  add(teamId: string, sessionId: string, content: string, description: string | undefined, scope: "team" | "session" = "team"): KanbanCard | null {
+  add(teamId: string, sessionId: string, content: string, description: string | undefined, scope: "team" | "session" = "session"): KanbanCard | null {
     const existing = this.loadAll(teamId, sessionId);
     if (existing.some((card) => card.content === content)) return null;
     const card: KanbanCardDraft = {
@@ -188,7 +188,7 @@ function mergeIncoming(
     const prior = byContent.get(write.content);
     const todos = mergeTodos(prior?.todos, write.todos);
     if (prior === undefined) {
-      const scope = write.scope ?? "team";
+      const scope = write.scope ?? "session";
       const card: KanbanCardDraft = {
         content: write.content,
         status: write.status,

@@ -10,8 +10,18 @@ function makeStore(): SqliteKanbanStore {
   return new SqliteKanbanStore(new SqliteStorage(":memory:"));
 }
 
-function write(content: string, status: KanbanCardWrite["status"] = "pending", activeForm?: string): KanbanCardWrite {
-  return { content, status, ...(activeForm === undefined ? {} : { active_form: activeForm }) };
+function write(
+  content: string,
+  status: KanbanCardWrite["status"] = "pending",
+  activeForm?: string,
+  scope?: "team" | "session",
+): KanbanCardWrite {
+  return {
+    content,
+    status,
+    ...(activeForm === undefined ? {} : { active_form: activeForm }),
+    ...(scope === undefined ? {} : { scope }),
+  };
 }
 
 function ids(cards: ReadonlyArray<KanbanCard>): string[] {
@@ -55,12 +65,21 @@ describe("SqliteKanbanStore", () => {
 
   test("add with session scope creates an ephemeral card visible only in that session", () => {
     const store = makeStore();
-    store.replace("t1", "s1", [write("first")]);
+    store.replace("t1", "s1", [write("first", "pending", undefined, "team")]);
     const card = store.add("t1", "s2", "ephemeral", undefined, "session");
     expect(card?.scope).toBe("session");
     expect(store.load("t1", "s2")).toHaveLength(2);
     expect(store.load("t1", "s1")).toHaveLength(1);
     expect(store.load("t1", "s3")).toHaveLength(1);
+  });
+
+  test("add without scope creates a session-scoped card by default", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first", "pending", undefined, "team")]);
+    const card = store.add("t1", "s2", "ephemeral", undefined);
+    expect(card?.scope).toBe("session");
+    expect(store.load("t1", "s2")).toHaveLength(2);
+    expect(store.load("t1", "s1")).toHaveLength(1);
   });
 
   test("add stores the description when provided", () => {
@@ -157,12 +176,20 @@ describe("SqliteKanbanStore", () => {
     expect(cards[0]).toMatchObject({ content: "a", status: "completed", active_form: "Working" });
   });
 
-  test("the board and id counter are scoped per team, not per session", () => {
+  test("the id counter is shared per team while default cards stay session-scoped", () => {
     const store = makeStore();
-    store.replace("t1", "s1", [write("a")]);
-    store.replace("t1", "s2", [write("b")]);
-    expect(ids(store.load("t1", "s1"))).toEqual(["#2"]);
+    store.add("t1", "s1", "a", undefined);
+    store.add("t1", "s2", "b", undefined);
+    expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
     expect(ids(store.load("t1", "s2"))).toEqual(["#2"]);
+    expect(ids(store.load("t2", "s1"))).toEqual([]);
+  });
+
+  test("team-scoped cards are visible across sessions on the same team", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("a", "pending", undefined, "team"), write("b", "pending", undefined, "team")]);
+    expect(ids(store.load("t1", "s1"))).toEqual(["#1", "#2"]);
+    expect(ids(store.load("t1", "s2"))).toEqual(["#1", "#2"]);
     expect(ids(store.load("t2", "s1"))).toEqual([]);
   });
 

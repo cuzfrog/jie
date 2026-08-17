@@ -261,13 +261,13 @@ describe("CommandResolverImpl", () => {
     });
   });
 
-  test("/kanban add with --ephemeral sets the session scope", () => {
+  test("/kanban add with --team sets the team scope", () => {
     const resolver = makeResolver(makeFakePlatform());
-    const result = resolver.resolve(withTeam(), "kanban", ["add", "--ephemeral", "task"]);
+    const result = resolver.resolve(withTeam(), "kanban", ["add", "--team", "task"]);
     expect(result).toEqual({
       kind: "platform",
       slashName: "kanban add",
-      command: { name: "kanbanAdd", teamId: "t1", description: "task", scope: "session" },
+      command: { name: "kanbanAdd", teamId: "t1", description: "task", scope: "team" },
     });
   });
 

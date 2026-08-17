@@ -845,19 +845,19 @@ describe("CommandHandlerImpl — /kanban", () => {
     expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", title: "refactor", description: "write the report" });
   });
 
-  test("/kanban add --ephemeral <description> creates a session-scoped card", () => {
+  test("/kanban add --team <description> creates a team-scoped card", () => {
     const { platform, execute } = makePlatform();
     execute.mockResolvedValueOnce({ board: [], card: { id: "#1", content: "t", status: "pending" } });
     const { handler } = makeHandler(platform, stateWithTeam("my-team", true));
-    handler.handle("/kanban add --ephemeral write the report");
-    expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", description: "write the report", scope: "session" });
+    handler.handle("/kanban add --team write the report");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", description: "write the report", scope: "team" });
   });
 
   test("/kanban add with no description reports usage", () => {
     const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
     handler.handle("/kanban add");
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban add [--ephemeral] [--title <title>] <description>"));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban add [--team] [--title <title>] <description>"));
     expect(execute).not.toHaveBeenCalled();
   });
 

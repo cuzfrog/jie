@@ -281,7 +281,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       throw new JiePlatformError("KANBAN_TEXT_EMPTY");
     }
     const description = command.description === "" || command.description === content ? undefined : command.description;
-    const scope = command.scope ?? "team";
+    const scope = command.scope ?? "session";
     const card = this.kanbanStore.add(command.teamId, sessionId, content, description, scope);
     if (card === null) {
       throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: content });
