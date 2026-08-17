@@ -15,6 +15,7 @@ const JiePlatformErrorMessages = {
   NO_MATCH: "old_string was not found in the file",
   AMBIGUOUS_MATCH: "old_string matched more than one location in the file",
   OVERLAPPING_EDITS: "edits overlap each other in the file",
+  NO_CHANGES: "The operation produced no changes (no diff)",
   INVALID_PATTERN: "Invalid search pattern",
 
   KANBAN_WRITE_INVALID: "Kanban board violates the write_kanban contract",

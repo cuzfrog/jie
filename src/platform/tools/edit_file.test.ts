@@ -175,19 +175,34 @@ describe("edit_file", () => {
     expect(result.content).not.toContain("-beta");
   });
 
-  test("no-op edit (old_string === new_string) still writes the file and reports 1 replacement", async () => {
+  test("no-op edit (old_string === new_string) rejects no changes and leaves the file untouched", async () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\n");
     const tool = createEditTool({ workspaceRoot: workspace, fileMutationQueue });
-    const result = await tool.execute(
-      { path: "a.txt", edits: [{ old_string: "beta", new_string: "beta" }] },
-      makeEmptyContext(),
-    );
+    await expect(
+      tool.execute(
+        { path: "a.txt", edits: [{ old_string: "beta", new_string: "beta" }] },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "NO_CHANGES", detail: "a.txt" });
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("alpha\nbeta\n");
-    expect(result.details).toMatchObject({
-      kind: "diff",
-      replacementsCount: 1,
-      diff: "",
-    });
+  });
+
+  test("two edits that cancel out reject no changes and leave the file untouched", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\n");
+    const tool = createEditTool({ workspaceRoot: workspace, fileMutationQueue });
+    await expect(
+      tool.execute(
+        {
+          path: "a.txt",
+          edits: [
+            { old_string: "alpha", new_string: "alpha" },
+            { old_string: "beta", new_string: "beta" },
+          ],
+        },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "NO_CHANGES", detail: "a.txt" });
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("alpha\nbeta\n");
   });
 
   test("replace_all with empty new_string deletes every occurrence", async () => {

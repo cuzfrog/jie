@@ -75,6 +75,9 @@ async function applyWrite(input: WriteFileInput, realPath: string): Promise<Tool
   }
 
   const before = readBeforeContent(realPath, stat);
+  if (before !== null && before === input.content) {
+    throw new JiePlatformError("NO_CHANGES", { detail: input.path });
+  }
 
   try {
     mkdirSync(dirname(realPath), { recursive: true });
