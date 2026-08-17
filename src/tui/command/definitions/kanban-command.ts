@@ -1,11 +1,17 @@
 import type { KanbanCard } from "../../../platform";
 import { PositionalSlashCommand } from "../positional-slash-command";
-import { completeItems, hasPrefix, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
+import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
 
-const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review|handoff|toggle>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
+const META = {
+  name: "kanban",
+  description: "toggle the kanban panel",
+  argumentHint: "<add|clear|remove|complete|review|handoff|toggle>",
+  arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }],
+} as const;
 
 const SUBCOMMAND_ITEMS = [
-  { value: "add", label: "add", description: "[--title <title>] <description>" },
+  { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
+  { value: "clear", label: "clear", description: "remove all session-scoped cards" },
   { value: "remove", label: "remove", description: "<cardId>" },
   { value: "complete", label: "complete", description: "<cardId>" },
   { value: "review", label: "review", description: "<cardId>" },
@@ -27,6 +33,8 @@ export class KanbanCommand extends PositionalSlashCommand {
     switch (subcommand.toLowerCase()) {
       case "add":
         return this.resolveKanbanAdd(teamId, rest);
+      case "clear":
+        return this.resolveKanbanClear(teamId, rest);
       case "remove":
         return this.resolveKanbanRemove(teamId, rest);
       case "complete":
@@ -68,9 +76,9 @@ export class KanbanCommand extends PositionalSlashCommand {
     const targetStatus = subcommand === "complete" ? "completed" : subcommand === "review" ? "in_review" : null;
     const hasTodos = subcommand === "toggle" ? (card: KanbanCard) => card.todos !== undefined && card.todos.length > 0 : () => true;
     const cards = context.state.kanban.board.filter((card) =>
-      hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus) && hasTodos(card),
+      card.id.toLowerCase().includes(rest.toLowerCase()) && (targetStatus === null || card.status !== targetStatus) && hasTodos(card),
     );
-    const items: ReadonlyArray<SlashCompletionItem> = cards.slice(0, 20).map((card) => ({
+    const items: ReadonlyArray<SlashCompletionItem> = cards.map((card) => ({
       value: card.id,
       label: card.id,
       description: card.content,
@@ -83,7 +91,16 @@ export class KanbanCommand extends PositionalSlashCommand {
   private resolveKanbanAdd(teamId: string, rest: string): ResolvedCommand {
     const parsed = parseKanbanAddArgs(rest);
     if (parsed.kind === "error") return { kind: "error", text: parsed.text };
-    return { kind: "platform", slashName: "kanban add", command: { name: "kanbanAdd", teamId, title: parsed.title, description: parsed.description, scope: parsed.scope } };
+    return {
+      kind: "platform",
+      slashName: "kanban add",
+      command: { name: "kanbanAdd", teamId, title: parsed.title, description: parsed.description, scope: parsed.scope },
+    };
+  }
+
+  private resolveKanbanClear(teamId: string, rest: string): ResolvedCommand {
+    if (rest.trim() !== "") return { kind: "error", text: "/kanban clear takes no arguments" };
+    return { kind: "platform", slashName: "kanban clear", command: { name: "kanbanClear", teamId } };
   }
 
   private resolveKanbanRemove(teamId: string, rest: string): ResolvedCommand {
@@ -124,24 +141,26 @@ export class KanbanCommand extends PositionalSlashCommand {
   }
 }
 
-function parseKanbanAddArgs(args: string): { kind: "ok"; title?: string; description: string; scope?: "session" } | { kind: "error"; text: string } {
+function parseKanbanAddArgs(args: string):
+  | { kind: "ok"; title?: string; description: string; scope?: "team" }
+  | { kind: "error"; text: string } {
   const words = args.split(/\s+/).filter((s) => s !== "");
-  const flags: { title?: string; ephemeral: boolean } = { ephemeral: false };
+  const flags: { title?: string; team: boolean } = { team: false };
   let index = 0;
   while (index < words.length && words[index]!.startsWith("--")) {
     const flag = words[index]!;
     if (flag === "--title") {
-      if (words[index + 1] === undefined) return { kind: "error", text: "/kanban add [--title <title>] <description>" };
+      if (words[index + 1] === undefined) return { kind: "error", text: "/kanban add [--team] [--title <title>] <description>" };
       flags.title = words[index + 1]!;
       index += 2;
-    } else if (flag === "--ephemeral") {
-      flags.ephemeral = true;
+    } else if (flag === "--team") {
+      flags.team = true;
       index += 1;
     } else {
       return { kind: "error", text: `/kanban add: unknown flag '${flag}'` };
     }
   }
   const description = words.slice(index).join(" ");
-  if (description.trim() === "") return { kind: "error", text: "/kanban add [--ephemeral] [--title <title>] <description>" };
-  return { kind: "ok", title: flags.title, description, ...(flags.ephemeral ? { scope: "session" as const } : {}) };
+  if (description.trim() === "") return { kind: "error", text: "/kanban add [--team] [--title <title>] <description>" };
+  return { kind: "ok", title: flags.title, description, ...(flags.team ? { scope: "team" as const } : {}) };
 }

@@ -1,8 +1,8 @@
 import type { AgentMessage, AgentEvent as PiAgentEvent } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, StopReason } from "@earendil-works/pi-ai";
+import type { AssistantMessage, StopReason, Usage } from "@earendil-works/pi-ai";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
-import type { TranscriptStore } from "../storage";
+import type { SessionUsageStore, SessionUsageTotals, TranscriptStore } from "../storage";
 import { isDiffDetails } from "..";
 import type { UserIngressMessage } from "../types";
 import type { PromptQueue } from "./prompt-queue";
@@ -19,6 +19,7 @@ export interface AgentEventBridge {
 interface AgentEventBridgeDeps {
   readonly eventManager: EventManager;
   readonly transcriptStore: TranscriptStore;
+  readonly sessionUsageStore: SessionUsageStore;
   readonly hookRunner: HookRunner;
   readonly hookIdentity: HookIdentity;
   readonly sender: AgentSender;
@@ -29,6 +30,7 @@ interface AgentEventBridgeDeps {
 export class AgentEventBridgeImpl implements AgentEventBridge {
   private readonly eventManager: EventManager;
   private readonly transcriptStore: TranscriptStore;
+  private readonly sessionUsageStore: SessionUsageStore;
   private readonly hookRunner: HookRunner;
   private readonly hookIdentity: HookIdentity;
   private readonly sender: AgentSender;
@@ -37,16 +39,26 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
   private readonly stream: StreamPublisher;
   private turnStartPending = false;
   private lengthContinuations = 0;
+  private sessionInputTokens = 0;
+  private sessionOutputTokens = 0;
+  private partialUsage: SessionUsageTotals | null = null;
+  private lastPublishedPartial: SessionUsageTotals | null = null;
 
   constructor(deps: AgentEventBridgeDeps) {
     this.eventManager = deps.eventManager;
     this.transcriptStore = deps.transcriptStore;
+    this.sessionUsageStore = deps.sessionUsageStore;
     this.hookRunner = deps.hookRunner;
     this.hookIdentity = deps.hookIdentity;
     this.sender = deps.sender;
     this.promptQueue = deps.promptQueue;
     this.onRunEnd = deps.onRunEnd;
     this.stream = new StreamPublisherImpl(deps.eventManager, deps.sender);
+  }
+
+  seedSessionUsage(totals: SessionUsageTotals): void {
+    this.sessionInputTokens = totals.inputTokens;
+    this.sessionOutputTokens = totals.outputTokens;
   }
 
   handleEvent(event: PiAgentEvent): void {
@@ -62,6 +74,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       }
       case "agent_end": {
         const final = readFinalStopReason(event);
+        this.clearPartial();
         this.eventManager.publish(Events.agentIdle(this.sender, final.stopReason));
         if (final.stopReason === "error" && final.errorMessage !== null) {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
@@ -79,6 +92,11 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       }
       case "message_start":
         this.stream.beginStream();
+        if (event.message.role === "assistant") {
+          this.lastPublishedPartial = null;
+          this.partialUsage = event.message.usage !== undefined && this.hasUsageValues(event.message.usage) ? usageTotals(event.message.usage) : null;
+          this.maybePublishPartial();
+        }
         return;
       case "message_update": {
         const ame = event.assistantMessageEvent;
@@ -87,6 +105,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
         } else if (ame.type === "thinking_delta") {
           this.stream.append("thinking", ame.delta);
         }
+        this.updatePartialUsage(event.message);
         return;
       }
       case "message_end":
@@ -94,15 +113,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
         if (message.role === "assistant") {
           const { thinkingDurations } = this.stream.endStream();
           message = withThinkingDurations(message, thinkingDurations);
-          if (message.usage !== undefined && message.usage.totalTokens > 0) {
-            this.eventManager.publish(Events.agentUsage(this.sender, {
-              input: message.usage.input,
-              output: message.usage.output,
-              cacheRead: message.usage.cacheRead,
-              cacheWrite: message.usage.cacheWrite,
-              totalTokens: message.usage.totalTokens,
-            }));
-          }
+          this.finalizeUsage(message);
         }
         this.transcriptStore.persist(
           persistableMessage(message),
@@ -127,6 +138,74 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
     if (isUserIngressMessage(message)) this.lengthContinuations = 0;
     this.promptQueue.consumeChained(message);
     this.eventManager.publish(Events.agentTurnStart(this.sender, userDisplayText(message)));
+  }
+
+  private updatePartialUsage(message: AgentMessage): void {
+    if (message.role !== "assistant") return;
+    const usage = message.usage;
+    if (usage === undefined || !this.hasUsageValues(usage)) return;
+    this.partialUsage = usageTotals(usage);
+    this.maybePublishPartial();
+  }
+
+  private maybePublishPartial(): void {
+    if (this.partialUsage === null) return;
+    if (this.partialUsage.inputTokens === 0 && this.partialUsage.outputTokens === 0) return;
+    if (
+      this.lastPublishedPartial !== null &&
+      this.lastPublishedPartial.inputTokens === this.partialUsage.inputTokens &&
+      this.lastPublishedPartial.outputTokens === this.partialUsage.outputTokens
+    ) {
+      return;
+    }
+    this.lastPublishedPartial = this.partialUsage;
+    this.eventManager.publish(Events.agentUsage(this.sender, {
+      input: this.partialUsage.inputTokens,
+      output: this.partialUsage.outputTokens,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: this.partialUsage.inputTokens + this.partialUsage.outputTokens,
+      session_input_tokens: this.sessionInputTokens,
+      session_output_tokens: this.sessionOutputTokens,
+      partial: true,
+    }));
+  }
+
+  private finalizeUsage(message: AssistantMessage): void {
+    const tracked = this.partialUsage;
+    const usage = message.usage;
+    const effectiveUsage = usage !== undefined && this.hasUsageValues(usage) ? usage : trackedToUsage(tracked);
+    this.clearPartial();
+    if (effectiveUsage === null) return;
+    const inputDelta = effectiveUsage.input + effectiveUsage.cacheRead + effectiveUsage.cacheWrite;
+    const outputDelta = effectiveUsage.output;
+    this.sessionInputTokens += inputDelta;
+    this.sessionOutputTokens += outputDelta;
+    this.sessionUsageStore.accumulate(
+      this.hookIdentity.teamId,
+      this.hookIdentity.sessionId,
+      this.hookIdentity.agentKey,
+      { inputTokens: inputDelta, outputTokens: outputDelta },
+    );
+    this.eventManager.publish(Events.agentUsage(this.sender, {
+      input: effectiveUsage.input,
+      output: effectiveUsage.output,
+      cacheRead: effectiveUsage.cacheRead,
+      cacheWrite: effectiveUsage.cacheWrite,
+      totalTokens: effectiveUsage.totalTokens,
+      session_input_tokens: this.sessionInputTokens,
+      session_output_tokens: this.sessionOutputTokens,
+      partial: false,
+    }));
+  }
+
+  private clearPartial(): void {
+    this.partialUsage = null;
+    this.lastPublishedPartial = null;
+  }
+
+  private hasUsageValues(usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }): boolean {
+    return usage.input > 0 || usage.output > 0 || usage.cacheRead > 0 || usage.cacheWrite > 0 || usage.totalTokens > 0;
   }
 }
 
@@ -185,4 +264,25 @@ function persistableMessage(message: AgentMessage): AgentMessage {
   if (message.role !== "toolResult" || isDiffDetails(message.details)) return message;
   const { details: _stripped, ...persistable } = message;
   return persistable;
+}
+
+function usageTotals(usage: Usage): SessionUsageTotals {
+  return {
+    inputTokens: usage.input + usage.cacheRead + usage.cacheWrite,
+    outputTokens: usage.output,
+  };
+}
+
+function trackedToUsage(tracked: SessionUsageTotals | null): Usage | null {
+  if (tracked === null) return null;
+  if (tracked.inputTokens === 0 && tracked.outputTokens === 0) return null;
+  const totalTokens = tracked.inputTokens + tracked.outputTokens;
+  return {
+    input: tracked.inputTokens,
+    output: tracked.outputTokens,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
 }

@@ -29,14 +29,14 @@ describe("slash command catalog", () => {
   });
 
   test("commandMeta returns metadata for canonical names and aliases", () => {
-    expect(registry.commandMeta("new")?.name).toBe("clear");
-    expect(registry.commandMeta("clear")?.name).toBe("clear");
+    expect(registry.commandMeta("new")?.name).toBe("new");
+    expect(registry.commandMeta("clear")).toBeNull();
     expect(registry.commandMeta("nope")).toBeNull();
   });
 
   test("findCommand returns the command for canonical names and aliases", () => {
-    expect(registry.findCommand("new")?.meta.name).toBe("clear");
-    expect(registry.findCommand("clear")?.meta.name).toBe("clear");
+    expect(registry.findCommand("new")?.meta.name).toBe("new");
+    expect(registry.findCommand("clear")).toBeNull();
     expect(registry.findCommand("nope")).toBeNull();
   });
 });

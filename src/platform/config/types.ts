@@ -1,4 +1,4 @@
-import type { OAuthCredentials } from "@earendil-works/pi-ai";
+import type { Credential } from "@earendil-works/pi-ai";
 import type { EffortLevel, ModelAlias } from "../types";
 
 export interface Settings {
@@ -27,8 +27,6 @@ export interface Settings {
 
 export type RawSettings = Record<string, unknown>;
 
-export type AuthEntry =
-  | { type: "api_key"; key: string }
-  | ({ type: "oauth" } & OAuthCredentials);
+export type AuthEntry = Credential;
 
 export type AuthJson = Record<string, AuthEntry>;

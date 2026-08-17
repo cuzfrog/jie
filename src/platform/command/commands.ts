@@ -40,6 +40,7 @@ interface CommandTypeMap {
   team: CommandDef<{ teamId?: string }, TeamInfo>;
   reload: CommandDef<{}, ReadonlyArray<TeamInfo>>;
   resumeSession: CommandDef<{ teamId: string; sessionId: string }, TeamInfo>;
+  newSession: CommandDef<{ teamId: string }, TeamInfo>;
   renameSession: CommandDef<{ teamId: string; sessionName: string }, null>;
   getTeamInfo: CommandDef<{}, {
     defaultTeam: string | null;
@@ -53,6 +54,7 @@ interface CommandTypeMap {
   setNotificationSoundEnabled: CommandDef<{ enabled: boolean }, null>;
   kanbanAdd: CommandDef<{ teamId: string; title?: string; description: string; scope?: "team" | "session" }, KanbanBoardResult & { card: KanbanCard }>;
   kanbanRemove: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
+  kanbanClear: CommandDef<{ teamId: string }, KanbanBoardResult>;
   kanbanSetStatus: CommandDef<{ teamId: string; cardId: string; status: KanbanStatus }, KanbanBoardResult>;
   kanbanEdit: CommandDef<{ teamId: string; cardId: string; field: "content" | "description"; text: string }, KanbanBoardResult>;
   kanbanHandoff: CommandDef<{ teamId: string; cardId: string; targetTeamId: string }, KanbanBoardResult & { card: KanbanCard }>;

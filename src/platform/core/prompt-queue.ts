@@ -63,7 +63,12 @@ export class PromptQueueImpl implements PromptQueue {
   }
 
   ingestPeerNotification(topic: string, source: string, prompt: string): void {
-    const message: UserIngressMessage = { role: "user", content: `[${source} on '${topic}']: ${prompt}`, timestamp: Date.now() };
+    const message: UserIngressMessage = {
+      role: "user",
+      content: `[${source} on '${topic}']: ${prompt}`,
+      timestamp: Date.now(),
+      displayText: prompt,
+    };
     this.ingest(message, null);
   }
 

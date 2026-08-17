@@ -15,6 +15,10 @@ const authStore = vi.mocked<AuthStore>({
   setProvider: vi.fn(),
   removeProvider: vi.fn(),
   clear: vi.fn(),
+  read: vi.fn(),
+  list: vi.fn(),
+  modify: vi.fn(),
+  delete: vi.fn(),
 });
 
 const settingsStore = vi.mocked<SettingsStore>({
@@ -32,7 +36,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   listProviders: vi.fn(),
   resolve: vi.fn(),
   listModels: vi.fn(),
-  getApiKey: vi.fn(),
+  getAuth: vi.fn(() => Promise.resolve(undefined)),
   reload: vi.fn(),
 });
 
@@ -40,6 +44,7 @@ const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
   reload: vi.fn(),
   resumeSession: vi.fn(),
+  newSession: vi.fn(),
   renameSession: vi.fn(),
   listInstalled: vi.fn(),
   agentCount: vi.fn(),
@@ -76,6 +81,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
+  clearSession: vi.fn(),
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
@@ -169,6 +175,10 @@ describe("CommandExecutorImpl", () => {
   });
 
   describe("setDefaultModel", () => {
+    beforeEach(() => {
+      modelRegistry.resolve.mockImplementation((_, id) => (id === "no-such-model" ? undefined : fakeModel("anthropic", id, id)));
+    });
+
     test("accepts a custom provider registered in models.json", async () => {
       const result = await executor.execute({ name: "setDefaultModel", provider: "my-local", id: "qwen3.5-2b" });
       expect(result).toBeNull();
@@ -179,6 +189,14 @@ describe("CommandExecutorImpl", () => {
       const result = await executor.execute({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" });
       expect(result).toBeNull();
       expect(settingsStore.setDefaultProvider).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
+    });
+
+    test("throws MODEL_UNRESOLVED for a model id that does not resolve", async () => {
+      const pending = executor.execute({ name: "setDefaultModel", provider: "my-local", id: "no-such-model" });
+      await expect(pending).rejects.toThrow(JiePlatformError);
+      await expect(pending).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
+      expect(settingsStore.setDefaultProvider).not.toHaveBeenCalled();
+      expect(eventManager.publish).not.toHaveBeenCalled();
     });
 
     test("throws UNKNOWN_PROVIDER for a provider that is not in the registry", async () => {
@@ -468,7 +486,7 @@ describe("CommandExecutorImpl", () => {
         currentSessionId: null,
         kanbanCards: [],
         history: [],
-        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
       };
       teamManager.load.mockResolvedValue(identity);
       const result = await executor.execute({ name: "team", teamId: "alpha" });
@@ -497,6 +515,16 @@ describe("CommandExecutorImpl", () => {
       const result = await executor.execute({ name: "resumeSession", teamId: "alpha", sessionId: "s1" });
       expect(result).toBe(identity);
       expect(teamManager.resumeSession).toHaveBeenCalledWith("alpha", "s1");
+    });
+  });
+
+  describe("newSession", () => {
+    test("delegates to teamManager.newSession with the teamId", async () => {
+      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: "new-session", agents: [], history: [], kanbanCards: [] };
+      teamManager.newSession.mockResolvedValue(identity);
+      const result = await executor.execute({ name: "newSession", teamId: "alpha" });
+      expect(result).toBe(identity);
+      expect(teamManager.newSession).toHaveBeenCalledWith("alpha");
     });
   });
 
@@ -632,15 +660,21 @@ describe("CommandExecutorImpl", () => {
     test("short description becomes the card title without an LLM call", async () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "write tests", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: "write tests" });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "write tests", undefined, "team");
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "write tests", undefined, "session");
       expect(result).toEqual({ board: [], card: { id: "#1", content: "write tests", status: "pending" } });
       expect(llmService.complete).not.toHaveBeenCalled();
+    });
+
+    test("explicit scope team is passed through to the store", async () => {
+      kanbanStore.add.mockReturnValue({ id: "#1", content: "cross-session", status: "pending" });
+      await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: "cross-session", scope: "team" });
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "cross-session", undefined, "team");
     });
 
     test("explicit title is used verbatim and the description is kept", async () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "short title", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", title: "short title", description: "a very long description body" });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "short title", "a very long description body", "team");
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "short title", "a very long description body", "session");
       expect(result.card).toMatchObject({ id: "#1", content: "short title" });
       expect(llmService.complete).not.toHaveBeenCalled();
     });
@@ -652,7 +686,7 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "distilled title", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
       expect(llmService.complete).toHaveBeenCalledWith(expect.objectContaining({ maxTokens: 20, prompt: long }));
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "distilled title", long, "team");
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "distilled title", long, "session");
       expect(result.card.content).toBe("distilled title");
     });
 
@@ -662,7 +696,7 @@ describe("CommandExecutorImpl", () => {
       llmService.complete.mockRejectedValue(new Error("llm down"));
       kanbanStore.add.mockReturnValue({ id: "#1", content: long, status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", long, undefined, "team");
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", long, undefined, "session");
       expect(result.card.content).toBe(long);
     });
 
@@ -692,7 +726,7 @@ describe("CommandExecutorImpl", () => {
       llmService.complete.mockResolvedValue("- fix the bug\n  then verify");
       kanbanStore.add.mockReturnValue({ id: "#1", content: "fix the bug then verify", status: "pending" });
       await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "fix the bug then verify", long, "team");
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "fix the bug then verify", long, "session");
     });
 
     test("throws NO_TEAM when the team has no loaded session", async () => {
@@ -716,6 +750,22 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.remove.mockReturnValue(false);
       const pending = executor.execute({ name: "kanbanRemove", teamId: "alpha", cardId: "#9" });
       await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+  });
+
+  describe("kanbanClear", () => {
+    test("clears the current session and returns the remaining board", async () => {
+      const board: KanbanCard[] = [{ id: "#1", content: "team task", status: "pending" }];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanClear", teamId: "alpha" });
+      expect(kanbanStore.clearSession).toHaveBeenCalledWith("alpha", "session-1");
+      expect(result).toEqual({ board });
+    });
+
+    test("throws NO_TEAM when the team has no loaded session", async () => {
+      teamManager.currentSessionId.mockReturnValueOnce(null);
+      const pending = executor.execute({ name: "kanbanClear", teamId: "ghost" });
+      await expect(pending).rejects.toMatchObject({ code: "NO_TEAM" });
     });
   });
 
@@ -904,6 +954,7 @@ describe("CommandExecutorImpl", () => {
       teamManager.listSessions.mockReturnValue([]);
       modelRegistry.listModels.mockReturnValue([]);
       modelRegistry.listProviders.mockReturnValue([]);
+      modelRegistry.resolve.mockReturnValue(fakeModel("anthropic", "claude-sonnet-4-5", "Claude"));
       kanbanStore.add.mockReturnValue({ id: "#1", content: "task", status: "pending" });
       kanbanStore.remove.mockReturnValue(true);
       kanbanStore.setStatus.mockReturnValue(true);

@@ -36,7 +36,7 @@ describe("WorkingSpinner.update", () => {
   test("reports dirty when the focused agent becomes busy", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     expect(new WorkingSpinner(stateStore).update()).toBe(true);
   });
@@ -44,14 +44,14 @@ describe("WorkingSpinner.update", () => {
   test("reports dirty when the working kind changes to team", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     const spinner = new WorkingSpinner(stateStore);
     spinner.update();
 
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     expect(spinner.update()).toBe(true);
   });
@@ -59,7 +59,7 @@ describe("WorkingSpinner.update", () => {
   test("reports dirty when the spinner clears after working", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     const spinner = new WorkingSpinner(stateStore);
     spinner.update();
@@ -76,7 +76,7 @@ describe("WorkingSpinner.update", () => {
   test("reports clean when the working kind is unchanged", () => {
     const busy = makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     });
     stateStore.getState.mockReturnValue(busy);
     const spinner = new WorkingSpinner(stateStore);
@@ -94,7 +94,7 @@ describe("WorkingSpinner.render", () => {
   test("renders the focused spinner with a frame, label and elapsed time", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinner(stateStore);
@@ -105,7 +105,7 @@ describe("WorkingSpinner.render", () => {
   test("renders the team spinner with a slower frame interval and elapsed time", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinner(stateStore);
@@ -116,7 +116,7 @@ describe("WorkingSpinner.render", () => {
   test("advances the team spinner frame at the slower interval and counts whole seconds", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     const spy = vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinner(stateStore);
@@ -128,13 +128,25 @@ describe("WorkingSpinner.render", () => {
   test("shows the elapsed time in whole seconds", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     const spy = vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinner(stateStore);
     spinner.update();
     spy.mockReturnValue(1600);
     expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (1s)\x1b[39m"]);
+  });
+
+  test("formats elapsed time as minutes and seconds once it reaches 60s", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
+    }));
+    const spy = vi.spyOn(Date, "now").mockReturnValue(0);
+    const spinner = new WorkingSpinner(stateStore);
+    spinner.update();
+    spy.mockReturnValue(60000);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (1m 0s)\x1b[39m"]);
   });
 
   test("renders the interrupted label", () => {
@@ -147,16 +159,45 @@ describe("WorkingSpinner.render", () => {
   test("recomputes the mode on render without requiring a prior update", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
     expect(new WorkingSpinner(stateStore).render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mWorking… (0s)\x1b[39m"]);
   });
 
+  test("team mode picks the earliest workStartedAt among busy agents", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([
+        [AGENT_ID, makeAgentUiState(AGENT_ID, { status: "idle" })],
+        [ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy", workStartedAt: 100 })],
+      ]),
+    }));
+    const spy = vi.spyOn(Date, "now").mockReturnValue(0);
+    const spinner = new WorkingSpinner(stateStore);
+    spinner.update();
+    spy.mockReturnValue(1100);
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠙\x1b[39m \x1b[90mTeam working… (1s)\x1b[39m"]);
+  });
+
+  test("team mode renders without an elapsed segment when every busy agent has a null workStartedAt", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([
+        [AGENT_ID, makeAgentUiState(AGENT_ID, { status: "idle" })],
+        [ANOTHER_AGENT_ID, makeAgentUiState(ANOTHER_AGENT_ID, { status: "busy", workStartedAt: null })],
+      ]),
+    }));
+    vi.spyOn(Date, "now").mockReturnValue(0);
+    const spinner = new WorkingSpinner(stateStore);
+    spinner.update();
+    expect(spinner.render(80)).toEqual(["", "\x1b[36m⠋\x1b[39m \x1b[90mTeam working…\x1b[39m"]);
+  });
+
   test("never renders a line wider than the given width", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       focusedAgentId: AGENT_ID,
-      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy", workStartedAt: 0 })]]),
     }));
     vi.spyOn(Date, "now").mockReturnValue(0);
     const spinner = new WorkingSpinner(stateStore);

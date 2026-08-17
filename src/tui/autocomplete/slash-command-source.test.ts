@@ -76,7 +76,7 @@ describe("SlashCommandSource — slash commands", () => {
   test("bare '/' lists every command with its argument hint and description", async () => {
     const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(18);
+    expect(suggestions!.items).toHaveLength(17);
     const team = suggestions!.items.find((item) => item.value === "team");
     expect(team!.description).toBe("<teamId> — switch the active team");
     const help = suggestions!.items.find((item) => item.value === "help");
@@ -355,13 +355,13 @@ describe("SlashCommandSource — /model arguments", () => {
     expect(suggestions).toBeNull();
   });
 
-  test("caps the suggestion list at twenty entries", async () => {
+  test("returns all matching suggestions without a cap", async () => {
     const many = Array.from({ length: 25 }, (_, index) => ({
       provider: "anthropic", id: `model-${index}`, name: `Model ${index}`, available: true,
     }));
     const suggestions = await slashSource(modelPlatform(many), makeStateStore())
       .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(20);
+    expect(suggestions!.items).toHaveLength(25);
   });
 
   test("hides models whose provider is not available", async () => {
@@ -570,16 +570,17 @@ describe("SlashCommandSource — /kanban arguments", () => {
     const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanb"], 0, 5, { signal: signal() });
     expect(suggestions!.prefix).toBe("/kanb");
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban remove", "kanban complete", "kanban review", "kanban handoff", "kanban toggle"]);
-    expect(suggestions!.items[0]!.description).toBe("[--title <title>] <description>");
-    expect(suggestions!.items[1]!.description).toBe("<cardId>");
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban clear", "kanban remove", "kanban complete", "kanban review", "kanban handoff", "kanban toggle"]);
+    expect(suggestions!.items[0]!.description).toBe("[--team] [--title <title>] <description>");
+    expect(suggestions!.items[1]!.description).toBe("remove all session-scoped cards");
   });
 
   test("suggests subcommands after '/kanban ' with their argument hints", async () => {
     const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban "], 0, 8, { signal: signal() });
     expect(suggestions!.items).toEqual([
-      { value: "add", label: "add", description: "[--title <title>] <description>" },
+      { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
+      { value: "clear", label: "clear", description: "remove all session-scoped cards" },
       { value: "remove", label: "remove", description: "<cardId>" },
       { value: "complete", label: "complete", description: "<cardId>" },
       { value: "review", label: "review", description: "<cardId>" },
@@ -591,7 +592,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
   test("filters subcommands by the typed prefix", async () => {
     const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban r"], 0, 9, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove", "review"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["clear", "remove", "review"]);
   });
 
   test("a fully typed add yields no suggestions so the user can type the description", async () => {

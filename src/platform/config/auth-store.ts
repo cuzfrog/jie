@@ -1,9 +1,10 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import { isErrnoException } from "..";
-import type { AuthEntry, AuthJson } from "./types";
+import type { AuthJson } from "./types";
 
-export interface AuthStore {
+export interface AuthStore extends CredentialStore {
   load(): AuthJson;
   setProvider(provider: string, key: string): void;
   removeProvider(provider: string): void;
@@ -11,6 +12,8 @@ export interface AuthStore {
 }
 
 export class AuthStoreImpl implements AuthStore {
+  private writeChain: Promise<unknown> = Promise.resolve();
+
   constructor(private readonly homeJieDir: string) {}
 
   load(): AuthJson {
@@ -22,18 +25,53 @@ export class AuthStoreImpl implements AuthStore {
   }
 
   setProvider(provider: string, key: string): void {
-    const entry: AuthEntry = { type: "api_key", key };
-    saveAuthJson(this.homeJieDir, { ...this.load(), [provider]: entry });
+    saveAuthJson(this.homeJieDir, { ...this.load(), [provider]: { type: "api_key", key } });
   }
 
   removeProvider(provider: string): void {
-    const next: AuthJson = { ...this.load() };
+    const next = { ...this.load() };
     delete next[provider];
     saveAuthJson(this.homeJieDir, next);
   }
 
   clear(): void {
     saveAuthJson(this.homeJieDir, {});
+  }
+
+  async read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
+    options?.signal?.throwIfAborted();
+    return this.load()[providerId];
+  }
+
+  async list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+    options?.signal?.throwIfAborted();
+    return Object.entries(this.load()).map(([providerId, credential]) => ({ providerId, type: credential.type }));
+  }
+
+  modify(providerId: string, fn: (current: Credential | undefined) => Promise<Credential | undefined>, options?: AuthOperationOptions): Promise<Credential | undefined> {
+    const task = this.writeChain.then(async (): Promise<Credential | undefined> => {
+      options?.signal?.throwIfAborted();
+      const current = this.load()[providerId];
+      const next = await fn(current);
+      options?.signal?.throwIfAborted();
+      if (next === undefined) return current;
+      saveAuthJson(this.homeJieDir, { ...this.load(), [providerId]: next });
+      return next;
+    });
+    this.writeChain = task.catch(() => {});
+    return task;
+  }
+
+  delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
+    const task = this.writeChain.then((): void => {
+      options?.signal?.throwIfAborted();
+      const auth = this.load();
+      if (auth[providerId] === undefined) return;
+      delete auth[providerId];
+      saveAuthJson(this.homeJieDir, auth);
+    });
+    this.writeChain = task.catch(() => {});
+    return task;
   }
 }
 
@@ -46,8 +84,8 @@ function loadAuthJson(homeJieDir: string): AuthJson {
     if (isErrnoException(error) && error.code === "ENOENT") return {};
     throw error;
   }
-  const parsed: AuthJson = JSON.parse(text);
-  return parsed;
+  const parsed = JSON.parse(text);
+  return parsed as AuthJson;
 }
 
 function saveAuthJson(homeJieDir: string, auth: AuthJson): void {

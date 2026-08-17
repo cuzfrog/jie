@@ -1,7 +1,7 @@
 import { truncateToWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 import type { MessageBlock, StateStore } from "../../state";
 import { THINKING_LABEL, style } from "../themes";
-import { formatDuration } from "./format-duration";
+import { formatDuration } from "../elements";
 
 export class ThinkingBlock implements Component {
   private readonly stateStore: StateStore;

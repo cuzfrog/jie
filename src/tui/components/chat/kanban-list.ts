@@ -7,7 +7,7 @@ import { strikethrough, style, type ColorName } from "../themes";
 const MAX_VISIBLE_CARDS = 6;
 const MAX_TODOS_PER_CARD = 5;
 const MAX_VISIBLE_LINES = 10;
-const TODO_TITLE = "Todo:";
+const KANBAN_TITLE = "Kanban:";
 
 const CARD_STYLES: { readonly [K in KanbanStatus]: { readonly glyph: string; readonly glyphColor: ColorName; readonly textColor: ColorName } } = {
   pending: { glyph: "·", glyphColor: "muted", textColor: "text" },
@@ -51,7 +51,7 @@ export class KanbanList implements TuiComponent {
       lines.push(...tree);
       rendered += tree.length;
     }
-    const result = [style("accent")(TODO_TITLE), ...lines];
+    const result = [style("accent")(KANBAN_TITLE), ...lines];
     if (totalLines > rendered) result.push(truncateToWidth(`+${totalLines - rendered} more`, w));
     return result;
   }

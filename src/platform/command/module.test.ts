@@ -14,6 +14,10 @@ const authStore = vi.mocked<AuthStore>({
   setProvider: vi.fn(),
   removeProvider: vi.fn(),
   clear: vi.fn(),
+  read: vi.fn(),
+  list: vi.fn(),
+  modify: vi.fn(),
+  delete: vi.fn(),
 });
 
 const settingsStore = vi.mocked<SettingsStore>({
@@ -31,13 +35,14 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   listProviders: vi.fn(),
   resolve: vi.fn(),
   listModels: vi.fn(),
-  getApiKey: vi.fn(),
+  getAuth: vi.fn(() => Promise.resolve(undefined)),
   reload: vi.fn(),
 });
 
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
   reload: vi.fn(),
+  newSession: vi.fn(),
   listInstalled: vi.fn(),
   agentCount: vi.fn(),
   getTeamDescription: vi.fn(),
@@ -75,6 +80,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
+  clearSession: vi.fn(),
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),

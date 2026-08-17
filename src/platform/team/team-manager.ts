@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AgentBody, AgentBodyParams } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { KanbanStore, SessionSummary, TranscriptStore } from "../storage";
+import type { KanbanStore, SessionSummary, SessionUsageStore, TranscriptStore } from "../storage";
 import { type ModelRegistry, type Settings, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_SETUP_ASSISTANT_TEAM_ID } from "./types";
@@ -16,6 +16,7 @@ export interface TeamManager {
   load(teamId?: string): Promise<TeamInfo>;
   reload(): Promise<ReadonlyArray<TeamInfo>>;
   resumeSession(teamId: string, sessionId: string): Promise<TeamInfo>;
+  newSession(teamId: string): Promise<TeamInfo>;
   listInstalled(): string[];
   agentCount(teamId: string): number;
   getTeamDescription(teamId: string): string | undefined;
@@ -45,6 +46,7 @@ export class TeamManagerImpl implements TeamManager {
     private readonly settingsStore: SettingsStore,
     private readonly modelRegistry: ModelRegistry,
     private readonly transcriptStore: TranscriptStore,
+    private readonly sessionUsageStore: SessionUsageStore,
     private readonly kanbanStore: KanbanStore,
     private readonly skillManager: SkillManager,
     private readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody,
@@ -82,6 +84,12 @@ export class TeamManagerImpl implements TeamManager {
     return this.loadImpl(teamId, sessionId);
   }
 
+  async newSession(teamId: string): Promise<TeamInfo> {
+    const requested = this.resolveTeamId(teamId);
+    this.unload(requested);
+    return this.buildTeam(requested, ulid());
+  }
+
   listInstalled(): string[] {
     return this.teamRegistry.listInstalled();
   }
@@ -113,7 +121,7 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   agents(teamId: string): ReadonlyArray<AgentInfo> {
-    return (this.loadedTeams.get(teamId) ?? []).map((b) => b.identity);
+    return (this.loadedTeams.get(teamId) ?? []).map((b) => this.agentInfoWithSessionUsage(teamId, b));
   }
 
   bodies(teamId: string): ReadonlyArray<AgentBody> {
@@ -158,17 +166,24 @@ export class TeamManagerImpl implements TeamManager {
     }
   }
 
+  private unload(teamId: string): void {
+    const existing = this.loadedTeams.get(teamId);
+    if (existing !== undefined) {
+      for (const body of existing) body.stop();
+      this.loadedTeams.delete(teamId);
+    }
+    this.loadedBlueprints.delete(teamId);
+    this.sessionIds.delete(teamId);
+  }
+
   private async loadImpl(teamId?: string, overrideSessionId?: string): Promise<TeamInfo> {
     const requested = this.resolveTeamId(teamId);
     const existing = this.loadedTeams.get(requested);
     if (existing !== undefined && overrideSessionId === undefined) {
       return this.toTeamInfo(requested, existing);
     }
-    if (existing !== undefined && overrideSessionId !== undefined) {
-      for (const body of existing) body.stop();
-      this.loadedTeams.delete(requested);
-      this.loadedBlueprints.delete(requested);
-      this.sessionIds.delete(requested);
+    if (overrideSessionId !== undefined) {
+      this.unload(requested);
     }
     const sessionId = this.resolveSessionId(requested, overrideSessionId);
     return this.buildTeam(requested, sessionId);
@@ -187,7 +202,7 @@ export class TeamManagerImpl implements TeamManager {
     const bodies: AgentBody[] = [];
     const blueprintKeys = new Set<string>();
     for (const soul of blueprint.roles) {
-      let resolved: { model: Model<Api>; effort: EffortLevel };
+      let resolved: { model: Model<Api>; effort: EffortLevel; modelPinned: boolean; effortPinned: boolean };
       try {
         resolved = this.resolveSoulModelAndEffort(soul, settings);
       } catch (error) {
@@ -208,6 +223,8 @@ export class TeamManagerImpl implements TeamManager {
           sessionId,
           model: resolved.model,
           effort: resolved.effort,
+          modelPinned: resolved.modelPinned,
+          effortPinned: resolved.effortPinned,
         };
         this.bodyParams.set(`${teamId}:${agentKey}`, params);
         bodies.push(this.agentBodyFactory(params));
@@ -274,8 +291,8 @@ export class TeamManagerImpl implements TeamManager {
     return ulid();
   }
 
-  private resolveSoulModelAndEffort(soul: AgentSoul, settings: Settings): { model: Model<Api>; effort: EffortLevel } {
-    const { modelRef, aliasEffort } = this.resolveAliasedModel(soul, settings);
+  private resolveSoulModelAndEffort(soul: AgentSoul, settings: Settings): { model: Model<Api>; effort: EffortLevel; modelPinned: boolean; effortPinned: boolean } {
+    const { modelRef, aliasEffort, modelPinned } = this.resolveAliasedModel(soul, settings);
     const parsed = parseModelRef(modelRef);
     if (parsed === null) {
       throw new JiePlatformError("NO_MODEL_ERROR", { detail: `no model configured for role '${soul.role}'` });
@@ -292,15 +309,16 @@ export class TeamManagerImpl implements TeamManager {
       });
     }
     const effort = soul.effort ?? aliasEffort ?? settings.defaultEffort ?? "off";
-    return { model, effort };
+    const effortPinned = soul.effort !== undefined || aliasEffort !== undefined;
+    return { model, effort, modelPinned, effortPinned };
   }
 
-  private resolveAliasedModel(soul: AgentSoul, settings: Settings): { modelRef: string; aliasEffort: EffortLevel | undefined } {
+  private resolveAliasedModel(soul: AgentSoul, settings: Settings): { modelRef: string; aliasEffort: EffortLevel | undefined; modelPinned: boolean } {
     if (soul.model === "") {
       if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
-        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined };
+        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined, modelPinned: false };
       }
-      return { modelRef: "", aliasEffort: undefined };
+      return { modelRef: "", aliasEffort: undefined, modelPinned: false };
     }
     if (isModelAlias(soul.model)) {
       const raw = settings.modelAliases?.[soul.model];
@@ -311,14 +329,14 @@ export class TeamManagerImpl implements TeamManager {
             detail: `model alias '${soul.model}' resolves to an invalid value '${raw}'`,
           });
         }
-        return { modelRef: parsed.model, aliasEffort: parsed.effort };
+        return { modelRef: parsed.model, aliasEffort: parsed.effort, modelPinned: true };
       }
       if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
-        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined };
+        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined, modelPinned: false };
       }
-      return { modelRef: "", aliasEffort: undefined };
+      return { modelRef: "", aliasEffort: undefined, modelPinned: false };
     }
-    return { modelRef: soul.model, aliasEffort: undefined };
+    return { modelRef: soul.model, aliasEffort: undefined, modelPinned: true };
   }
 
   private publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {
@@ -326,7 +344,7 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   private toTeamInfo(id: string, bodies: AgentBody[]): TeamInfo {
-    const identities = bodies.map((b) => b.identity);
+    const identities = bodies.map((b) => this.agentInfoWithSessionUsage(id, b));
     const leader = identities.find((a) => a.isLeader);
     if (leader === undefined) {
       throw new JiePlatformError("NO_LEADER", {
@@ -350,6 +368,12 @@ export class TeamManagerImpl implements TeamManager {
     };
   }
 
+  private agentInfoWithSessionUsage(teamId: string, body: AgentBody): AgentInfo {
+    const sessionId = this.sessionIds.get(teamId) ?? null;
+    const sessionUsage = sessionId === null ? null : this.sessionUsageStore.load(teamId, sessionId, body.identity.agentKey);
+    return { ...body.identity, sessionUsage };
+  }
+
   private async buildAdHoc(teamId: string, sessionId: string, agentRef: string, isEphemeral: boolean): Promise<AgentBody | null> {
     try {
       const soul = this.agentRegistry.resolve(agentRef);
@@ -364,6 +388,8 @@ export class TeamManagerImpl implements TeamManager {
         sessionId,
         model: resolved.model,
         effort: resolved.effort,
+        modelPinned: resolved.modelPinned,
+        effortPinned: resolved.effortPinned,
       };
       this.bodyParams.set(`${teamId}:${agentRef}`, params);
       return this.agentBodyFactory(params);

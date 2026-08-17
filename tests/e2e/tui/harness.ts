@@ -132,7 +132,7 @@ export async function sendLine(stdin: PassThrough, text: string): Promise<void> 
   await sendEnter(stdin);
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs: number, label: string): Promise<void> {
+export async function waitFor(predicate: () => boolean, timeoutMs: number, label: string): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (predicate()) return;

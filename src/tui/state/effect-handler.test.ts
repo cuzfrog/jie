@@ -23,6 +23,7 @@ class StubTerminal implements Terminal {
   columns = 80;
   rows = 30;
   writeCalls: string[] = [];
+  clearScreenCalls = 0;
   start(): void {}
   stop(): void {}
   drainInput(): Promise<void> { return Promise.resolve(); }
@@ -33,7 +34,7 @@ class StubTerminal implements Terminal {
   showCursor(): void {}
   clearLine(): void {}
   clearFromCursor(): void {}
-  clearScreen(): void {}
+  clearScreen(): void { this.clearScreenCalls += 1; }
   setTitle(): void {}
   setProgress(): void {}
 }
@@ -88,7 +89,7 @@ function makeTeamInfo(teamId = "my-team", agentKey = "general-1"): TeamInfo {
     currentSessionId: null,
     kanbanCards: [],
     history: [],
-    agents: [{ teamId, role: "general", agentKey, isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+    agents: [{ teamId, role: "general", agentKey, isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
   };
 }
 
@@ -98,15 +99,17 @@ interface EffectHarness {
   readonly platform: PlatformHarness;
   readonly commandHandler: { handle: ReturnType<typeof vi.fn> };
   readonly terminal: StubTerminal;
+  readonly screen: { requestRender: ReturnType<typeof vi.fn> };
   readonly quitTui: ReturnType<typeof vi.fn>;
 }
 
 function makeEffectHarness(platform: PlatformHarness, state: StateStoreImpl): EffectHarness {
   const commandHandler = { handle: vi.fn() };
   const terminal = new StubTerminal();
+  const screen = { requestRender: vi.fn() };
   const quitTui = vi.fn();
-  const handler = new EffectHandlerImpl(platform.platform, state, commandHandler, terminal, quitTui);
-  return { handler, stateStore: state, platform, commandHandler, terminal, quitTui };
+  const handler = new EffectHandlerImpl(platform.platform, state, commandHandler, terminal, screen, quitTui);
+  return { handler, stateStore: state, platform, commandHandler, terminal, screen, quitTui };
 }
 
 async function runAsync(): Promise<void> {
@@ -162,6 +165,49 @@ describe("EffectHandlerImpl", () => {
     state.dispatch(Actions.requestQuit());
     await runAsync();
     expect(quitTui).toHaveBeenCalled();
+  });
+
+  test("system.team.loaded for a same-team session change clears the screen and scrollback", () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    const { terminal, screen } = makeEffectHarness(platform, state);
+    const first = makeTeamInfo("my-team", "general-1");
+    const teamLoaded = platform.handlers.get("system.team.loaded")!;
+    teamLoaded(Events.teamLoaded({ kind: "system" }, { ...first, currentSessionId: "s1" }));
+    teamLoaded(Events.teamLoaded({ kind: "system" }, { ...first, currentSessionId: "s2" }));
+    expect(terminal.clearScreenCalls).toBe(1);
+    expect(terminal.writeCalls).toContain("\x1b[3J");
+    expect(screen.requestRender).toHaveBeenCalledWith(true);
+  });
+
+  test("system.team.loaded on first load does not clear the screen", () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    const { terminal } = makeEffectHarness(platform, state);
+    const teamLoaded = platform.handlers.get("system.team.loaded")!;
+    teamLoaded(Events.teamLoaded({ kind: "system" }, makeTeamInfo("my-team", "general-1")));
+    expect(terminal.clearScreenCalls).toBe(0);
+  });
+
+  test("system.team.loaded on same-session reload does not clear the screen", () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    const { terminal } = makeEffectHarness(platform, state);
+    const team = { ...makeTeamInfo("my-team", "general-1"), currentSessionId: "s1" };
+    const teamLoaded = platform.handlers.get("system.team.loaded")!;
+    teamLoaded(Events.teamLoaded({ kind: "system" }, team));
+    teamLoaded(Events.teamLoaded({ kind: "system" }, team));
+    expect(terminal.clearScreenCalls).toBe(0);
+  });
+
+  test("system.team.loaded on a team switch does not clear the screen", () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    const { terminal } = makeEffectHarness(platform, state);
+    const teamLoaded = platform.handlers.get("system.team.loaded")!;
+    teamLoaded(Events.teamLoaded({ kind: "system" }, { ...makeTeamInfo("my-team", "general-1"), currentSessionId: "s1" }));
+    teamLoaded(Events.teamLoaded({ kind: "system" }, { ...makeTeamInfo("other-team", "general-1"), currentSessionId: "s2" }));
+    expect(terminal.clearScreenCalls).toBe(0);
   });
 });
 

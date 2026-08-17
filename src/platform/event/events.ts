@@ -30,7 +30,9 @@ type EventDefinitions = {
   }>;
   "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_durations: ReadonlyArray<number> }>;
   // totalTokens is the context carried into the next turn; input + cacheRead + cacheWrite is the true prompt size (system prompt, tool schemas, messages - cached or not).
-  "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
+  // partial: true — input is the in-flight message's accumulated sent tokens (input+cacheRead+cacheWrite already folded); cacheRead and cacheWrite are 0. partial: false — fields carry the raw per-message pi usage.
+  // session_input_tokens/session_output_tokens: cumulative session totals, excluding the in-flight message when partial is true and including it when false.
+  "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; session_input_tokens: number; session_output_tokens: number; partial: boolean }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null }>;
   "agent.compacted": EventDef<AgentSender, { summary: string; tokens_before: number; tokens_after: number; summarized_prompts: number }>;
@@ -86,8 +88,7 @@ export const Events = {
     createEvent("agent.stream.chunk", sender, { stream_id, seq, block_type, text }),
   agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number, thinking_durations: ReadonlyArray<number>): EventEnvelope<"agent.stream.end"> =>
     createEvent("agent.stream.end", sender, { stream_id, total_chunks, thinking_durations }),
-  agentUsage: (sender: AgentSender, usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }): EventEnvelope<"agent.usage"> =>
-    createEvent("agent.usage", sender, usage),
+  agentUsage: agentUsage,
   agentPromptQueueUpdate: (sender: AgentSender, prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }>): EventEnvelope<"agent.prompt.queue.update"> =>
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max", contextWindow: number | null): EventEnvelope<"agent.model.assigned"> =>
@@ -129,6 +130,26 @@ function agentToolCall(sender: AgentSender, tool_call_id: string, name: string, 
 function agentToolResult(sender: AgentSender, tool_call_id: string, name: string, output: string | null, duration_ms: number, error: string | null, details: ToolResultDetails | null = null): EventEnvelope<"agent.tool.result"> {
   const { text, truncated } = truncateForTelemetry(output);
   return createEvent("agent.tool.result", sender, { tool_call_id, name, output: text, output_truncated: truncated, duration_ms, error, details });
+}
+
+interface AgentUsageInput {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  session_input_tokens?: number;
+  session_output_tokens?: number;
+  partial?: boolean;
+}
+
+function agentUsage(sender: AgentSender, usage: AgentUsageInput): EventEnvelope<"agent.usage"> {
+  return createEvent("agent.usage", sender, {
+    ...usage,
+    session_input_tokens: usage.session_input_tokens ?? 0,
+    session_output_tokens: usage.session_output_tokens ?? 0,
+    partial: usage.partial ?? false,
+  });
 }
 
 function createEvent<T extends EventType>(type: T, sender: Sender): EventEnvelope<T>;

@@ -2,6 +2,14 @@ import type { Expectation } from "../../mock-llm-backend";
 
 const expectations: Expectation[] = [
   {
+    match: { lastUserContains: "meter tokens" },
+    responseChunks: [
+      { kind: "text", delta: "Ack." },
+      { kind: "finish", reason: "stop" },
+      { kind: "usage", promptTokens: 12345, cacheReadTokens: 2345, completionTokens: 678 },
+    ],
+  },
+  {
     match: { lastUserContains: "honest usage" },
     responseChunks: [
       { kind: "text", delta: "Ack." },

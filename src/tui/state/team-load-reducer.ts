@@ -8,10 +8,12 @@ import { kanbanReducer } from "./kanban-reducer";
 export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   const { id: teamId, agents } = teamInfo;
   const switching = state.teamId !== null && state.teamId !== teamId;
+  const sessionChanged = state.sessionId !== null && teamInfo.currentSessionId !== state.sessionId;
+  const reset = switching || sessionChanged;
   const newAgents = new Map(state.agents);
   let leaderId: AgentId | null = state.leaderAgentId;
   let focused: AgentId | null = state.focusedAgentId;
-  if (switching) {
+  if (reset) {
     newAgents.clear();
     leaderId = null;
     focused = null;
@@ -22,6 +24,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     incomingIds.add(agentId);
     const existing = newAgents.get(agentId);
     if (existing !== undefined) {
+      const sessionUsage = agent.sessionUsage;
       newAgents.set(agentId, {
         ...existing,
         role: agent.role,
@@ -30,6 +33,8 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
         subscribe: agent.subscribe,
         skills: agent.skills,
         model: agent.model ?? existing.model,
+        sessionInputTokens: sessionUsage?.inputTokens ?? existing.sessionInputTokens,
+        sessionOutputTokens: sessionUsage?.outputTokens ?? existing.sessionOutputTokens,
       });
     } else {
       newAgents.set(agentId, emptyAgent(agentId, teamId, agent));
@@ -39,7 +44,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   for (const id of newAgents.keys()) {
     if (!incomingIds.has(id)) newAgents.delete(id);
   }
-  let nextEntrySeq = switching ? 0 : state.nextEntrySeq;
+  let nextEntrySeq = reset ? 0 : state.nextEntrySeq;
   for (const entry of teamInfo.history) {
     if (entry.messages.length === 0) continue;
     const agentId = `${teamId}:${entry.agentKey}` as AgentId;
@@ -61,11 +66,12 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   if (focused !== null && !newAgents.has(focused)) focused = null;
   if (focused === null && leaderId !== null && newAgents.has(leaderId)) focused = leaderId;
   if (leaderId !== null && !newAgents.has(leaderId)) leaderId = null;
-  let cursor = switching ? null : state.teamCursorAgentId;
+  let cursor = reset ? null : state.teamCursorAgentId;
   if (cursor !== null && !newAgents.has(cursor)) cursor = null;
   const loaded: TuiState = {
     ...state,
     teamId,
+    sessionId: teamInfo.currentSessionId,
     sessionName: teamInfo.sessionName,
     leaderAgentId: leaderId,
     focusedAgentId: focused,
@@ -75,14 +81,15 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     agents: newAgents,
     kanban: {
       ...state.kanban,
-      expanded: switching ? false : state.kanban.expanded,
-      edit: switching ? null : state.kanban.edit,
+      expanded: reset ? false : state.kanban.expanded,
+      edit: reset ? null : state.kanban.edit,
     },
   };
   return kanbanReducer(loaded, Actions.setKanbanBoard(teamInfo.kanbanCards));
 }
 
 function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUiState {
+  const sessionUsage = agent.sessionUsage;
   return {
     agentId,
     teamId,
@@ -102,7 +109,10 @@ function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUi
     compactionInProgress: false,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,
-    uploadTokens: 0,
-    downloadTokens: 0,
+    sessionInputTokens: sessionUsage?.inputTokens ?? 0,
+    sessionOutputTokens: sessionUsage?.outputTokens ?? 0,
+    inflightInputTokens: 0,
+    inflightOutputTokens: 0,
+    workStartedAt: null,
   };
 }

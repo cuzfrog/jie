@@ -122,6 +122,9 @@ async function applyEdits(input: EditInput, realPath: string): Promise<ToolResul
   const spans = matchEdits(before, edits, input.path, replaceAll);
   const edited = applySpans(before, spans);
   const after = bom + restoreLineEndings(edited, lineEnding);
+  if (edited === before) {
+    throw new JiePlatformError("NO_CHANGES", { detail: input.path });
+  }
 
   try {
     writeFileSync(realPath, after, "utf-8");

@@ -1,8 +1,8 @@
-import { Agent, convertToLlm, estimateTokens, type AgentEvent, type AgentLoopTurnUpdate, type AgentMessage, type AgentTool, type PrepareNextTurnContext } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import { Agent, convertToLlm, estimateTokens, type AgentEvent, type AgentLoopTurnUpdate, type AgentMessage, type AgentTool, type PrepareNextTurnContext, type StreamFn } from "@earendil-works/pi-agent-core";
+import { lazyStream, type Api, type AuthResult, type Model, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { MemoryManager } from "../memory";
-import type { ArtifactStore, TranscriptStore } from "../storage";
+import type { ArtifactStore, SessionUsageStore, TranscriptStore } from "../storage";
 import { type ExecutionContext, parseToolSpec, type ToolRegistry, type ToolSpec } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
@@ -27,13 +27,15 @@ interface AgentBodyDeps {
   readonly eventManager: EventManager;
   readonly artifactStore: ArtifactStore;
   readonly transcriptStore: TranscriptStore;
+  readonly sessionUsageStore: SessionUsageStore;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
   readonly systemContextBlock: string;
   readonly hookRunner: HookRunner;
   readonly cwd: string;
-  getApiKey(provider: string): Promise<string | undefined> | string | undefined;
+  getAuth(provider: string): Promise<AuthResult | undefined>;
   resolveModel(provider: string, modelId: string): Model<Api> | undefined;
+  readonly streamFn?: StreamFn;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
   readonly compactor: Compactor;
   readonly memoryManager: MemoryManager;
@@ -50,7 +52,9 @@ export class JieAgentBody implements AgentBody {
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly transcriptStore: TranscriptStore;
+  private readonly sessionUsageStore: SessionUsageStore;
   private readonly hookRunner: HookRunner;
+  private readonly eventBridge: AgentEventBridgeImpl;
   private readonly hookIdentity: HookIdentity;
   private readonly compactor: Compactor;
   private readonly systemContextBlock: string;
@@ -80,6 +84,7 @@ export class JieAgentBody implements AgentBody {
     this.sessionId = params.sessionId;
     this.eventManager = deps.eventManager;
     this.transcriptStore = deps.transcriptStore;
+    this.sessionUsageStore = deps.sessionUsageStore;
     this.hookRunner = deps.hookRunner;
     this.compactor = deps.compactor;
     this.systemContextBlock = deps.systemContextBlock;
@@ -125,9 +130,10 @@ export class JieAgentBody implements AgentBody {
       memoryManager: this.memoryManager,
       getOverheadTokens: () => this.getOverheadTokens(),
     });
-    const eventBridge = new AgentEventBridgeImpl({
+    this.eventBridge = new AgentEventBridgeImpl({
       eventManager: deps.eventManager,
       transcriptStore: this.transcriptStore,
+      sessionUsageStore: this.sessionUsageStore,
       hookRunner: this.hookRunner,
       hookIdentity: this.hookIdentity,
       sender: this.sender,
@@ -163,10 +169,10 @@ export class JieAgentBody implements AgentBody {
       sender: this.sender,
     });
     const createAgent = deps.createAgent ?? defaultAgentFactory;
+    const streamFn = deps.streamFn ?? streamSimple;
     this.agent = createAgent({
       sessionId: this.sessionId,
-      getApiKey: deps.getApiKey,
-      streamFn: streamSimple,
+      streamFn: withResolvedAuth(streamFn, (provider) => deps.getAuth(provider)),
       convertToLlm,
       transformContext: async (messages: AgentMessage[]) => {
         const stripped = stripThinkingDurations(messages);
@@ -195,8 +201,8 @@ export class JieAgentBody implements AgentBody {
     this.modelController = new ModelControllerImpl(params.model, params.effort, {
       eventManager: deps.eventManager,
       sender: this.sender,
-      soulPinsModel: params.soul.model !== "",
-      soulPinsEffort: params.soul.effort !== undefined,
+      soulPinsModel: params.modelPinned,
+      soulPinsEffort: params.effortPinned,
       resolveModel: deps.resolveModel,
       targetContextWindowSize: this.soul.targetContextWindowSize,
       agentState: {
@@ -223,7 +229,7 @@ export class JieAgentBody implements AgentBody {
     const unsubscribeAgent = this.agent.subscribe((event, _signal) => {
       logger?.log(event);
       this.onAgentEvent(event);
-      eventBridge.handleEvent(event);
+      this.eventBridge.handleEvent(event);
     });
     this.cleanups.push(unsubscribeAgent);
   }
@@ -239,6 +245,7 @@ export class JieAgentBody implements AgentBody {
       subscribe: this.soul.subscribe,
       skills: this.resolvedSkills.map((skill) => ({ name: skill.name, description: skill.description, argumentHint: skill.argumentHint })),
       model: this.modelController.modelInfo,
+      sessionUsage: null,
     };
   }
 
@@ -294,6 +301,8 @@ export class JieAgentBody implements AgentBody {
     if (this.started) return;
     this.started = true;
 
+    const loaded = this.sessionUsageStore.load(this.teamId, this.sessionId, this.agentKey);
+    this.eventBridge.seedSessionUsage(loaded ?? { inputTokens: 0, outputTokens: 0 });
     this.registerSubscriptions();
     await this.hookRunner.sessionStart({ identity: this.hookIdentity });
 
@@ -475,6 +484,31 @@ function stripThinkingDurations(messages: AgentMessage[]): AgentMessage[] {
     if (!changed) return message;
     return { ...message, content };
   });
+}
+
+function withResolvedAuth(streamFn: StreamFn, getAuth: (provider: string) => Promise<AuthResult | undefined>): StreamFn {
+  return async (model, context, options) => {
+    let auth: AuthResult | undefined;
+    try {
+      auth = await getAuth(model.provider);
+    } catch (error) {
+      return lazyStream(model, async () => {
+        throw error;
+      });
+    }
+    return streamFn(model, context, applyResolvedAuth(options, auth));
+  };
+}
+
+function applyResolvedAuth(options: SimpleStreamOptions | undefined, auth: AuthResult | undefined): SimpleStreamOptions | undefined {
+  if (auth === undefined) return options;
+  const { apiKey, headers } = auth.auth;
+  if (apiKey === undefined && headers === undefined) return options;
+  return {
+    ...options,
+    apiKey: options?.apiKey ?? apiKey,
+    headers: headers === undefined ? options?.headers : { ...headers, ...(options?.headers ?? {}) },
+  };
 }
 
 function adaptAllTools(

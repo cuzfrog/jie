@@ -71,13 +71,16 @@ describe("PromptQueue — ingress", () => {
     expect(dispatcher.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "hello", displayText: "hello" });
   });
 
-  test("ingestPeerNotification dispatches a [<source> on '<topic>']: prefixed message without displayText", async () => {
+  test("ingestPeerNotification dispatches a [<source> on '<topic>']: prefixed message with the prompt as displayText", async () => {
     makeQueue().ingestPeerNotification("task.recorded", "leader-1", "do X");
     await flush();
     expect(dispatcher.prompt).toHaveBeenCalledTimes(1);
     const message = dispatcher.prompt.mock.calls[0]![0];
-    expect(message).toMatchObject({ role: "user", content: "[leader-1 on 'task.recorded']: do X" });
-    expect("displayText" in message).toBe(false);
+    expect(message).toMatchObject({
+      role: "user",
+      content: "[leader-1 on 'task.recorded']: do X",
+      displayText: "do X",
+    });
   });
 
   test("ingress while the dispatcher is streaming queues without dispatching", async () => {

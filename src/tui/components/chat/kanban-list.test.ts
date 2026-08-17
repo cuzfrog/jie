@@ -21,14 +21,14 @@ describe("KanbanList", () => {
     expect(new KanbanList(stateStore).render(80)).toEqual([]);
   });
 
-  test("renders the Todo: title above one glyphed row per card", () => {
+  test("renders the Kanban: title above one glyphed row per card", () => {
     stateStore.getState.mockReturnValue(boardState([
       { id: "#1", content: "later", status: "pending" },
       { id: "#2", content: "now", status: "in_progress" },
       { id: "#3", content: "done", status: "completed" },
     ]));
     const lines = new KanbanList(stateStore).render(80);
-    expect(lines[0]).toBe(style("accent")("Todo:"));
+    expect(lines[0]).toBe(style("accent")("Kanban:"));
     expect(lines).toHaveLength(4);
     expect(lines[1]).toContain("·");
     expect(lines[1]).toContain("#1");
@@ -76,7 +76,7 @@ describe("KanbanList", () => {
     stateStore.getState.mockReturnValue(boardState(cards));
     const lines = new KanbanList(stateStore).render(80);
     expect(lines).toHaveLength(1 + 6 + 1);
-    expect(lines[0]).toBe(style("accent")("Todo:"));
+    expect(lines[0]).toBe(style("accent")("Kanban:"));
     expect(lines[lines.length - 1]).toContain("+3 more");
   });
 

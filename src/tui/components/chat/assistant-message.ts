@@ -1,7 +1,7 @@
 import { Markdown, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { MessageBlock, MessageCard, MessageTurn, StateStore } from "../../state";
 import { ASSISTANT_PREFIX, jieMarkdownTheme, style, THINKING_LABEL } from "../themes";
-import { formatDuration } from "./format-duration";
+import { formatDuration, formatDurationAsSeconds } from "../elements";
 import { ThinkingBlock } from "./thinking-block";
 import { ToolCard } from "./tool-card";
 
@@ -14,8 +14,6 @@ export class AssistantMessage implements Component {
   private readonly markdowns: Markdown[] = [];
   private readonly thinkings: ThinkingBlock[] = [];
   private readonly cards: ToolCard[] = [];
-  private liveBlockIndex: number | null = null;
-  private liveStartedAt: number = 0;
 
   constructor(turn: MessageTurn | null, stateStore: StateStore) {
     this.turn = turn;
@@ -36,7 +34,7 @@ export class AssistantMessage implements Component {
     let thinkingOrdinal = 0;
     let cardOrdinal = 0;
     let prefixed = false;
-    const run: RunState = { thinkingMs: null, cards: [], liveBlockIndex: null };
+    const run: RunState = { thinkingMs: null, cards: [], liveStartedAtMs: null };
     for (let i = 0; i < turn.entries.length; i += 1) {
       const entry = turn.entries[i]!;
       if (isInvisibleEntry(entry)) continue;
@@ -63,7 +61,7 @@ export class AssistantMessage implements Component {
         if (entry.durationMs !== undefined) {
           run.thinkingMs = (run.thinkingMs ?? 0) + entry.durationMs;
         } else if (entry.text !== "") {
-          run.liveBlockIndex = i;
+          run.liveStartedAtMs = entry.startedAtMs ?? null;
         }
         continue;
       }
@@ -81,32 +79,19 @@ export class AssistantMessage implements Component {
   }
 
   private flushRun(lines: string[], width: number, run: RunState): void {
-    if (run.thinkingMs === null && run.cards.length === 0 && run.liveBlockIndex === null) return;
-    const liveElapsedMs = this.liveElapsedFor(run.liveBlockIndex);
+    if (run.thinkingMs === null && run.cards.length === 0 && run.liveStartedAtMs === null) return;
+    const liveElapsedMs = run.liveStartedAtMs === null ? null : Date.now() - run.liveStartedAtMs;
     const summary = summarizeWork(run.thinkingMs, run.cards, liveElapsedMs);
     if (summary !== null) lines.push(truncateToWidth(style("thinkingText")(summary), width));
     run.thinkingMs = null;
     run.cards.length = 0;
-    run.liveBlockIndex = null;
+    run.liveStartedAtMs = null;
   }
 
   invalidate(): void {
     for (const markdown of this.markdowns) markdown.invalidate();
     for (const thinking of this.thinkings) thinking.invalidate();
     for (const card of this.cards) card.invalidate();
-  }
-
-  private liveElapsedFor(liveBlockIndex: number | null): number | null {
-    if (liveBlockIndex === null) {
-      this.liveBlockIndex = null;
-      return null;
-    }
-    const now = Date.now();
-    if (this.liveBlockIndex !== liveBlockIndex) {
-      this.liveBlockIndex = liveBlockIndex;
-      this.liveStartedAt = now;
-    }
-    return now - this.liveStartedAt;
   }
 
   private markdownAt(ordinal: number, text: string): Markdown {
@@ -146,7 +131,7 @@ export class AssistantMessage implements Component {
 interface RunState {
   thinkingMs: number | null;
   cards: MessageCard[];
-  liveBlockIndex: number | null;
+  liveStartedAtMs: number | null;
 }
 
 function isInvisibleEntry(entry: MessageBlock | MessageCard): boolean {
@@ -173,7 +158,7 @@ function summarizeWork(thinkingMs: number | null, cards: ReadonlyArray<MessageCa
   if (thinkingMs === null && cards.length === 0 && liveElapsedMs === null) return null;
   const parts: string[] = [];
   if (liveElapsedMs !== null) {
-    parts.push(`${THINKING_LABEL} (${formatDuration((thinkingMs ?? 0) + liveElapsedMs)})`);
+    parts.push(`${THINKING_LABEL} (${formatDurationAsSeconds((thinkingMs ?? 0) + liveElapsedMs)})`);
   } else if (thinkingMs !== null) {
     parts.push(`Thought for ${formatDuration(thinkingMs)}`);
   }

@@ -53,6 +53,7 @@ function agentInfo(overrides: Partial<AgentInfo> & { agentKey: string }): AgentI
     subscribe: [],
     skills: [],
     model: overrides.model ?? null,
+    sessionUsage: overrides.sessionUsage ?? null,
     ...overrides,
   };
 }
@@ -80,6 +81,7 @@ function makeTeamManager() {
   return vi.mocked<TeamManager>({
     load: vi.fn(),
     reload: vi.fn(),
+    newSession: vi.fn(),
     resumeSession: vi.fn(),
     listInstalled: vi.fn(),
     agentCount: vi.fn(),
@@ -124,7 +126,7 @@ function makeSessionNamer() {
     listProviders: vi.fn(),
     resolve: vi.fn(),
     listModels: vi.fn(),
-    getApiKey: vi.fn(),
+    getAuth: vi.fn(() => Promise.resolve(undefined)),
     reload: vi.fn(),
   });
   const namer = new SessionNamerImpl(eventManager, llmService, teamManager, transcriptStore, modelRegistry);

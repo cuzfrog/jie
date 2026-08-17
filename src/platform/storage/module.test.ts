@@ -51,5 +51,6 @@ describe("registerStorageModule", () => {
     expect(container.cradle.storage).toBe(container.resolve("storage"));
     expect(container.cradle.artifactStore).toBe(container.resolve("artifactStore"));
     expect(container.cradle.transcriptStore).toBe(container.resolve("transcriptStore"));
+    expect(container.cradle.sessionUsageStore).toBe(container.resolve("sessionUsageStore"));
   });
 });

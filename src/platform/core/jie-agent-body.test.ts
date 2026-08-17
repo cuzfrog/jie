@@ -11,18 +11,20 @@ import {
   type PrepareNextTurnContext,
   type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, AssistantMessageEventStream, AuthResult, Context, Model } from "@earendil-works/pi-ai";
+import type { StreamFn } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
 import type { CompactionInput, CompactionResult, Compactor } from "./compaction";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { MemoryManager } from "../memory";
-import type { ArtifactStore, TranscriptStore } from "../storage";
+import type { ArtifactStore, SessionUsageStore, TranscriptStore } from "../storage";
 import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookRunner } from "../hooks";
 import type { AgentSoul } from "../team";
+import { isModelAlias } from "../types";
 import type { AgentDispatcher, EffortLevel, UserIngressMessage } from "../types";
 
 async function flush(): Promise<void> {
@@ -256,10 +258,13 @@ interface MakeBodyOverrides {
   sessionId?: string;
   model?: Model<Api>;
   effort?: EffortLevel;
+  modelPinned?: boolean;
+  effortPinned?: boolean;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
   compactor?: Compactor;
-  getApiKey?: (provider: string) => string | undefined;
+  getAuth?: (provider: string) => Promise<AuthResult | undefined>;
+  streamFn?: StreamFn;
   logDir?: string | null;
 }
 
@@ -271,6 +276,7 @@ interface Harness {
   hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
   memoryManager: ReturnType<typeof vi.mocked<MemoryManager>>;
   transcriptStore: TranscriptStore;
+  sessionUsageStore: SessionUsageStore;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   restoreDisplay: ReturnType<typeof vi.fn>;
@@ -334,29 +340,35 @@ function makeHarness(): Harness {
   });
   const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
   const agentDispatcher = vi.mocked<AgentDispatcher>({ call: vi.fn() });
+  const sessionUsageStore = vi.mocked<SessionUsageStore>({ load: vi.fn(() => null), accumulate: vi.fn() });
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>
     events.subscribe(topic, (env) => cb(env));
   const makeBody: Harness["makeBody"] = (overrides = {}) => {
+    const soul = overrides.soul ?? makeSoul();
     const params: AgentBodyParams = {
       agentKey: overrides.agentKey ?? "general-1",
       teamId: overrides.teamId ?? "t1",
-      soul: overrides.soul ?? makeSoul(),
+      soul,
       isLeader: overrides.isLeader ?? false,
       isEphemeral: overrides.isEphemeral ?? false,
       sessionId: overrides.sessionId ?? "s1",
       model: overrides.model,
       effort: overrides.effort ?? "off",
+      modelPinned: overrides.modelPinned ?? (soul.model !== "" && !isModelAlias(soul.model)),
+      effortPinned: overrides.effortPinned ?? (soul.effort !== undefined),
     };
     return new JieAgentBody(params, {
       eventManager: events,
       artifactStore,
       transcriptStore,
+      sessionUsageStore,
       toolRegistry,
       skillManager,
       systemContextBlock: overrides.systemContextBlock ?? "",
       hookRunner,
       cwd: "/work",
-      getApiKey: overrides.getApiKey ?? (() => undefined),
+      getAuth: overrides.getAuth ?? (() => Promise.resolve(undefined)),
+      streamFn: overrides.streamFn,
       resolveModel,
       createAgent: overrides.factory ?? cap.factory,
       compactor: overrides.compactor ?? noopCompactor,
@@ -383,6 +395,7 @@ function makeHarness(): Harness {
     memoryManager,
     agentDispatcher,
     transcriptStore,
+    sessionUsageStore,
     persisted,
     restore,
     restoreDisplay,
@@ -453,6 +466,7 @@ describe("JieAgentBody — identity", () => {
       tools: ["notify", "read_file"],
       subscribe: ["task.recorded"],
       skills: [],
+      sessionUsage: null,
       model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 },
     });
   });
@@ -537,6 +551,61 @@ describe("JieAgentBody — agent configuration", () => {
     h.makeBody();
     expect(h.cap.capturedOptions?.followUpMode).toBe("one-at-a-time");
     expect(h.cap.capturedOptions?.steeringMode).toBe("one-at-a-time");
+  });
+});
+
+describe("JieAgentBody — auth resolution", () => {
+  function makeStream(): AssistantMessageEventStream {
+    return undefined as unknown as AssistantMessageEventStream;
+  }
+
+  test("merges resolved auth apiKey and headers into stream options", async () => {
+    const h = makeHarness();
+    const mockStreamFn = vi.fn<StreamFn>(() => makeStream());
+    const getAuth = vi.fn(async () => ({ auth: { apiKey: "key", headers: { Authorization: "Bearer key" } } }));
+    h.makeBody({ getAuth, streamFn: mockStreamFn });
+    const model = makeModel("proxy", "claude");
+    const context: Context = { systemPrompt: "", messages: [], tools: [] };
+    await h.cap.capturedOptions?.streamFn(model, context, {});
+    expect(getAuth).toHaveBeenCalledWith("proxy");
+    expect(mockStreamFn).toHaveBeenCalledWith(model, context, { apiKey: "key", headers: { Authorization: "Bearer key" } });
+  });
+
+  test("passes options through unchanged when auth is unresolved", async () => {
+    const h = makeHarness();
+    const mockStreamFn = vi.fn<StreamFn>(() => makeStream());
+    h.makeBody({ getAuth: async () => undefined, streamFn: mockStreamFn });
+    const model = makeModel("proxy", "claude");
+    const context: Context = { systemPrompt: "", messages: [], tools: [] };
+    await h.cap.capturedOptions?.streamFn(model, context, { apiKey: "explicit" });
+    expect(mockStreamFn).toHaveBeenCalledWith(model, context, { apiKey: "explicit" });
+  });
+
+  test("explicit options win over resolved auth", async () => {
+    const h = makeHarness();
+    const mockStreamFn = vi.fn<StreamFn>(() => makeStream());
+    const getAuth = vi.fn(async () => ({ auth: { apiKey: "resolved", headers: { Authorization: "Bearer resolved", "x-provider": "v" } } }));
+    h.makeBody({ getAuth, streamFn: mockStreamFn });
+    const model = makeModel("proxy", "claude");
+    const context: Context = { systemPrompt: "", messages: [], tools: [] };
+    await h.cap.capturedOptions?.streamFn(model, context, { apiKey: "explicit", headers: { Authorization: "Bearer explicit" } });
+    expect(mockStreamFn).toHaveBeenCalledWith(model, context, {
+      apiKey: "explicit",
+      headers: { Authorization: "Bearer explicit", "x-provider": "v" },
+    });
+  });
+
+  test("encodes auth resolution failure as a stream error", async () => {
+    const h = makeHarness();
+    const mockStreamFn = vi.fn<StreamFn>(() => makeStream());
+    h.makeBody({ getAuth: async () => Promise.reject(new Error("token refresh failed")), streamFn: mockStreamFn });
+    const model = makeModel("proxy", "claude");
+    const context: Context = { systemPrompt: "", messages: [], tools: [] };
+    const stream = await h.cap.capturedOptions?.streamFn(model, context, {});
+    expect(mockStreamFn).not.toHaveBeenCalled();
+    const message = await stream?.result();
+    expect(message?.stopReason).toBe("error");
+    expect(message?.errorMessage).toContain("token refresh failed");
   });
 });
 
@@ -1297,6 +1366,26 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     body.stop();
   });
 
+  test("start() seeds session usage from the store before any events are handled", async () => {
+    vi.spyOn(h.sessionUsageStore, "load").mockReturnValue({ inputTokens: 30, outputTokens: 12 });
+    const body = h.makeBody();
+    await body.start();
+    const usage = {
+      input: 5,
+      output: 3,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 8,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    };
+    const usages: EventEnvelope<"agent.usage">[] = [];
+    h.subscribeSubject("agent.usage", (env) => usages.push(env));
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage({ usage }) });
+    expect(usages).toHaveLength(1);
+    expect(usages[0]!.payload).toMatchObject({ session_input_tokens: 35, session_output_tokens: 15, partial: false });
+    body.stop();
+  });
+
   test("the prompt queue dispatcher routes steer to agent.steer and the run continues when the agent has queued messages", async () => {
     const body = h.makeBody();
     await body.start();
@@ -1520,7 +1609,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     body.stop();
   });
 
-  test("turn_start after a custom-source ingress carries a null prompt", async () => {
+  test("turn_start after a custom-source ingress carries the raw message as the prompt", async () => {
     const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.researched"] }) });
     await body.start();
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
@@ -1530,7 +1619,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
     expect(turnStart).toHaveLength(1);
-    expect(turnStart[0]!.payload).toBeNull();
+    expect(turnStart[0]!.payload).toBe("report");
     body.stop();
   });
 
@@ -1664,7 +1753,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     body.stop();
   });
 
-  test("a followUp-fed peer notification keeps a null turn.start payload", async () => {
+  test("a followUp-fed peer notification carries the raw message as the turn.start payload", async () => {
     const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.recorded"] }) });
     await body.start();
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
@@ -1681,7 +1770,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     const followUpMessage = h.followUp.mock.calls[0]![0] as AgentMessage;
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: followUpMessage });
-    expect(turnStart.map((env) => env.payload)).toEqual(["first", null]);
+    expect(turnStart.map((env) => env.payload)).toEqual(["first", "do X"]);
     body.stop();
   });
 
@@ -1902,6 +1991,30 @@ describe("JieAgentBody — user.effort.update", () => {
     body.stop();
   });
 
+  test("ignores the update when effortPinned is true even if soul.effort is undefined", async () => {
+    const body = h.makeBody({ soul: makeSoul({ model: "" }), effort: "low", effortPinned: true, model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("low");
+    expect(received).toHaveLength(0);
+    expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "low", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("applies the update when effortPinned is false", async () => {
+    const body = h.makeBody({ soul: makeSoul({ model: "" }), effort: "low", effortPinned: false, model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("high");
+    expect(received).toHaveLength(1);
+    expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
+    body.stop();
+  });
+
   test("stop() unsubscribes from user.effort.update", async () => {
     const body = h.makeBody();
     await body.start();
@@ -1957,6 +2070,34 @@ describe("JieAgentBody — user.model.update", () => {
     expect(h.state.model).toBe(pinned);
     expect(received).toHaveLength(0);
     expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("unmapped model alias follows user.model.update", async () => {
+    const nextModel = makeModel("lm-studio", "qwen3.5-2b");
+    h.resolveModel.mockReturnValue(nextModel);
+    const body = h.makeBody({ soul: makeSoul({ model: "large" }), model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(h.resolveModel).toHaveBeenCalledWith("lm-studio", "qwen3.5-2b");
+    expect(h.state.model).toBe(nextModel);
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({ provider: "lm-studio", model: "qwen3.5-2b", effort: "off", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("mapped model alias stays pinned", async () => {
+    const pinned = makeModel("anthropic", "claude-sonnet-4");
+    const body = h.makeBody({ soul: makeSoul({ model: "large" }), model: pinned, modelPinned: true });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(h.resolveModel).not.toHaveBeenCalled();
+    expect(h.state.model).toBe(pinned);
+    expect(received).toHaveLength(0);
     body.stop();
   });
 

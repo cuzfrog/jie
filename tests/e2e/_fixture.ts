@@ -68,7 +68,7 @@ export function seedTeam(jieDir: string, teamId: string, leaderRole: string, rol
     const tools = role.tools ?? [];
     const toolsYaml = tools.length === 0 ? "tools: []" : `tools:\n${tools.map((t) => `  - ${t}`).join("\n")}`;
     const modelLine = role.model !== undefined ? `model: ${role.model}\n` : "";
-    const targetWindowLine = role.targetContextWindowSize !== undefined ? `target_context_window_size: ${role.targetContextWindowSize}\n` : "";
+    const targetWindowLine = role.targetContextWindowSize !== undefined ? `target-context-window-size: ${role.targetContextWindowSize}\n` : "";
     const subscribe = role.subscribe ?? [];
     const subscribeYaml = subscribe.length === 0 ? "" : `\nsubscribe:\n${subscribe.map((t) => `  - ${t}`).join("\n")}`;
     const skills = role.skills ?? [];

@@ -7,7 +7,7 @@ import type { KanbanCard, KanbanCardWrite } from "../types";
 const KANBAN_WRITE_DESCRIPTION = `Replace the team kanban board with the full desired state.
 Cards merge by \`content\` so existing ids stay stable; use this to create, remove, or rename cards.
 For one-card edits, use \`update_kanban\`.
-\`scope\` defaults to \`team\`. Omit \`todos\` to keep the existing checklist, \`[]\` clears it;
+\`scope\` defaults to \`session\`. Omit \`todos\` to keep the existing checklist, \`[]\` clears it;
 matching \`text\` inherits the prior \`done\` state.
 Contract: no duplicate or empty \`content\`; no empty or duplicate \`text\` in the same card's \`todos\`.`;
 

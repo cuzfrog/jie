@@ -26,22 +26,6 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return reduceTeamPanelToggle(state);
     case ActionTypes.COMMIT_TEAM_CURSOR:
       return reduceTeamCursorCommit(state);
-    case ActionTypes.CLEAR_TUI_STATE:
-      return {
-        ...state,
-        agents: new Map(),
-        sessionName: null,
-        leaderAgentId: null,
-        focusedAgentId: null,
-        teamCursorAgentId: null,
-        interruptedAgentId: null,
-        nextEntrySeq: 0,
-        transientMessage: null,
-        transientSetAt: null,
-        errorBanner: null,
-        helpPanelVisible: false,
-        requireUserAttention: false,
-      };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
       return { ...state, transientMessage: action.payload.text, transientSetAt: Date.now() };
     case ActionTypes.CLEAR_TRANSIENT_MESSAGE:
@@ -134,3 +118,5 @@ function reduceTeamCursorCommit(state: TuiState): TuiState {
   if (!state.agents.has(cursor)) return { ...state, teamCursorAgentId: null };
   return { ...state, focusedAgentId: cursor };
 }
+
+

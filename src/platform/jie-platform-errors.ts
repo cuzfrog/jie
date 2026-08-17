@@ -15,6 +15,7 @@ const JiePlatformErrorMessages = {
   NO_MATCH: "old_string was not found in the file",
   AMBIGUOUS_MATCH: "old_string matched more than one location in the file",
   OVERLAPPING_EDITS: "edits overlap each other in the file",
+  NO_CHANGES: "The operation produced no changes (no diff)",
   INVALID_PATTERN: "Invalid search pattern",
 
   KANBAN_WRITE_INVALID: "Kanban board violates the write_kanban contract",
@@ -64,8 +65,6 @@ const JiePlatformErrorMessages = {
   REPLICA_LIMIT_EXCEEDED: "Agent replica count exceeds the maximum allowed",
   SUBSCRIBE_REJECTS_PLATFORM_TOPIC: "subscribe cannot target a platform topic",
   TOOL_SPEC_UNRESOLVED: "Tool spec resolved no tools",
-
-  OAUTH_NOT_SUPPORTED: "OAuth credentials are not supported in v1",
 
   UNKNOWN_SESSION: "Unknown session_id",
   INVALID_SESSION_NAME: "Invalid session name",

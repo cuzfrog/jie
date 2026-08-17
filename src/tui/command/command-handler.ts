@@ -83,9 +83,6 @@ export class CommandHandlerImpl implements CommandHandler {
 
   private dispatchUiAction(action: UiAction): void {
     switch (action) {
-      case "clearState":
-        this.stateStore.dispatch(Actions.clearTuiState());
-        return;
       case "showHelp":
         this.stateStore.dispatch(Actions.showHelp());
         return;
@@ -110,6 +107,7 @@ export class CommandHandlerImpl implements CommandHandler {
     switch (command.name) {
       case "team":
       case "resumeSession":
+      case "newSession":
         this.stateStore.dispatch(Actions.switchTeam(result as TeamInfo));
         return;
       case "reload": {
@@ -129,7 +127,10 @@ export class CommandHandlerImpl implements CommandHandler {
         return;
       }
       case "kanbanRemove":
+      case "kanbanClear":
       case "kanbanSetStatus":
+      case "kanbanEdit":
+      case "kanbanToggleTodo":
         this.stateStore.dispatch(Actions.setKanbanBoard((result as { readonly board: ReadonlyArray<KanbanCard> }).board));
         return;
       case "kanbanHandoff": {

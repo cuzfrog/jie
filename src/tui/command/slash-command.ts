@@ -15,7 +15,7 @@ export interface ArgumentSpec {
   readonly greedy?: boolean;
 }
 
-export type UiAction = "clearState" | "showHelp" | "stop" | "cycleKanbanView";
+export type UiAction = "showHelp" | "stop" | "cycleKanbanView";
 
 export type ResolvedCommand =
   | { readonly kind: "ui"; readonly action: UiAction }
@@ -46,12 +46,6 @@ export interface SlashCommandDefinition {
   complete(argumentText: string, context: SlashContext): SlashCompletion | Promise<SlashCompletion | null> | null;
 }
 
-export const MAX_SUGGESTIONS = 20;
-
-export function hasPrefix(value: string, prefix: string): boolean {
-  return value.toLowerCase().startsWith(prefix.toLowerCase());
-}
-
 export function isAlreadyComplete(candidates: ReadonlyArray<string>, prefix: string): boolean {
   return prefix !== "" && candidates.some((candidate) => candidate.toLowerCase() === prefix.toLowerCase());
 }
@@ -62,7 +56,11 @@ export function completeItems(
   match?: (item: SlashCompletionItem, prefix: string) => boolean,
 ): SlashCompletion | null {
   if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
-  const matcher = match ?? ((item) => hasPrefix(item.value, prefix));
-  const matches = items.filter((item) => matcher(item, prefix)).slice(0, MAX_SUGGESTIONS);
+  const matcher = match ?? ((item) => containsText(item.value, prefix));
+  const matches = items.filter((item) => matcher(item, prefix));
   return matches.length === 0 ? null : { items: matches };
+}
+
+function containsText(value: string, needle: string): boolean {
+  return value.toLowerCase().includes(needle.toLowerCase());
 }

@@ -51,6 +51,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       team: this.team.bind(this),
       reload: this.reload.bind(this),
       resumeSession: this.resumeSession.bind(this),
+      newSession: this.newSession.bind(this),
       renameSession: this.renameSession.bind(this),
       getTeamInfo: this.getTeamInfo.bind(this),
       getGitStatus: this.getGitStatus.bind(this),
@@ -61,6 +62,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       compact: this.compact.bind(this),
       kanbanAdd: this.kanbanAdd.bind(this),
       kanbanRemove: this.kanbanRemove.bind(this),
+      kanbanClear: this.kanbanClear.bind(this),
       kanbanSetStatus: this.kanbanSetStatus.bind(this),
       kanbanEdit: this.kanbanEdit.bind(this),
       kanbanHandoff: this.kanbanHandoff.bind(this),
@@ -102,6 +104,9 @@ export class CommandExecutorImpl implements CommandExecutor {
   private setDefaultModel(command: Command<"setDefaultModel">): CommandResult<"setDefaultModel"> {
     if (!this.modelRegistry.providers().includes(command.provider)) {
       throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: command.provider });
+    }
+    if (this.modelRegistry.resolve(command.provider, command.id) === undefined) {
+      throw new JiePlatformError("MODEL_UNRESOLVED", { detail: `${command.provider}/${command.id}` });
     }
     this.settingsStore.setDefaultProvider(command.provider, command.id);
     this.eventManager.publish(Events.userModelUpdate({ kind: "user" }, command.provider, command.id));
@@ -217,6 +222,10 @@ export class CommandExecutorImpl implements CommandExecutor {
     return this.teamManager.resumeSession(command.teamId, command.sessionId);
   }
 
+  private newSession(command: Command<"newSession">): Promise<CommandResult<"newSession">> {
+    return this.teamManager.newSession(command.teamId);
+  }
+
   private renameSession(command: Command<"renameSession">): CommandResult<"renameSession"> {
     this.teamManager.renameSession(command.teamId, command.sessionName);
     return null;
@@ -273,7 +282,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       throw new JiePlatformError("KANBAN_TEXT_EMPTY");
     }
     const description = command.description === "" || command.description === content ? undefined : command.description;
-    const scope = command.scope ?? "team";
+    const scope = command.scope ?? "session";
     const card = this.kanbanStore.add(command.teamId, sessionId, content, description, scope);
     if (card === null) {
       throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: content });
@@ -286,6 +295,12 @@ export class CommandExecutorImpl implements CommandExecutor {
     if (!this.kanbanStore.remove(command.teamId, sessionId, command.cardId)) {
       throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
     }
+    return { board: this.kanbanStore.load(command.teamId, sessionId) };
+  }
+
+  private kanbanClear(command: Command<"kanbanClear">): CommandResult<"kanbanClear"> {
+    const sessionId = this.sessionIdFor(command.teamId);
+    this.kanbanStore.clearSession(command.teamId, sessionId);
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
   }
 

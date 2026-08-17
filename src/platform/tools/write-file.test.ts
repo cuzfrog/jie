@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -157,14 +158,24 @@ describe("write_file", () => {
     expect(result.details).toMatchObject({ diff: "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c" });
   });
 
-  test("rewriting identical content reports an empty diff", async () => {
-    writeFileSync(join(workspace, "a.txt"), "same\n");
+  test("writing identical content to an existing file rejects no changes and leaves the file untouched", async () => {
+    const path = join(workspace, "a.txt");
+    writeFileSync(path, "same\n");
+    const beforeMtime = statSync(path).mtimeMs;
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
-    const result = await tool.execute(
-      { path: "a.txt", content: "same\n" },
-      makeEmptyContext(),
-    );
-    expect(result.details).toMatchObject({ diff: "" });
+    await expect(
+      tool.execute({ path: "a.txt", content: "same\n" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "NO_CHANGES", detail: "a.txt" });
+    expect(readFileSync(path, "utf-8")).toBe("same\n");
+    expect(statSync(path).mtimeMs).toBe(beforeMtime);
+  });
+
+  test("writing empty content to a new path rejects no changes and creates nothing", async () => {
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
+    await expect(
+      tool.execute({ path: "empty.txt", content: "" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "NO_CHANGES", detail: "empty.txt" });
+    expect(existsSync(join(workspace, "empty.txt"))).toBe(false);
   });
 
   test("overwriting a non-UTF-8 file succeeds with a null diff", async () => {

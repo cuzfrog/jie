@@ -102,6 +102,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
           tools: [],
           subscribe: [],
           skills: [],
+          sessionUsage: null,
           model: null,
         }],
       };

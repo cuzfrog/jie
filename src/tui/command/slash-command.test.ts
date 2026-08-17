@@ -1,12 +1,4 @@
-import { completeItems, hasPrefix, isAlreadyComplete } from "./slash-command";
-
-describe("hasPrefix", () => {
-  test("matches case-insensitively from the start", () => {
-    expect(hasPrefix("OpenAI", "open")).toBe(true);
-    expect(hasPrefix("OpenAI", "ai")).toBe(false);
-    expect(hasPrefix("OpenAI", "")).toBe(true);
-  });
-});
+import { completeItems, isAlreadyComplete } from "./slash-command";
 
 describe("isAlreadyComplete", () => {
   test("is false for an empty prefix", () => {
@@ -38,9 +30,14 @@ describe("completeItems", () => {
     expect(completion!.items.map((item) => item.value)).toEqual(["off", "low", "medium", "high", "max"]);
   });
 
-  test("filters items by the value prefix", () => {
-    const completion = completeItems([...ITEMS], "m");
-    expect(completion!.items.map((item) => item.value)).toEqual(["medium", "max"]);
+  test("filters items by substring of the value", () => {
+    const completion = completeItems([...ITEMS], "ed");
+    expect(completion!.items.map((item) => item.value)).toEqual(["medium"]);
+  });
+
+  test("filters items case-insensitively", () => {
+    const completion = completeItems([...ITEMS], "MED");
+    expect(completion!.items.map((item) => item.value)).toEqual(["medium"]);
   });
 
   test("returns null when the prefix exactly matches a value", () => {
@@ -51,17 +48,20 @@ describe("completeItems", () => {
     expect(completeItems([...ITEMS], "turbo")).toBeNull();
   });
 
-  test("caps the result at MAX_SUGGESTIONS", () => {
+  test("returns all matches beyond MAX_SUGGESTIONS", () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ value: `item-${i}`, label: `item-${i}` }));
     const completion = completeItems(many, "");
-    expect(completion!.items.length).toBe(20);
+    expect(completion!.items.length).toBe(30);
   });
 
   test("uses a custom matcher when provided", () => {
     const completion = completeItems(
       [{ value: "id-1", label: "one" }, { value: "id-2", label: "two" }],
       "two",
-      (item, prefix) => hasPrefix(item.value, prefix) || hasPrefix(item.label, prefix),
+      (item, prefix) => {
+        const needle = prefix.toLowerCase();
+        return item.value.toLowerCase().includes(needle) || item.label.toLowerCase().includes(needle);
+      },
     );
     expect(completion!.items[0]!.value).toBe("id-2");
   });

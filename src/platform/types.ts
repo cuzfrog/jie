@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { UserMessage } from "@earendil-works/pi-ai";
+import type { SessionUsageTotals } from "./storage";
 
 declare module "@earendil-works/pi-ai" {
     interface ThinkingContent {
@@ -71,6 +72,7 @@ export interface AgentInfo {
     readonly subscribe: ReadonlyArray<string>;
     readonly skills: ReadonlyArray<SkillInfo>;
     readonly model: ModelInfo | null;
+    readonly sessionUsage: SessionUsageTotals | null;
     readonly ephemeral?: boolean;
 }
 

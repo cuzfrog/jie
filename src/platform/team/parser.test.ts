@@ -60,19 +60,19 @@ describe("loadTeamFromDir", () => {
     expect(bp.leaderRole).toBe("general");
   });
 
-  test("agent with target_context_window_size stores the value", () => {
+  test("agent with target-context-window-size stores the value", () => {
     writeFileSync(
       join(dir, "general.md"),
-      `---\ntools:\n  - bash\ntarget_context_window_size: 30000\n---\nsolo body`,
+      `---\ntools:\n  - bash\ntarget-context-window-size: 30000\n---\nsolo body`,
     );
     const bp = loadTeamFromDir(dir);
     expect(bp.roles[0]?.targetContextWindowSize).toBe(30000);
   });
 
-  test("invalid target_context_window_size is rejected", () => {
+  test("invalid target-context-window-size is rejected", () => {
     writeFileSync(
       join(dir, "general.md"),
-      `---\ntools:\n  - bash\ntarget_context_window_size: 0\n---\nsolo body`,
+      `---\ntools:\n  - bash\ntarget-context-window-size: 0\n---\nsolo body`,
     );
     expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
   });

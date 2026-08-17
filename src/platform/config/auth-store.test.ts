@@ -61,4 +61,46 @@ describe("AuthStoreImpl", () => {
     store.clear();
     expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({});
   });
+
+  test("read() returns the stored credential or undefined", async () => {
+    const store = new AuthStoreImpl(homeJieDir);
+    store.setProvider("anthropic", "sk-a");
+    await expect(store.read("anthropic")).resolves.toEqual({ type: "api_key", key: "sk-a" });
+    await expect(store.read("openai")).resolves.toBeUndefined();
+  });
+
+  test("list() returns provider ids with credential types", async () => {
+    const store = new AuthStoreImpl(homeJieDir);
+    store.setProvider("anthropic", "sk-a");
+    store.setProvider("openai", "sk-o");
+    const entries = await store.list();
+    expect([...entries].sort((a, b) => a.providerId.localeCompare(b.providerId))).toEqual([
+      { providerId: "anthropic", type: "api_key" },
+      { providerId: "openai", type: "api_key" },
+    ]);
+  });
+
+  test("modify() writes the returned credential and resolves it", async () => {
+    const store = new AuthStoreImpl(homeJieDir);
+    store.setProvider("anthropic", "sk-old");
+    const result = await store.modify("anthropic", (current) => Promise.resolve({ type: "api_key", key: `${current?.key}-new` }));
+    expect(result).toEqual({ type: "api_key", key: "sk-old-new" });
+    expect(store.load()).toEqual({ anthropic: { type: "api_key", key: "sk-old-new" } });
+  });
+
+  test("modify() returning undefined leaves the entry unchanged and resolves the current credential", async () => {
+    const store = new AuthStoreImpl(homeJieDir);
+    store.setProvider("anthropic", "sk-old");
+    const result = await store.modify("anthropic", () => Promise.resolve(undefined));
+    expect(result).toEqual({ type: "api_key", key: "sk-old" });
+    expect(store.load()).toEqual({ anthropic: { type: "api_key", key: "sk-old" } });
+  });
+
+  test("delete() removes the entry", async () => {
+    const store = new AuthStoreImpl(homeJieDir);
+    store.setProvider("anthropic", "sk-a");
+    await store.delete("anthropic");
+    expect(store.load()).toEqual({});
+    await expect(store.delete("anthropic")).resolves.toBeUndefined();
+  });
 });

@@ -14,7 +14,7 @@ describe("KanbanCommand", () => {
   test("meta", () => {
     expect(command.meta.name).toBe("kanban");
     expect(command.meta.description).toBe("toggle the kanban panel");
-    expect(command.meta.argumentHint).toBe("<add|remove|complete|review|handoff|toggle>");
+    expect(command.meta.argumentHint).toBe("<add|clear|remove|complete|review|handoff|toggle>");
   });
 
   test("resolve with no subcommand cycles the kanban view", () => {
@@ -33,20 +33,39 @@ describe("KanbanCommand", () => {
     });
   });
 
-  test("resolve add with --ephemeral sets the session scope", () => {
+  test("resolve add with --team and --title sets both scope and title", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["add", "--team", "--title", "T", "desc"])).toEqual({
+      kind: "platform",
+      slashName: "kanban add",
+      command: { name: "kanbanAdd", teamId: "t1", title: "T", description: "desc", scope: "team" },
+    });
+  });
+
+  test("resolve add with --team sets the team scope", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["add", "--team", "task"])).toEqual({
+      kind: "platform",
+      slashName: "kanban add",
+      command: { name: "kanbanAdd", teamId: "t1", description: "task", scope: "team" },
+    });
+  });
+
+  test("resolve add with --ephemeral reports an unknown flag", () => {
     const { platform } = makePlatform();
     const context = { state: teamState(), platform };
     expect(command.resolve(context, ["add", "--ephemeral", "task"])).toEqual({
-      kind: "platform",
-      slashName: "kanban add",
-      command: { name: "kanbanAdd", teamId: "t1", description: "task", scope: "session" },
+      kind: "error",
+      text: "/kanban add: unknown flag '--ephemeral'",
     });
   });
 
   test("resolve add without a description reports usage", () => {
     const { platform } = makePlatform();
     const context = { state: teamState(), platform };
-    expect(command.resolve(context, ["add"])).toEqual({ kind: "error", text: "/kanban add [--ephemeral] [--title <title>] <description>" });
+    expect(command.resolve(context, ["add"])).toEqual({ kind: "error", text: "/kanban add [--team] [--title <title>] <description>" });
   });
 
   test("resolve remove requires a card id", () => {
@@ -158,6 +177,25 @@ describe("KanbanCommand", () => {
     });
   });
 
+  test("resolve clear builds the kanbanClear command", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["clear"])).toEqual({
+      kind: "platform",
+      slashName: "kanban clear",
+      command: { name: "kanbanClear", teamId: "t1" },
+    });
+  });
+
+  test("resolve clear with extra arguments reports usage", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["clear", "junk"])).toEqual({
+      kind: "error",
+      text: "/kanban clear takes no arguments",
+    });
+  });
+
   test("resolve add requires a loaded team", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
@@ -170,7 +208,8 @@ describe("KanbanCommand", () => {
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [
-        { value: "add", label: "add", description: "[--title <title>] <description>" },
+        { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
+        { value: "clear", label: "clear", description: "remove all session-scoped cards" },
         { value: "remove", label: "remove", description: "<cardId>" },
         { value: "complete", label: "complete", description: "<cardId>" },
         { value: "review", label: "review", description: "<cardId>" },
@@ -180,12 +219,15 @@ describe("KanbanCommand", () => {
     });
   });
 
-  test("complete filters subcommands by prefix", async () => {
+  test("complete filters subcommands by substring", async () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     const result = await command.complete("c", context);
     expect(result).toEqual({
-      items: [{ value: "complete", label: "complete", description: "<cardId>" }],
+      items: [
+        { value: "clear", label: "clear", description: "remove all session-scoped cards" },
+        { value: "complete", label: "complete", description: "<cardId>" },
+      ],
     });
   });
 
@@ -224,6 +266,36 @@ describe("KanbanCommand", () => {
         { value: "review #3", label: "#3", description: "third task" },
       ],
     });
+  });
+
+  test("complete remove filters cards by a substring of the card id", async () => {
+    const { platform } = makePlatform();
+    const board: ReadonlyArray<KanbanCard> = [
+      { id: "#12", content: "twelve", status: "pending" },
+      { id: "#21", content: "twenty-one", status: "pending" },
+      { id: "#33", content: "thirty-three", status: "pending" },
+    ];
+    const context = { state: makeTuiState({ kanbanBoard: board }), platform };
+    const result = await command.complete("remove 1", context);
+    expect(result).toEqual({
+      items: [
+        { value: "remove #12", label: "#12", description: "twelve" },
+        { value: "remove #21", label: "#21", description: "twenty-one" },
+      ],
+    });
+  });
+
+  test("complete remove returns all matching card ids beyond 20", async () => {
+    const { platform } = makePlatform();
+    const board: ReadonlyArray<KanbanCard> = Array.from({ length: 25 }, (_, i) => ({
+      id: `#${i + 1}`,
+      content: `task ${i + 1}`,
+      status: "pending",
+    }));
+    const context = { state: makeTuiState({ kanbanBoard: board }), platform };
+    const result = await command.complete("remove ", context);
+    expect(result).not.toBeNull();
+    expect(result!.items.length).toBe(25);
   });
 
   test("complete add returns null", async () => {

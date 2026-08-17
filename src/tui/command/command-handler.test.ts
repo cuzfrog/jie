@@ -67,20 +67,23 @@ describe("CommandHandlerImpl", () => {
     expect(dispatch).not.toHaveBeenCalledWith(Actions.setTransientMessage(expect.anything()));
   });
 
-  test("handle('/clear') dispatches clearTuiState", () => {
+  test("handle('/new') dispatches newSession for the loaded team", () => {
     const { platform } = makePlatform();
-    const { handler, dispatch } = makeHandler(platform);
-    handler.handle("/clear");
+    const state = stateWithTeam("my-team", true);
+    const { handler, dispatch } = makeHandler(platform, state);
+    handler.handle("/new");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
-    expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("starting new session"));
+    expect(platform.execute).toHaveBeenCalledWith({ name: "newSession", teamId: "my-team" });
   });
 
-  test("handle('/new') dispatches clearTuiState as an alias of /clear", () => {
+  test("handle('/new') reports an error when no team is loaded", () => {
     const { platform } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/new");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
-    expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/new: no team loaded"));
+    expect(platform.execute).not.toHaveBeenCalled();
   });
 
   test("handle('/exit') dispatches requestQuit", () => {
@@ -539,7 +542,7 @@ describe("CommandHandlerImpl — /reload", () => {
     currentSessionId: null,
     kanbanCards: [],
     history: [],
-    agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+    agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
   };
 
   test("/reload while any agent is busy sets an error banner and does not call execute", () => {
@@ -629,7 +632,7 @@ describe("CommandHandlerImpl — /team", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     }));
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/team alpha");
@@ -644,7 +647,7 @@ describe("CommandHandlerImpl — /team", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     }));
   });
 
@@ -657,7 +660,7 @@ describe("CommandHandlerImpl — /team", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     } as const;
     execute.mockImplementation(async () => identity);
     const { handler, dispatch } = makeHandler(platform);
@@ -711,7 +714,7 @@ describe("CommandHandlerImpl — /resume", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("setup-assistant", true));
@@ -729,7 +732,7 @@ describe("CommandHandlerImpl — /resume", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("setup-assistant", true));
@@ -842,19 +845,19 @@ describe("CommandHandlerImpl — /kanban", () => {
     expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", title: "refactor", description: "write the report" });
   });
 
-  test("/kanban add --ephemeral <description> creates a session-scoped card", () => {
+  test("/kanban add --team <description> creates a team-scoped card", () => {
     const { platform, execute } = makePlatform();
     execute.mockResolvedValueOnce({ board: [], card: { id: "#1", content: "t", status: "pending" } });
     const { handler } = makeHandler(platform, stateWithTeam("my-team", true));
-    handler.handle("/kanban add --ephemeral write the report");
-    expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", description: "write the report", scope: "session" });
+    handler.handle("/kanban add --team write the report");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", description: "write the report", scope: "team" });
   });
 
   test("/kanban add with no description reports usage", () => {
     const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
     handler.handle("/kanban add");
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban add [--ephemeral] [--title <title>] <description>"));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban add [--team] [--title <title>] <description>"));
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -874,6 +877,24 @@ describe("CommandHandlerImpl — /kanban", () => {
     expect(execute).toHaveBeenCalledWith({ name: "kanbanRemove", teamId: "my-team", cardId: "#1" });
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban clear executes kanbanClear and publishes the board", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [] });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban clear");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanClear", teamId: "my-team" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban clear with extra arguments reports usage", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban clear junk");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban clear takes no arguments"));
+    expect(execute).not.toHaveBeenCalled();
   });
 
   test("/kanban remove without a card id reports usage", () => {

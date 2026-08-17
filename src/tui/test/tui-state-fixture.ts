@@ -46,6 +46,7 @@ export function makeTuiState(
     version: "",
     installedTeams: null,
     teamId: null,
+    sessionId: null,
     sessionName: null,
     leaderAgentId: null,
     agents: new Map(),

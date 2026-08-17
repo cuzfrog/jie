@@ -1,5 +1,5 @@
-import type { Terminal } from "@earendil-works/pi-tui";
-import { type AnyEventEnvelope, type JiePlatform, type QuestionAnswer } from "../../platform";
+import type { Terminal, TUI } from "@earendil-works/pi-tui";
+import { type AnyEventEnvelope, type JiePlatform, type QuestionAnswer, type TeamInfo } from "../../platform";
 import { logger } from "../../utils";
 import type { CommandHandler } from "../command";
 import { Actions, ActionTypes } from "./actions";
@@ -16,6 +16,7 @@ export class EffectHandlerImpl implements EffectHandler {
   private readonly platform: JiePlatform;
   private readonly stateStore: StateStore;
   private readonly terminal: Terminal;
+  private readonly screen: Pick<TUI, "requestRender">;
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
 
@@ -24,12 +25,17 @@ export class EffectHandlerImpl implements EffectHandler {
     stateStore: StateStore,
     commandHandler: CommandHandler,
     terminal: Terminal,
+    screen: Pick<TUI, "requestRender">,
     quitTui: () => Promise<void>,
   ) {
     this.platform = platform;
     this.stateStore = stateStore;
     this.terminal = terminal;
+    this.screen = screen;
     this.unsubscribeBus = subscribeToBus(platform, (env) => {
+      if (env.type === "system.team.loaded" && this.shouldResetScreen(env.payload)) {
+        this.resetScreen();
+      }
       this.stateStore.dispatch(Actions.receiveEvent(env));
       if (env.type === "agent.idle" || env.type === "agent.question.ask") {
         void this.maybePlaySound(env);
@@ -130,6 +136,17 @@ export class EffectHandlerImpl implements EffectHandler {
     } catch (error: unknown) {
       log.error(`failed to read notification sound setting: ${String(error)}`);
     }
+  }
+
+  private shouldResetScreen(teamInfo: TeamInfo): boolean {
+    const state = this.stateStore.getState();
+    return state.teamId === teamInfo.id && state.sessionId !== null && state.sessionId !== teamInfo.currentSessionId;
+  }
+
+  private resetScreen(): void {
+    this.terminal.clearScreen();
+    this.terminal.write("\x1b[3J");
+    this.screen.requestRender(true);
   }
 }
 

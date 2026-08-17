@@ -32,7 +32,7 @@ function loadedState(): TuiState {
     currentSessionId: null,
     kanbanCards: [],
     history: [],
-    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
   }));
 }
 
@@ -45,8 +45,8 @@ function twoAgentState(): TuiState {
     kanbanCards: [],
     history: [],
     agents: [
-      { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
-      { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
+      { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
+      { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
     ],
   }));
 }
@@ -70,7 +70,7 @@ describe("reduceTeamLoaded", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     }));
     expect(state.teamId).toBe("my-team");
     expect(state.agents.size).toBe(1);
@@ -86,7 +86,7 @@ describe("reduceTeamLoaded", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "my-team-1", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "my-team-1", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     }));
     const state2 = reduce(state1, Events.teamLoaded(SYSTEM_SENDER, {
       id: "my-team-2",
@@ -95,7 +95,7 @@ describe("reduceTeamLoaded", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "my-team-2", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "my-team-2", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     }));
     expect(state2.teamId).toBe("my-team-2");
     expect(state2.agents.size).toBe(1);
@@ -113,8 +113,8 @@ describe("reduceTeamLoaded", () => {
       kanbanCards: [],
       history: [],
       agents: [
-        { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
-        { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
+        { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
+        { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
       ],
     }));
     expect(state.leaderAgentId).toBe("my-team:manager-1");
@@ -144,7 +144,7 @@ describe("Actions.switchTeam", () => {
       kanbanCards: [],
       history: [],
       agents: [
-        { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+        { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
       ],
     };
     const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
@@ -163,7 +163,7 @@ describe("Actions.switchTeam", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     }));
     const second = reduceAction(first, Actions.switchTeam({
       id: "team-b",
@@ -173,8 +173,8 @@ describe("Actions.switchTeam", () => {
       kanbanCards: [],
       history: [],
       agents: [
-        { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
-        { teamId: "team-b", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+        { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
+        { teamId: "team-b", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null },
       ],
     }));
     expect(second.teamId).toBe("team-b");
@@ -194,7 +194,7 @@ describe("Actions.switchTeam", () => {
       currentSessionId: null,
       kanbanCards: [],
       history: [],
-      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "setup-assistant", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null }],
     };
     const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
     expect(state.agents.get("setup-assistant:general-1")?.role).toBe("general");
@@ -388,7 +388,7 @@ describe("reduceTurnStart", () => {
     expect(agent?.currentTurn?.seq).toBe(0);
     expect(state.nextEntrySeq).toBe(1);
     expect(agent?.currentTurn?.entries).toEqual([
-      { kind: "thinking", text: "ponder", durationMs: 300 },
+      expect.objectContaining({ kind: "thinking", text: "ponder", durationMs: 300 }),
       { kind: "toolResult", callId: "c1", name: "bash", input: "ls", inputTruncated: false, output: "out", outputTruncated: false, durationMs: 10, error: null, details: null },
     ]);
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 0, "thinking", "more"));
@@ -397,8 +397,8 @@ describe("reduceTurnStart", () => {
     expect(agent?.currentTurn?.entries.length).toBe(3);
     const thinkingEntries = agent?.currentTurn?.entries.filter((e) => e.kind === "thinking");
     expect(thinkingEntries).toEqual([
-      { kind: "thinking", text: "ponder", durationMs: 300 },
-      { kind: "thinking", text: "more", durationMs: 500 },
+      expect.objectContaining({ kind: "thinking", text: "ponder", durationMs: 300 }),
+      expect.objectContaining({ kind: "thinking", text: "more", durationMs: 500 }),
     ]);
   });
 
@@ -431,6 +431,31 @@ describe("reduceTurnStart", () => {
     expect(state2).toBe(state);
   });
 
+  test("sets workStartedAt from the event timestamp when an idle agent starts a new prompt", () => {
+    const event = Events.agentTurnStart(AGENT_SENDER, "hello");
+    const state = reduce(loadedState(), event);
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.workStartedAt).toBe(Date.parse(event.timestamp));
+    expect(agent?.status).toBe("busy");
+  });
+
+  test("keeps workStartedAt when a busy agent receives another prompt", () => {
+    const seeded = { ...loadedState(), agents: new Map(loadedState().agents) };
+    const agent = seeded.agents.get("my-team:general-1")!;
+    seeded.agents.set(agent.agentId, { ...agent, status: "busy", workStartedAt: 42 });
+    const event = Events.agentTurnStart(AGENT_SENDER, "next");
+    const state = reduce(seeded, event);
+    expect(state.agents.get("my-team:general-1")?.workStartedAt).toBe(42);
+  });
+
+  test("keeps workStartedAt for a prompt-less continuation turn", () => {
+    const seeded = { ...loadedState(), agents: new Map(loadedState().agents) };
+    const agent = seeded.agents.get("my-team:general-1")!;
+    seeded.agents.set(agent.agentId, { ...agent, status: "busy", workStartedAt: 42 });
+    const state = reduce(seeded, Events.agentTurnStart(AGENT_SENDER, null));
+    expect(state.agents.get("my-team:general-1")?.workStartedAt).toBe(42);
+  });
+
   test("clears interruptedAgentId when the interrupted agent starts its next turn", () => {
     const state = reduce(interruptedState(), Events.agentTurnStart(AGENT_SENDER, null));
     expect(state.interruptedAgentId).toBeNull();
@@ -454,6 +479,15 @@ describe("reduceIdle", () => {
     const agent = state2.agents.get("my-team:general-1");
     expect(agent?.status).toBe("idle");
     expect(agent?.lastStopReason).toBe("stop");
+  });
+
+  test("leaves workStartedAt unchanged on idle", () => {
+    const seeded = { ...loadedState(), agents: new Map(loadedState().agents) };
+    const agent = seeded.agents.get("my-team:general-1")!;
+    seeded.agents.set(agent.agentId, { ...agent, status: "busy", workStartedAt: 42 });
+    const state = reduce(seeded, Events.agentIdle(AGENT_SENDER, "stop"));
+    expect(state.agents.get("my-team:general-1")?.workStartedAt).toBe(42);
+    expect(state.agents.get("my-team:general-1")?.status).toBe("idle");
   });
 
   test("keeps a populated currentTurn for the next turn to rotate (tui-state.md)", () => {
@@ -561,7 +595,7 @@ describe("reduceUsage", () => {
     expect(after).not.toBe(before);
   });
 
-  test("agent.usage stores upload and download token counts", () => {
+  test("agent.usage stores session input and output token counts", () => {
     const state = loadedState();
     const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
       input: 100,
@@ -569,10 +603,63 @@ describe("reduceUsage", () => {
       cacheRead: 0,
       cacheWrite: 0,
       totalTokens: 1234,
+      session_input_tokens: 250,
+      session_output_tokens: 120,
+      partial: false,
     }));
     const agent = state2.agents.get("my-team:general-1");
-    expect(agent?.uploadTokens).toBe(100);
-    expect(agent?.downloadTokens).toBe(50);
+    expect(agent?.sessionInputTokens).toBe(250);
+    expect(agent?.sessionOutputTokens).toBe(120);
+    expect(agent?.inflightInputTokens).toBe(0);
+    expect(agent?.inflightOutputTokens).toBe(0);
+  });
+
+  test("agent.usage partial sets inflight tokens and leaves session totals untouched", () => {
+    const state = loadedState();
+    const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10,
+      output: 5,
+      cacheRead: 2,
+      cacheWrite: 1,
+      totalTokens: 0,
+      session_input_tokens: 0,
+      session_output_tokens: 0,
+      partial: true,
+    }));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.inflightInputTokens).toBe(13);
+    expect(agent?.inflightOutputTokens).toBe(5);
+    expect(agent?.sessionInputTokens).toBe(0);
+    expect(agent?.sessionOutputTokens).toBe(0);
+  });
+
+  test("agent.usage final clears inflight tokens", () => {
+    const state = loadedState();
+    const withPartial = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10,
+      output: 5,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 100,
+      session_input_tokens: 0,
+      session_output_tokens: 0,
+      partial: true,
+    }));
+    const final = reduce(withPartial, Events.agentUsage(AGENT_SENDER, {
+      input: 10,
+      output: 5,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 100,
+      session_input_tokens: 15,
+      session_output_tokens: 5,
+      partial: false,
+    }));
+    const agent = final.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(15);
+    expect(agent?.sessionOutputTokens).toBe(5);
+    expect(agent?.inflightInputTokens).toBe(0);
+    expect(agent?.inflightOutputTokens).toBe(0);
   });
 
   test("rejects usage events from a foreign team", () => {
@@ -689,6 +776,16 @@ describe("reduceCompacted", () => {
     expect(state.agents.get("my-team:general-1")?.compactionInProgress).toBe(false);
   });
 
+  test("compaction does not reset workStartedAt", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "do work"));
+    const startedAt = state.agents.get("my-team:general-1")?.workStartedAt;
+    expect(startedAt).not.toBeNull();
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "answer"));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    state = reduce(state, Events.agentCompacted(AGENT_SENDER, "summary", 100, 50, 1));
+    expect(state.agents.get("my-team:general-1")?.workStartedAt).toBe(startedAt);
+  });
+
   test("a later compaction advances the marker and keeps all earlier turns", () => {
     let state = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "first summary", 500, 100, 1));
     state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "four"));
@@ -729,7 +826,7 @@ describe("reduceStreamChunk", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 3, "thinking", "I think"));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.entries.length).toBe(2);
-    expect(agent?.currentTurn?.entries[1]).toEqual({ kind: "thinking", text: "I think" });
+    expect(agent?.currentTurn?.entries[1]).toEqual(expect.objectContaining({ kind: "thinking", text: "I think" }));
   });
 
   test("opens a new block when stream_id changes", () => {
@@ -749,6 +846,72 @@ describe("reduceStreamChunk", () => {
     const state2 = reduce(state, Events.agentStreamChunk(foreign, 1, 1, "text", "x"));
     expect(state2).toBe(state);
   });
+
+  describe("thinking block startedAtMs", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ now: 1000 });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test("stamps the clock on the first thinking chunk of a stream", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "hmm"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([{ kind: "thinking", text: "hmm", startedAtMs: 1000 }]);
+    });
+
+    test("preserves the original stamp on subsequent thinking chunks", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "hmm"));
+      vi.advanceTimersByTime(500);
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "thinking", " more"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([{ kind: "thinking", text: "hmm more", startedAtMs: 1000 }]);
+    });
+
+    test("stamps a fresh thinking block when the block type changes within a stream", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "answer"));
+      vi.advanceTimersByTime(200);
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "thinking", "hmm"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([
+        { kind: "text", text: "answer" },
+        { kind: "thinking", text: "hmm", startedAtMs: 1200 },
+      ]);
+    });
+
+    test("stamps a fresh thinking block when the stream id changes", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "first"));
+      vi.advanceTimersByTime(300);
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 0, "thinking", "second"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([
+        { kind: "thinking", text: "first", startedAtMs: 1000 },
+        { kind: "thinking", text: "second", startedAtMs: 1300 },
+      ]);
+    });
+
+    test("text entries do not carry startedAtMs", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "hello"));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([{ kind: "text", text: "hello" }]);
+    });
+
+    test("stream end leaves the startedAtMs stamp intact and only adds durationMs", () => {
+      let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+      state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "hmm"));
+      vi.advanceTimersByTime(400);
+      state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, [100]));
+      const entries = state.agents.get("my-team:general-1")?.currentTurn?.entries;
+      expect(entries).toEqual([{ kind: "thinking", text: "hmm", durationMs: 100, startedAtMs: 1000 }]);
+    });
+  });
 });
 
 describe("reduceStreamEnd", () => {
@@ -758,7 +921,7 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 2, [350]));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
-      { kind: "thinking", text: "ponder", durationMs: 350 },
+      expect.objectContaining({ kind: "thinking", text: "ponder", durationMs: 350 }),
       { kind: "text", text: "answer" },
     ]);
   });
@@ -770,8 +933,8 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, [100, 250]));
     const blocks = state.agents.get("my-team:general-1")?.currentTurn?.entries;
-    expect(blocks?.[0]).toEqual({ kind: "thinking", text: "a", durationMs: 100 });
-    expect(blocks?.[2]).toEqual({ kind: "thinking", text: "b", durationMs: 250 });
+    expect(blocks?.[0]).toEqual(expect.objectContaining({ kind: "thinking", text: "a", durationMs: 100 }));
+    expect(blocks?.[2]).toEqual(expect.objectContaining({ kind: "thinking", text: "b", durationMs: 250 }));
   });
 
   test("extra durations beyond the thinking blocks are ignored", () => {
@@ -779,7 +942,7 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "a"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, [100, 250]));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
-      { kind: "thinking", text: "a", durationMs: 100 },
+      expect.objectContaining({ kind: "thinking", text: "a", durationMs: 100 }),
     ]);
   });
 
@@ -790,9 +953,9 @@ describe("reduceStreamEnd", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
     state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, [100]));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.entries).toEqual([
-      { kind: "thinking", text: "a", durationMs: 100 },
+      expect.objectContaining({ kind: "thinking", text: "a", durationMs: 100 }),
       { kind: "text", text: "mid" },
-      { kind: "thinking", text: "b" },
+      expect.objectContaining({ kind: "thinking", text: "b" }),
     ]);
   });
 
@@ -992,6 +1155,53 @@ describe("reduceToolCall + reduceToolResult", () => {
     const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "write_kanban", "ok", 5, null, { kind: "kanban", cards: [{ id: "#1", content: "x", status: "in_progress" }] }));
     expect(state2).toBe(state);
     expect(state2.kanban.board).toEqual([]);
+  });
+});
+
+describe("session token accounting", () => {
+  test("turn.start and turn.continue do not reset session token totals", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 100,
+      session_input_tokens: 15, session_output_tokens: 5, partial: false,
+    }));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "hi"));
+    let agent = state.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(15);
+    expect(agent?.sessionOutputTokens).toBe(5);
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    state = reduce(state, Events.agentTurnContinue(AGENT_SENDER));
+    agent = state.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(15);
+    expect(agent?.sessionOutputTokens).toBe(5);
+  });
+
+  test("compacted does not reset session token totals", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 100,
+      session_input_tokens: 15, session_output_tokens: 5, partial: false,
+    }));
+    state = reduce(state, Events.agentCompacted(AGENT_SENDER, "summary", 100, 50, 0));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.sessionInputTokens).toBe(15);
+    expect(agent?.sessionOutputTokens).toBe(5);
+  });
+
+  test("agent.idle clears inflight token totals", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 8, output: 4, cacheRead: 0, cacheWrite: 0, totalTokens: 80,
+      session_input_tokens: 0, session_output_tokens: 0, partial: true,
+    }));
+    let agent = state.agents.get("my-team:general-1");
+    expect(agent?.inflightInputTokens).toBe(8);
+    expect(agent?.inflightOutputTokens).toBe(4);
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    agent = state.agents.get("my-team:general-1");
+    expect(agent?.inflightInputTokens).toBe(0);
+    expect(agent?.inflightOutputTokens).toBe(0);
   });
 });
 

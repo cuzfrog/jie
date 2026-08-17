@@ -4,7 +4,7 @@ import type { MessageCard, StateStore } from "../../state";
 import { style } from "../themes";
 import { diffStats } from "./diff-stats";
 import { DiffView } from "./diff-view";
-import { formatDuration } from "./format-duration";
+import { formatDuration } from "../elements";
 
 export class ToolCard implements Component {
   private readonly stateStore: StateStore;

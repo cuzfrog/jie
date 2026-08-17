@@ -3,4 +3,5 @@ export { SqliteStorage } from "./sqlite-storage";
 export type { ArtifactStore } from "./artifact-store";
 export type { KanbanStore } from "./kanban-store";
 export { type SessionSummary, type TranscriptStore } from "./transcript-store";
+export { type SessionUsageStore, type SessionUsageTotals } from "./session-usage-store";
 export { registerStorageModule } from "./module";

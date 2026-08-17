@@ -354,14 +354,15 @@ The `key` field is a plain string — no `!cmd` interpolation, no `$ENV_VAR` exp
 
 ### Credentials Resolution
 
-For a provider, credentials resolve at call time (`ModelRegistry.getApiKey`) — **no environment-variable fallback**:
+For a provider, credentials resolve at call time (`ModelRegistry.getAuth`, delegated to pi-ai's auth resolution):
 
 | Order | Source | Notes |
 |---|---|---|
-|1 | `~/.jie/auth.json` entry for the provider | Set by `jie login` or `--api-key <key>` (which writes `auth.json` for the resolved provider — taken from `defaultProvider`, or unambiguous when only one provider is known). |
+|1 | `~/.jie/auth.json` entry for the provider | Set by `jie login` or `--api-key <key>` (which writes `auth.json` for the resolved provider — taken from `defaultProvider`, or unambiguous when only one provider is known). API-key and OAuth credentials are supported; OAuth tokens are refreshed by pi-ai automatically. |
 |2 | `apiKey` in the provider's `models.json` entry | Custom providers may carry their key in the provider definition. |
+|3 | Built-in provider ambient sources | pi-ai's per-provider resolution (e.g. `ANTHROPIC_API_KEY`) applies only to built-in providers with no stored or configured key. |
 
-Missing credentials do not throw at resolution time; the error surfaces when the LLM call is attempted.
+How the resolved credential reaches the wire (bearer vs. API-native header, identity headers) is pi-ai's job per API — jie passes the resolved `apiKey`/`headers` through unchanged. Missing credentials do not throw at resolution time; the error surfaces when the LLM call is attempted.
 
 ### Model Resolution
 

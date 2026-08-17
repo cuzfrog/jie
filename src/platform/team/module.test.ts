@@ -8,7 +8,7 @@ import type { PlatformCradle } from "../container";
 import type { AgentBody, AgentBodyParams } from "../core";
 import type { EventManager } from "../event";
 import type { SkillManager } from "../skills";
-import type { KanbanStore, TranscriptStore } from "../storage";
+import type { KanbanStore, SessionUsageStore, TranscriptStore } from "../storage";
 import { registerTeamModule } from "./module";
 
 const eventManager = vi.mocked<EventManager>({
@@ -31,7 +31,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   listProviders: vi.fn(() => []),
   resolve: vi.fn(() => undefined),
   listModels: vi.fn(() => []),
-  getApiKey: vi.fn(() => undefined),
+  getAuth: vi.fn(() => Promise.resolve(undefined)),
   reload: vi.fn(),
 });
 
@@ -53,11 +53,17 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   renameSession: vi.fn(),
 });
 
+const sessionUsageStore = vi.mocked<SessionUsageStore>({
+  load: vi.fn(() => null),
+  accumulate: vi.fn(),
+});
+
 const kanbanStore = vi.mocked<KanbanStore>({
   load: vi.fn(() => []),
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
+  clearSession: vi.fn(),
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
@@ -82,6 +88,7 @@ function bootedContainer(homeJieDir: string, projectJieDir: string | null): Awil
     settingsStore: asValue(settingsStore),
     modelRegistry: asValue(modelRegistry),
     transcriptStore: asValue(transcriptStore),
+    sessionUsageStore: asValue(sessionUsageStore),
     kanbanStore: asValue(kanbanStore),
     skillManager: asValue(skillManager),
     agentBodyFactory: asValue(agentBodyFactory),
@@ -116,6 +123,7 @@ function makeFakeBody(params: AgentBodyParams): AgentBody {
       subscribe: params.soul.subscribe,
       skills: params.soul.skills.map((name) => ({ name, description: "", argumentHint: null })),
       model: null,
+      sessionUsage: null,
       ephemeral: params.isEphemeral ?? false,
     },
     restore: async () => [],

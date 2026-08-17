@@ -1,8 +1,6 @@
 ---
 no-new-exports:
   - index.ts
-  - clear-command.ts
-  - clear-command.test.ts
   - compact-command.ts
   - compact-command.test.ts
   - effort-command.ts
@@ -21,6 +19,8 @@ no-new-exports:
   - model-command.test.ts
   - model-filter-command.ts
   - model-filter-command.test.ts
+  - new-command.ts
+  - new-command.test.ts
   - notification-command.ts
   - notification-command.test.ts
   - reload-command.ts

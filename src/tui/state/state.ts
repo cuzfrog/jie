@@ -24,6 +24,7 @@ export interface MessageBlock {
   readonly kind: "text" | "thinking";
   readonly text: string;
   readonly durationMs?: number;
+  readonly startedAtMs?: number;
 }
 
 export interface MessageTurn {
@@ -54,8 +55,11 @@ export interface AgentUiState {
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;
   readonly lastReportedTotalTokens: number | null;
-  readonly uploadTokens: number;
-  readonly downloadTokens: number;
+  readonly sessionInputTokens: number;
+  readonly sessionOutputTokens: number;
+  readonly inflightInputTokens: number;
+  readonly inflightOutputTokens: number;
+  readonly workStartedAt: number | null;
 }
 
 export type KanbanEditField = "content" | "description" | { readonly todoIndex: number };
@@ -87,6 +91,7 @@ export interface TuiState {
   readonly version: string;
   readonly installedTeams: InstalledTeams | null;
   readonly teamId: string | null;
+  readonly sessionId: string | null;
   readonly sessionName: string | null;
   readonly leaderAgentId: AgentId | null;
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;

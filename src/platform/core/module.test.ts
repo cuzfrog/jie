@@ -7,12 +7,13 @@ import { Events, type EventEnvelope, type EventManager, type EventType } from ".
 import type { HookRunner } from "../hooks";
 import type { LlmService } from "../llm";
 import type { MemoryManager } from "../memory";
-import type { ArtifactStore, TranscriptStore } from "../storage";
+import type { ArtifactStore, SessionUsageStore, TranscriptStore } from "../storage";
 import type { AgentSoul } from "../team";
 import type { SkillManager } from "../skills";
 import type { Tool, ToolRegistry } from "../tools";
 import type { AgentBodyParams } from "./agent-body";
 import type { AgentDispatcher } from "../types";
+import { isModelAlias } from "../types";
 import { registerCoreModule } from "./module";
 
 const eventManager = vi.mocked<EventManager>({
@@ -24,6 +25,11 @@ const artifactStore = vi.mocked<ArtifactStore>({
   write: vi.fn(),
   read: vi.fn(),
   list: vi.fn(),
+});
+
+const sessionUsageStore = vi.mocked<SessionUsageStore>({
+  load: vi.fn(() => null),
+  accumulate: vi.fn(),
 });
 
 const transcriptStore = vi.mocked<TranscriptStore>({
@@ -71,7 +77,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   listProviders: vi.fn(() => []),
   resolve: vi.fn(() => undefined),
   listModels: vi.fn(() => []),
-  getApiKey: vi.fn(() => undefined),
+  getAuth: vi.fn(() => Promise.resolve(undefined)),
   reload: vi.fn(),
 });
 
@@ -95,6 +101,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     eventManager: asValue(eventManager),
     artifactStore: asValue(artifactStore),
     transcriptStore: asValue(transcriptStore),
+    sessionUsageStore: asValue(sessionUsageStore),
     toolRegistry: asValue(toolRegistry),
     skillManager: asValue(skillManager),
     loadSystemContextBlock: asValue(() => ""),
@@ -141,15 +148,18 @@ function makeModel(provider: string, id: string): Model<Api> {
 }
 
 function makeParams(overrides: Partial<AgentBodyParams> = {}): AgentBodyParams {
+  const soul = overrides.soul ?? makeSoul();
   return {
     agentKey: "general-1",
     teamId: "t1",
-    soul: makeSoul(),
+    soul,
     isLeader: false,
     isEphemeral: false,
     sessionId: "s1",
     model: undefined,
     effort: "off",
+    modelPinned: soul.model !== "" && !isModelAlias(soul.model),
+    effortPinned: soul.effort !== undefined,
     ...overrides,
   };
 }
@@ -167,6 +177,7 @@ describe("registerCoreModule", () => {
       tools: [],
       subscribe: [],
       skills: [],
+      sessionUsage: null,
       model: null,
     });
     body.stop();

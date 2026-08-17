@@ -43,10 +43,15 @@ describe("CommandResolverImpl", () => {
     expect(result).toEqual({ kind: "ui", action: "showHelp" });
   });
 
-  test("/clear resolves to a UI clear action", () => {
+  test("/new builds the newSession platform command", () => {
     const resolver = makeResolver(makeFakePlatform());
-    expect(resolver.resolve(makeTuiState(), "clear", [])).toEqual({ kind: "ui", action: "clearState" });
-    expect(resolver.resolve(makeTuiState(), "new", [])).toEqual({ kind: "ui", action: "clearState" });
+    expect(resolver.resolve(withTeam(), "new", [])).toEqual({
+      kind: "platform",
+      slashName: "new",
+      command: { name: "newSession", teamId: "t1" },
+      transient: "starting new session",
+    });
+    expect(resolver.resolve(makeTuiState(), "new", [])).toEqual({ kind: "error", text: "/new: no team loaded" });
   });
 
   test("/exit resolves to a UI stop action", () => {
@@ -256,13 +261,13 @@ describe("CommandResolverImpl", () => {
     });
   });
 
-  test("/kanban add with --ephemeral sets the session scope", () => {
+  test("/kanban add with --team sets the team scope", () => {
     const resolver = makeResolver(makeFakePlatform());
-    const result = resolver.resolve(withTeam(), "kanban", ["add", "--ephemeral", "task"]);
+    const result = resolver.resolve(withTeam(), "kanban", ["add", "--team", "task"]);
     expect(result).toEqual({
       kind: "platform",
       slashName: "kanban add",
-      command: { name: "kanbanAdd", teamId: "t1", description: "task", scope: "session" },
+      command: { name: "kanbanAdd", teamId: "t1", description: "task", scope: "team" },
     });
   });
 

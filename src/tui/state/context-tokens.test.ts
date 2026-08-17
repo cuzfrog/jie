@@ -70,8 +70,11 @@ describe("contextHistory", () => {
       lastStopReason: null,
       contextTokensUsed: 0,
       lastReportedTotalTokens: null,
-      uploadTokens: 0,
-      downloadTokens: 0,
+      sessionInputTokens: 0,
+      sessionOutputTokens: 0,
+      inflightInputTokens: 0,
+      inflightOutputTokens: 0,
+      workStartedAt: null,
     };
   }
 

@@ -7,7 +7,7 @@ import type { ModelRegistry, Settings, SettingsStore } from "../config";
 import type { AgentBody, AgentBodyParams } from "../core";
 import type { EventEnvelope, EventManager, EventType } from "../event";
 import type { SkillManager } from "../skills";
-import type { KanbanStore, TranscriptStore } from "../storage";
+import type { KanbanStore, SessionUsageStore, TranscriptStore } from "../storage";
 import { AgentRegistryImpl } from "./agent-registry";
 import { TeamManagerImpl } from "./team-manager";
 import { TeamRegistryImpl } from "./registry";
@@ -32,7 +32,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   listProviders: vi.fn(() => []),
   resolve: vi.fn(() => undefined),
   listModels: vi.fn(() => []),
-  getApiKey: vi.fn(() => undefined),
+  getAuth: vi.fn(() => Promise.resolve(undefined)),
   reload: vi.fn(),
 });
 
@@ -54,11 +54,17 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   renameSession: vi.fn(),
 });
 
+const sessionUsageStore = vi.mocked<SessionUsageStore>({
+  load: vi.fn(() => null),
+  accumulate: vi.fn(),
+});
+
 const kanbanStore = vi.mocked<KanbanStore>({
   load: vi.fn(() => []),
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
+  clearSession: vi.fn(),
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
@@ -99,6 +105,7 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
       subscribe: params.soul.subscribe,
       skills: params.soul.skills.map((name) => ({ name, description: "", argumentHint: null })),
       model: null,
+      sessionUsage: null,
       ephemeral: params.isEphemeral ?? false,
     },
     restore: async () => restored,
@@ -114,7 +121,7 @@ function makeManager(homeJieDir: string, projectJieDir: string | null, resumeSes
   const agentBodyFactory = vi.fn((params: AgentBodyParams): AgentBody => makeFakeBody(params, restored, displayed));
   const agentRegistry = new AgentRegistryImpl(homeJieDir, projectJieDir);
   const teamRegistry = new TeamRegistryImpl(homeJieDir, projectJieDir, agentRegistry);
-  const manager = new TeamManagerImpl(teamRegistry, agentRegistry, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, agentBodyFactory, resumeSessionId);
+  const manager = new TeamManagerImpl(teamRegistry, agentRegistry, eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, agentBodyFactory, resumeSessionId);
   return { manager, agentBodyFactory };
 }
 
@@ -266,7 +273,7 @@ describe("TeamManagerImpl — full surface", () => {
 
     test("rejects and leaves the team unloaded when a body fails to start", async () => {
       const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
         displayMessages: () => [],
@@ -274,7 +281,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: vi.fn(),
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
       await expect(manager.load("setup-assistant")).rejects.toThrow("start failure");
       expect(teamLoadedEvents()).toHaveLength(0);
       expect(manager.listLoaded().size).toBe(0);
@@ -289,7 +296,7 @@ describe("TeamManagerImpl — full surface", () => {
       modelRegistry.resolve.mockImplementation((provider, modelId) => (modelId === "gone" ? undefined : makeModel(provider, modelId)));
       const started: string[] = [];
       const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
         displayMessages: () => [],
@@ -297,7 +304,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: () => {},
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
       await expect(manager.load("dev")).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
       expect(started).toEqual([]);
       expect(manager.listLoaded().size).toBe(0);
@@ -356,6 +363,7 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
     test("falls back to defaultEffort when the soul has no effort", async () => {
@@ -367,6 +375,7 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("medium");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
     });
 
     test("resolves a model alias with effort and keeps the effort", async () => {
@@ -379,6 +388,7 @@ describe("TeamManagerImpl — full surface", () => {
       await manager.load("dev");
       expect(modelRegistry.resolve).toHaveBeenCalledWith("openai", "gpt-4o");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
     test("uses the effort suffix in a model alias when the soul has no effort", async () => {
@@ -392,6 +402,7 @@ describe("TeamManagerImpl — full surface", () => {
       expect(modelRegistry.resolve).toHaveBeenCalledWith("openai", "gpt-4o");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
       expect(agentBodyFactory.mock.calls[0]![0]!.soul.effort).toBeUndefined();
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
     test("the soul's pinned effort overrides an alias effort suffix", async () => {
@@ -404,6 +415,7 @@ describe("TeamManagerImpl — full surface", () => {
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
       expect(agentBodyFactory.mock.calls[0]![0]!.soul.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
 
     test("uses defaultEffort when neither the soul nor the alias pin effort", async () => {
@@ -415,6 +427,7 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("medium");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
     });
 
     test("per-role effort is independent across souls", async () => {
@@ -429,8 +442,10 @@ describe("TeamManagerImpl — full surface", () => {
       const [lead, worker] = agentBodyFactory.mock.calls.map((call) => call[0]!);
       expect(lead!.soul.effort).toBe("low");
       expect(lead!.effort).toBe("low");
+      expect(lead!.effortPinned).toBe(true);
       expect(worker!.soul.effort).toBeUndefined();
       expect(worker!.effort).toBe("high");
+      expect(worker!.effortPinned).toBe(false);
     });
 
     test("skips a non-leader role whose pinned model does not resolve and loads the leader", async () => {
@@ -487,6 +502,83 @@ describe("TeamManagerImpl — full surface", () => {
       expect(identity.history[0]?.messages).not.toEqual(llm);
     });
 
+    test("toTeamInfo includes stored session usage for each agent", async () => {
+      const live: AgentMessage[] = [];
+      const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
+        restore: async () => [...live],
+        messages: () => [...live],
+        displayMessages: () => [...live],
+        start: async () => {},
+        compact: async () => {},
+        stop: () => {},
+      }));
+      sessionUsageStore.load.mockImplementation((_teamId, _sessionId, agentKey) => {
+        if (agentKey === "general-1") return { inputTokens: 100, outputTokens: 50 };
+        return null;
+      });
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
+      const team = await manager.load("setup-assistant");
+      const general = team.agents.find((a) => a.agentKey === "general-1");
+      expect(general?.sessionUsage).toEqual({ inputTokens: 100, outputTokens: 50 });
+      expect(team.agents.every((a) => a.sessionUsage !== undefined)).toBe(true);
+    });
+
+    test("newSession starts a fresh session, stops the old bodies, and publishes team loaded", async () => {
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      const first = await manager.load("setup-assistant");
+      const firstSessionId = first.currentSessionId;
+      expect(firstSessionId).not.toBeNull();
+      eventManager.publish.mockClear();
+      const second = await manager.newSession("setup-assistant");
+      expect(second.id).toBe("setup-assistant");
+      expect(second.currentSessionId).not.toBe(firstSessionId);
+      expect(second.currentSessionId).toMatch(/^[0-9A-Z]{26}$/);
+      expect(agentBodyFactory).toHaveBeenCalledTimes(2);
+      expect(agentBodyFactory.mock.calls[1]![0]!.sessionId).toBe(second.currentSessionId!);
+      expect(teamLoadedEvents()).toHaveLength(1);
+      expect(teamLoadedEvents()[0]!.payload.currentSessionId).toBe(second.currentSessionId);
+    });
+
+    test("newSession on a team that is not loaded loads it fresh", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      const team = await manager.newSession("setup-assistant");
+      expect(team.id).toBe("setup-assistant");
+      expect(team.currentSessionId).not.toBeNull();
+      expect(team.history[0]?.messages).toHaveLength(0);
+      expect(team.agents[0]?.sessionUsage).toBeNull();
+      expect(teamLoadedEvents().map((e) => e.payload.id)).toContain("setup-assistant");
+    });
+
+    test("newSession leaves other loaded teams untouched", async () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      await manager.load("alpha");
+      eventManager.publish.mockClear();
+      const alphaFirst = manager.currentSessionId("alpha");
+      const team = await manager.newSession("setup-assistant");
+      expect(manager.currentSessionId("alpha")).toBe(alphaFirst);
+      expect(agentBodyFactory.mock.calls.filter((call) => call[0]!.teamId === "alpha")).toHaveLength(1);
+      expect(teamLoadedEvents().map((e) => e.payload.id)).toEqual(["setup-assistant"]);
+      expect(team.history[0]?.messages).toHaveLength(0);
+      expect(team.agents[0]?.sessionUsage).toBeNull();
+    });
+
+    test("newSession starts with empty transcript and usage for the new session", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      const first = await manager.load("setup-assistant");
+      const firstSessionId = first.currentSessionId!;
+      sessionUsageStore.load.mockImplementation((_teamId, sessionId, _agentKey) =>
+        sessionId === firstSessionId ? { inputTokens: 100, outputTokens: 50 } : null,
+      );
+      transcriptStore.listAgentKeys.mockImplementation((_teamId, sessionId) => (sessionId === firstSessionId ? ["general-1"] : []));
+      const team = await manager.newSession("setup-assistant");
+      expect(team.history[0]?.messages).toHaveLength(0);
+      expect(team.agents[0]?.sessionUsage).toBeNull();
+    });
+
     test("resumeSession reloads an already-loaded team and re-publishes history (picker flow, not a cache hit)", async () => {
       transcriptStore.hasSession.mockReturnValue(true);
       const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "hello", timestamp: 1 }, assistantMessage("hi there", 2)];
@@ -508,7 +600,7 @@ describe("TeamManagerImpl — full surface", () => {
     test("cache hit carries the agents' live history and stays silent", async () => {
       const live: AgentMessage[] = [];
       const factory = (params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
         restore: async () => [...live],
         messages: () => [...live],
         displayMessages: () => [...live],
@@ -516,7 +608,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: () => {},
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
       const first = await manager.load("setup-assistant");
       expect(first.history[0]?.messages).toEqual([]);
       live.push({ role: "user", content: "hello", timestamp: 1 }, assistantMessage("hi there", 2));
@@ -532,12 +624,14 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("setup-assistant");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("high");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
     });
 
     test("passes effort 'off' to the agent body factory when no defaultEffort is configured", async () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("setup-assistant");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("off");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
     });
 
     test("loads a second team without disturbing the first", async () => {
@@ -549,6 +643,144 @@ describe("TeamManagerImpl — full surface", () => {
       const loadedIds = teamLoadedEvents().map((e) => e.payload.id);
       expect(loadedIds).toContain("setup-assistant");
       expect(loadedIds).toContain("alpha");
+    });
+  });
+
+  describe("model pin propagation", () => {
+    test("unset soul model is not pinned", async () => {
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(false);
+    });
+
+    test("concrete soul model is pinned", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: openai/gpt-4o\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(true);
+    });
+
+    test("mapped model alias is pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(true);
+    });
+
+    test("unmapped model alias is not pinned", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(false);
+    });
+
+    test("unmapped alias still resolves to the default model", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(modelRegistry.resolve).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
+    });
+  });
+
+  describe("effort pin propagation", () => {
+    test("concrete soul effort is pinned", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: openai/gpt-4o(low)\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
+    });
+
+    test("alias with effort suffix is pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o(low)" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
+    });
+
+    test("alias with effort suffix and a space is pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o (high)" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("high");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
+    });
+
+    test("alias without suffix is not pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("off");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
+    });
+
+    test("defaultEffort only is not pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultEffort: "medium" });
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("medium");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
+    });
+
+    test("unmapped alias with soul effort suffix pins effort while model stays unpinned", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large(low)\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(modelRegistry.resolve).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
+      expect(agentBodyFactory.mock.calls[0]![0]!.modelPinned).toBe(false);
+    });
+
+    test("no effort anywhere falls back to off and is not pinned", async () => {
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("off");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(false);
+    });
+
+    test("soul effort overrides alias effort suffix and stays pinned", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o(high)" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large(low)\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effortPinned).toBe(true);
     });
   });
 
@@ -605,7 +837,7 @@ describe("TeamManagerImpl — full surface", () => {
       const factory = vi.fn((params: AgentBodyParams): AgentBody => {
         const created = generation;
         return {
-          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
+          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
         displayMessages: () => [],
@@ -614,7 +846,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
       await manager.load("setup-assistant");
       generation = 1;
       await manager.reload();
@@ -638,7 +870,7 @@ describe("TeamManagerImpl — full surface", () => {
       writeTeam(userTeams, "alpha", "general");
       const stops: string[] = [];
       const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
         displayMessages: () => [],
@@ -646,7 +878,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
       await manager.load("alpha");
       writeFileSync(join(userTeams, "alpha", "TEAM.md"), "leader: [unclosed");
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
@@ -660,7 +892,7 @@ describe("TeamManagerImpl — full surface", () => {
       const factory = vi.fn((params: AgentBodyParams): AgentBody => {
         const created = generation;
         return {
-          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
+          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
         displayMessages: () => [],
@@ -669,7 +901,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
       await manager.load("setup-assistant");
       generation = 1;
       eventManager.publish.mockClear();
@@ -682,7 +914,7 @@ describe("TeamManagerImpl — full surface", () => {
     test("keeps the running team intact when the leader model no longer resolves", async () => {
       const stops: string[] = [];
       const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
         displayMessages: () => [],
@@ -690,7 +922,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
       await manager.load("setup-assistant");
       modelRegistry.resolve.mockReturnValue(undefined);
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
@@ -706,7 +938,7 @@ describe("TeamManagerImpl — full surface", () => {
       const factory = vi.fn((params: AgentBodyParams): AgentBody => {
         created.push(`${params.teamId}:${params.agentKey}`);
         return {
-          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
+          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
         displayMessages: () => [],
@@ -715,7 +947,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => {},
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, sessionUsageStore, kanbanStore, skillManager, factory);
       await manager.load("alpha");
       await manager.load("beta");
       created.length = 0;
@@ -834,6 +1066,18 @@ describe("TeamManagerImpl — full surface", () => {
       const identities = manager.agents("setup-assistant");
       expect(identities).toHaveLength(1);
       expect(identities[0]?.agentKey).toBe("general-1");
+    });
+
+    test("includes stored session usage in the returned identities", async () => {
+      sessionUsageStore.load.mockImplementation((_teamId, _sessionId, agentKey) => {
+        if (agentKey === "general-1") return { inputTokens: 111, outputTokens: 222 };
+        return null;
+      });
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("setup-assistant");
+      const identities = manager.agents("setup-assistant");
+      expect(identities).toHaveLength(1);
+      expect(identities[0]?.sessionUsage).toEqual({ inputTokens: 111, outputTokens: 222 });
     });
 
     test("returns an empty array for a team that wasn't loaded", () => {

@@ -42,6 +42,7 @@ function makeTeamManager(): ReturnType<typeof vi.mocked<TeamManager>> {
   return vi.mocked<TeamManager>({
     load: vi.fn(),
     reload: vi.fn(),
+    newSession: vi.fn(),
     resumeSession: vi.fn(),
     listInstalled: vi.fn(() => []),
     agentCount: vi.fn(() => 0),
@@ -128,6 +129,7 @@ describe("AgentDispatcherImpl", () => {
       subscribe: [],
       skills: [],
       model: null,
+      sessionUsage: null,
       ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([reviewer]);
@@ -146,10 +148,10 @@ describe("AgentDispatcherImpl", () => {
   test("resolves a role to a replica and returns the selected key", () => {
     const h = makeHarness();
     const r1 = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     const r2 = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-2", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-2", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([r1, r2]);
     h.teamRegistry.parseTeamManifest.mockReturnValue(makeBlueprint({
@@ -166,10 +168,10 @@ describe("AgentDispatcherImpl", () => {
   test("selects the idle replica over a running replica", () => {
     const h = makeHarness();
     const r1 = makeFakeBody({
-      teamId: "t1", role: "worker", agentKey: "worker-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "worker", agentKey: "worker-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     const r2 = makeFakeBody({
-      teamId: "t1", role: "worker", agentKey: "worker-2", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "worker", agentKey: "worker-2", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([r1, r2]);
     h.teamRegistry.parseTeamManifest.mockReturnValue(makeBlueprint({
@@ -187,10 +189,10 @@ describe("AgentDispatcherImpl", () => {
   test("selects the replica with the shorter queue when all are busy", async () => {
     const h = makeHarness();
     const r1 = makeFakeBody({
-      teamId: "t1", role: "worker", agentKey: "worker-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "worker", agentKey: "worker-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     const r2 = makeFakeBody({
-      teamId: "t1", role: "worker", agentKey: "worker-2", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "worker", agentKey: "worker-2", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([r1, r2]);
     h.teamRegistry.parseTeamManifest.mockReturnValue(makeBlueprint({
@@ -219,7 +221,7 @@ describe("AgentDispatcherImpl", () => {
   test("spawns an ad-hoc shared agent when agent is not loaded but is installed", async () => {
     const h = makeHarness();
     const explorer = makeFakeBody({
-      teamId: "t1", role: "explorer", agentKey: "explorer", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: true,
+      teamId: "t1", role: "explorer", agentKey: "explorer", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: true,
     });
     h.teamManager.bodies.mockReturnValue([]);
     h.teamRegistry.parseTeamManifest.mockReturnValue(makeBlueprint());
@@ -247,7 +249,7 @@ describe("AgentDispatcherImpl", () => {
   test("rejects self-calls", () => {
     const h = makeHarness();
     const body = makeFakeBody({
-      teamId: "t1", role: "leader", agentKey: "leader-1", isLeader: true, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "leader", agentKey: "leader-1", isLeader: true, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([body]);
 
@@ -259,7 +261,7 @@ describe("AgentDispatcherImpl", () => {
   test("queues when the target is busy and dispatches after idle", async () => {
     const h = makeHarness();
     const reviewer = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([reviewer]);
 
@@ -280,7 +282,7 @@ describe("AgentDispatcherImpl", () => {
   test("publishes a failure when the target ends without notifying", async () => {
     const h = makeHarness();
     const reviewer = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([reviewer]);
 
@@ -298,7 +300,7 @@ describe("AgentDispatcherImpl", () => {
   test("does not publish failure when the target has already notified", async () => {
     const h = makeHarness();
     const reviewer = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([reviewer]);
 
@@ -324,7 +326,7 @@ describe("AgentDispatcherImpl", () => {
   test("resets the target before dispatch when requested", async () => {
     const h = makeHarness();
     const reviewer = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([reviewer]);
     h.teamManager.resetAgent.mockResolvedValue(reviewer);
@@ -338,7 +340,7 @@ describe("AgentDispatcherImpl", () => {
   test("publishes a failure when the target lacks the notify tool", async () => {
     const h = makeHarness();
     const reviewer = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["read_file"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["read_file"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([reviewer]);
 
@@ -353,7 +355,7 @@ describe("AgentDispatcherImpl", () => {
   test("publishes a failure when reset fails", async () => {
     const h = makeHarness();
     const reviewer = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([reviewer]);
     h.teamManager.resetAgent.mockRejectedValue(new Error("reset failed"));
@@ -390,7 +392,7 @@ describe("AgentDispatcherImpl", () => {
   test("publishes a failure when event publish fails during dispatch", async () => {
     const h = makeHarness();
     const reviewer = makeFakeBody({
-      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, sessionUsage: null, ephemeral: false,
     });
     h.teamManager.bodies.mockReturnValue([reviewer]);
     h.eventManager.publish.mockImplementationOnce(() => {

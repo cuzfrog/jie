@@ -13,6 +13,7 @@ export interface KanbanStore {
   replace(teamId: string, sessionId: string, incoming: ReadonlyArray<KanbanCardWrite>): ReadonlyArray<KanbanCard>;
   add(teamId: string, sessionId: string, content: string, description: string | undefined, scope?: "team" | "session"): KanbanCard | null;
   remove(teamId: string, sessionId: string, cardId: string): boolean;
+  clearSession(teamId: string, sessionId: string): void;
   setStatus(teamId: string, sessionId: string, cardId: string, status: KanbanStatus): boolean;
   editContent(teamId: string, sessionId: string, cardId: string, content: string): KanbanCard | null;
   editDescription(teamId: string, sessionId: string, cardId: string, description: string | undefined): KanbanCard | null;
@@ -46,7 +47,7 @@ export class SqliteKanbanStore implements KanbanStore {
     return this.load(teamId, sessionId);
   }
 
-  add(teamId: string, sessionId: string, content: string, description: string | undefined, scope: "team" | "session" = "team"): KanbanCard | null {
+  add(teamId: string, sessionId: string, content: string, description: string | undefined, scope: "team" | "session" = "session"): KanbanCard | null {
     const existing = this.loadAll(teamId, sessionId);
     if (existing.some((card) => card.content === content)) return null;
     const card: KanbanCardDraft = {
@@ -66,6 +67,13 @@ export class SqliteKanbanStore implements KanbanStore {
     if (next.length === existing.length) return false;
     this.persist(teamId, sessionId, next);
     return true;
+  }
+
+  clearSession(teamId: string, sessionId: string): void {
+    this.storage.exec(
+      `DELETE FROM kanban_tasks WHERE team_id = ? AND session_id = ? AND scope = 'session'`,
+      [teamId, sessionId],
+    );
   }
 
   setStatus(teamId: string, sessionId: string, cardId: string, status: KanbanStatus): boolean {
@@ -188,7 +196,7 @@ function mergeIncoming(
     const prior = byContent.get(write.content);
     const todos = mergeTodos(prior?.todos, write.todos);
     if (prior === undefined) {
-      const scope = write.scope ?? "team";
+      const scope = write.scope ?? "session";
       const card: KanbanCardDraft = {
         content: write.content,
         status: write.status,

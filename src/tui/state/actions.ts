@@ -16,7 +16,6 @@ export const ActionTypes = {
   TOGGLE_TEAM_PANEL: "[ui] toggle team panel visibility",
   CYCLE_KANBAN_VIEW: "[ui] cycle kanban view",
   COMMIT_TEAM_CURSOR: "[ui] commit team cursor to focused agent",
-  CLEAR_TUI_STATE: "[ui] clear tui state",
   SET_TRANSIENT_MESSAGE: "[ui] transient message",
   CLEAR_TRANSIENT_MESSAGE: "[ui] transient clear",
   SET_ERROR_MESSAGE: "[ui] set error banner",
@@ -68,7 +67,6 @@ const cycleKanbanView = createAction(ActionTypes.CYCLE_KANBAN_VIEW);
 const terminalFocusGained = createAction(ActionTypes.TERMINAL_FOCUS_GAINED);
 const terminalFocusLost = createAction(ActionTypes.TERMINAL_FOCUS_LOST);
 const commitTeamCursor = createAction(ActionTypes.COMMIT_TEAM_CURSOR);
-const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
 const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
 const clearErrorMessage = createAction(ActionTypes.CLEAR_ERROR_MESSAGE);
 const clearBanners = createAction(ActionTypes.CLEAR_BANNERS);
@@ -90,7 +88,6 @@ export const Actions = {
 	terminalFocusGained: () => terminalFocusGained,
 	terminalFocusLost: () => terminalFocusLost,
 	commitTeamCursor: () => commitTeamCursor,
-	clearTuiState: () => clearTuiState,
 	setTransientMessage: (text: string) => createAction(ActionTypes.SET_TRANSIENT_MESSAGE, { text }),
 	clearTransientMessage: () => clearTransientMessage,
 	setErrorMessage: (text: string) => createAction(ActionTypes.SET_ERROR_MESSAGE, { text }),
