@@ -6,6 +6,8 @@ no-new-exports:
   - help-panel.test.ts
   - kanban-panel.ts
   - kanban-panel.test.ts
+  - mcp-panel.ts
+  - mcp-panel.test.ts
   - panel.ts
   - team-panel.ts
   - team-panel.test.ts

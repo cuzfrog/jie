@@ -19,8 +19,8 @@ function fakeConnection(tools: McpToolDefinition[] = []) {
   return connection;
 }
 
-function tool(name: string): McpToolDefinition {
-  return { name, description: `desc ${name}`, inputSchema: { type: "object" } };
+function tool(name: string, description = `desc ${name}`): McpToolDefinition {
+  return { name, description, inputSchema: { type: "object" } };
 }
 
 function writeMcpJson(dir: string, servers: Record<string, unknown>): void {
@@ -156,5 +156,87 @@ describe("McpManagerImpl", () => {
 
     await expect(manager.dispose()).resolves.toBeUndefined();
     expect(second.close).toHaveBeenCalledTimes(1);
+  });
+
+  test("listServers is empty before connectAll", () => {
+    const home = track(mkdtempSync(join(tmpdir(), "jie-home-")));
+    writeMcpJson(home, { good: { transport: "stdio", command: "bun" } });
+    const { manager } = makeManager(home, vi.fn());
+    expect(manager.listServers()).toEqual([]);
+  });
+
+  test("listServers records connected server with tools", async () => {
+    const home = track(mkdtempSync(join(tmpdir(), "jie-home-")));
+    writeMcpJson(home, { good: { transport: "stdio", command: "bun" } });
+    const connector = vi.fn<McpConnector>();
+    connector.mockResolvedValue(fakeConnection([tool("t1"), tool("t2", "second tool")]));
+    const { manager } = makeManager(home, connector);
+
+    await manager.connectAll();
+
+    expect(manager.listServers()).toEqual([{
+      name: "good",
+      transport: "stdio",
+      status: "connected",
+      tools: [
+        { name: "t1", description: "desc t1" },
+        { name: "t2", description: "second tool" },
+      ],
+      detail: null,
+    }]);
+  });
+
+  test("listServers records http server as skipped", async () => {
+    const home = track(mkdtempSync(join(tmpdir(), "jie-home-")));
+    writeMcpJson(home, { remote: { transport: "http", url: "https://mcp.example.com" } });
+    const { manager } = makeManager(home, vi.fn());
+
+    await manager.connectAll();
+
+    expect(manager.listServers()).toEqual([{
+      name: "remote",
+      transport: "http",
+      status: "skipped",
+      tools: [],
+      detail: "http transport not supported in v1",
+    }]);
+  });
+
+  test("listServers records connector failure with message", async () => {
+    const home = track(mkdtempSync(join(tmpdir(), "jie-home-")));
+    writeMcpJson(home, { broken: { transport: "stdio", command: "nope" } });
+    const connector = vi.fn<McpConnector>();
+    connector.mockRejectedValue(new Error("spawn failed"));
+    const { manager } = makeManager(home, connector);
+
+    await manager.connectAll();
+
+    expect(manager.listServers()).toEqual([{
+      name: "broken",
+      transport: "stdio",
+      status: "failed",
+      tools: [],
+      detail: "spawn failed",
+    }]);
+  });
+
+  test("listServers records listTools failure with message", async () => {
+    const home = track(mkdtempSync(join(tmpdir(), "jie-home-")));
+    writeMcpJson(home, { srv: { transport: "stdio", command: "bun" } });
+    const connection = fakeConnection();
+    connection.listTools.mockRejectedValue(new Error("listing blew up"));
+    const connector = vi.fn<McpConnector>();
+    connector.mockResolvedValue(connection);
+    const { manager } = makeManager(home, connector);
+
+    await manager.connectAll();
+
+    expect(manager.listServers()).toEqual([{
+      name: "srv",
+      transport: "stdio",
+      status: "failed",
+      tools: [],
+      detail: "listing blew up",
+    }]);
   });
 });

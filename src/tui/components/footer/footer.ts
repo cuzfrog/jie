@@ -22,6 +22,7 @@ export class Footer implements TuiComponent {
   private teamId: string | null = null;
   private helpPanelVisible = false;
   private teamPanelVisible = false;
+  private mcpPanelVisible = false;
   private kanbanView: TuiState["kanban"]["view"] = "hidden";
   private kanbanOpenCount = 0;
   private editorCursorAtStart = false;
@@ -47,6 +48,7 @@ export class Footer implements TuiComponent {
       state.teamId === this.teamId &&
       state.helpPanelVisible === this.helpPanelVisible &&
       state.teamPanelVisible === this.teamPanelVisible &&
+      state.mcpPanelVisible === this.mcpPanelVisible &&
       state.kanban.view === this.kanbanView &&
       openCount === this.kanbanOpenCount &&
       state.editorCursorAtStart === this.editorCursorAtStart
@@ -58,6 +60,7 @@ export class Footer implements TuiComponent {
     this.teamId = state.teamId;
     this.helpPanelVisible = state.helpPanelVisible;
     this.teamPanelVisible = state.teamPanelVisible;
+    this.mcpPanelVisible = state.mcpPanelVisible;
     this.kanbanView = state.kanban.view;
     this.kanbanOpenCount = openCount;
     this.editorCursorAtStart = state.editorCursorAtStart;
@@ -72,7 +75,7 @@ export class Footer implements TuiComponent {
     const identity = style("accent")(`${state.cwd ?? ""} (${branch}${state.gitDirty ? "*" : ""})`);
     const teamAgent = style("muted")(`${state.teamId ?? "no-team"}:${focused === null ? "—" : focused.agentKey}`);
     const identityLine = rightAligned(identity, teamAgent, w);
-    if (state.helpPanelVisible || (state.teamId !== null && (state.teamPanelVisible || state.kanban.view === "panel"))) return [identityLine];
+    if (state.helpPanelVisible || state.mcpPanelVisible || (state.teamId !== null && (state.teamPanelVisible || state.kanban.view === "panel"))) return [identityLine];
     const stats: string[] = [this.tokenUsage.format(focused)];
     const queue = this.queueIndicator.format(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));

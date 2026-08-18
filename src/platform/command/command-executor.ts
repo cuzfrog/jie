@@ -1,6 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AuthStore, ModelRegistry, SettingsStore } from "../config";
 import { Events, type EventManager } from "../event";
+import type { McpManager } from "../mcp";
 import { MODEL_ALIASES, type ModelAlias } from "../types";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { LlmService } from "../llm";
@@ -30,6 +31,7 @@ export class CommandExecutorImpl implements CommandExecutor {
     private readonly kanbanStore: KanbanStore,
     private readonly llmService: LlmService,
     private readonly questionBroker: QuestionBroker,
+    private readonly mcpManager: McpManager,
   ) {
     this.handlers = {
       login: this.login.bind(this),
@@ -68,6 +70,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       kanbanHandoff: this.kanbanHandoff.bind(this),
       kanbanToggleTodo: this.kanbanToggleTodo.bind(this),
       answerUserQuestion: this.answerUserQuestion.bind(this),
+      listMcpServers: this.listMcpServers.bind(this),
     };
   }
 
@@ -406,6 +409,10 @@ export class CommandExecutorImpl implements CommandExecutor {
       answers: command.cancelled ? null : (command.answers ?? null),
     });
     return null;
+  }
+
+  private listMcpServers(): CommandResult<"listMcpServers"> {
+    return this.mcpManager.listServers();
   }
 
   private resolveLlmModel(): Model<Api> | null {

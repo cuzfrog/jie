@@ -27,6 +27,10 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   toolCardsExpanded: false,
   teamPanelVisible: false,
   helpPanelVisible: false,
+  mcpPanelVisible: false,
+  mcpServers: [],
+  mcpCursorIndex: null,
+  mcpExpanded: new Set<string>(),
   kanban: Object.freeze({
     view: "hidden",
     board: [],

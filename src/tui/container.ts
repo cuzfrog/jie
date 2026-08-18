@@ -41,6 +41,7 @@ export interface TuiCradle {
   readonly teamPanel: TuiComponent;
   readonly kanbanPanel: TuiComponent;
   readonly helpPanel: TuiComponent;
+  readonly mcpPanel: TuiComponent;
   readonly questionPanel: TuiComponent & Focusable;
   readonly editor: Editor & TuiComponent;
   readonly chatSync: ChatSync;

@@ -375,6 +375,93 @@ describe("setSessionName", () => {
 
 });
 
+describe("mcp panel", () => {
+  test("toggle opens the mcp panel and seeds the cursor", () => {
+    const servers = [{ name: "github", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null }];
+    const state = reduceUiAction({ ...INITIAL_TUI_STATE, mcpServers: servers }, Actions.toggleMcpPanel());
+    expect(state.mcpPanelVisible).toBe(true);
+    expect(state.mcpCursorIndex).toBe(0);
+  });
+
+  test("toggle with no servers leaves the cursor null", () => {
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleMcpPanel());
+    expect(state.mcpPanelVisible).toBe(true);
+    expect(state.mcpCursorIndex).toBeNull();
+  });
+
+  test("a second toggle closes the mcp panel and clears cursor", () => {
+    const servers = [{ name: "github", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null }];
+    let state = reduceUiAction({ ...INITIAL_TUI_STATE, mcpServers: servers }, Actions.toggleMcpPanel());
+    state = reduceUiAction(state, Actions.toggleMcpPanel());
+    expect(state.mcpPanelVisible).toBe(false);
+    expect(state.mcpCursorIndex).toBeNull();
+  });
+
+  test("opening the mcp panel closes an open team, help, or kanban panel", () => {
+    const withTeam = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
+    const withPanels = { ...withTeam, teamPanelVisible: true, teamCursorAgentId: "my-team:general-1" as AgentId, helpPanelVisible: true, kanban: { ...withTeam.kanban, view: "panel" as const } };
+    const state = reduceUiAction(withPanels, Actions.toggleMcpPanel());
+    expect(state.mcpPanelVisible).toBe(true);
+    expect(state.teamPanelVisible).toBe(false);
+    expect(state.teamCursorAgentId).toBeNull();
+    expect(state.helpPanelVisible).toBe(false);
+    expect(state.kanban.view).toBe("hidden");
+  });
+
+  test("opening the team or help panel closes an open mcp panel", () => {
+    const servers = [{ name: "github", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null }];
+    const withTeam = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
+    const withMcp = { ...withTeam, mcpPanelVisible: true, mcpServers: servers, mcpCursorIndex: 0 };
+    const teamOpen = reduceUiAction(withMcp, Actions.toggleTeamPanel());
+    expect(teamOpen.teamPanelVisible).toBe(true);
+    expect(teamOpen.mcpPanelVisible).toBe(false);
+    expect(teamOpen.mcpCursorIndex).toBeNull();
+    const helpOpen = reduceUiAction(withMcp, Actions.showHelp());
+    expect(helpOpen.helpPanelVisible).toBe(true);
+    expect(helpOpen.mcpPanelVisible).toBe(false);
+    expect(helpOpen.mcpCursorIndex).toBeNull();
+  });
+
+  test("setMcpServers stores the server list and resets cursor and expanded", () => {
+    const servers = [{ name: "github", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null }];
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.setMcpServers(servers));
+    expect(state.mcpServers).toEqual(servers);
+    expect(state.mcpCursorIndex).toBe(0);
+    expect(state.mcpExpanded).toEqual(new Set<string>());
+  });
+
+  test("moveMcpCursor wraps around the server list", () => {
+    const servers = [
+      { name: "a", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null },
+      { name: "b", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null },
+    ];
+    const open = reduceUiAction({ ...INITIAL_TUI_STATE, mcpPanelVisible: true, mcpServers: servers, mcpCursorIndex: 0 }, Actions.moveMcpCursor(1));
+    expect(open.mcpCursorIndex).toBe(1);
+    const wrap = reduceUiAction(open, Actions.moveMcpCursor(1));
+    expect(wrap.mcpCursorIndex).toBe(0);
+    const back = reduceUiAction(wrap, Actions.moveMcpCursor(-1));
+    expect(back.mcpCursorIndex).toBe(1);
+  });
+
+  test("moveMcpCursor is a no-op while the panel is hidden", () => {
+    const servers = [{ name: "a", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null }];
+    const state = reduceUiAction({ ...INITIAL_TUI_STATE, mcpServers: servers, mcpCursorIndex: 0 }, Actions.moveMcpCursor(1));
+    expect(state.mcpCursorIndex).toBe(0);
+  });
+
+  test("toggleMcpExpand adds and removes the pointed server", () => {
+    const servers = [
+      { name: "a", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null },
+      { name: "b", transport: "stdio" as const, status: "connected" as const, tools: [], detail: null },
+    ];
+    const open = { ...INITIAL_TUI_STATE, mcpPanelVisible: true, mcpServers: servers, mcpCursorIndex: 0 };
+    const expanded = reduceUiAction(open, Actions.toggleMcpExpand());
+    expect(expanded.mcpExpanded.has("a")).toBe(true);
+    const collapsed = reduceUiAction(expanded, Actions.toggleMcpExpand());
+    expect(collapsed.mcpExpanded.has("a")).toBe(false);
+  });
+});
+
 describe("showHelp", () => {
   test("toggles the help panel on", () => {
     const state = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());

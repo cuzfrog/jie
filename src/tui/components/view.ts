@@ -27,6 +27,7 @@ export class TuiViewImpl implements TuiView {
   private readonly teamPanel: TuiComponent;
   private readonly kanbanPanel: TuiComponent;
   private readonly helpPanel: TuiComponent;
+  private readonly mcpPanel: TuiComponent;
   private readonly questionPanel: TuiComponent & Focusable;
   private readonly kanbanList: TuiComponent;
   private readonly footer: TuiComponent;
@@ -46,6 +47,7 @@ export class TuiViewImpl implements TuiView {
     teamPanel: TuiComponent,
     kanbanPanel: TuiComponent,
     helpPanel: TuiComponent,
+    mcpPanel: TuiComponent,
     questionPanel: TuiComponent & Focusable,
     workingSpinner: TuiComponent,
   ) {
@@ -60,6 +62,7 @@ export class TuiViewImpl implements TuiView {
     this.teamPanel = teamPanel;
     this.kanbanPanel = kanbanPanel;
     this.helpPanel = helpPanel;
+    this.mcpPanel = mcpPanel;
     this.questionPanel = questionPanel;
     this.kanbanList = kanbanList;
     this.footer = footer;
@@ -75,6 +78,7 @@ export class TuiViewImpl implements TuiView {
     screen.addChild(this.teamPanel);
     screen.addChild(this.kanbanPanel);
     screen.addChild(this.helpPanel);
+    screen.addChild(this.mcpPanel);
     screen.addChild(this.questionPanel);
     screen.setFocus(this.editor);
     this.unsubscribeInput = screen.addInputListener((data) => this.handleInput(data));
@@ -89,6 +93,7 @@ export class TuiViewImpl implements TuiView {
     dirty = this.teamPanel.update() || dirty;
     dirty = this.kanbanPanel.update() || dirty;
     dirty = this.helpPanel.update() || dirty;
+    dirty = this.mcpPanel.update() || dirty;
     dirty = this.questionPanel.update() || dirty;
     dirty = this.kanbanList.update() || dirty;
     dirty = this.footer.update() || dirty;
@@ -130,7 +135,11 @@ export class TuiViewImpl implements TuiView {
 
   private reconcileFocus(state: TuiState): void {
     const targetName = resolveFocusTarget(state);
-    const target = targetName === "question" ? this.questionPanel : targetName === "kanban" ? this.kanbanPanel : this.editor;
+    const target =
+      targetName === "question" ? this.questionPanel :
+      targetName === "kanban" ? this.kanbanPanel :
+      targetName === "mcp" ? this.mcpPanel :
+      this.editor;
     if (target === this.focusedComponent) return;
     this.focusedComponent = target;
     this.screen.setFocus(target);
@@ -142,7 +151,7 @@ function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Ac
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
   if (data === CTRL_K && state.kanban.edit === null && state.kanban.board.length > 0) return Actions.cycleKanbanView();
-  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanban.view !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
+  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanban.view !== "panel" && !state.mcpPanelVisible && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }
 
@@ -157,8 +166,9 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
   return state.teamPanelVisible && state.teamCursorAgentId !== null && state.teamCursorAgentId !== state.focusedAgentId;
 }
 
-function resolveFocusTarget(state: TuiState): "question" | "kanban" | "editor" {
+function resolveFocusTarget(state: TuiState): "question" | "kanban" | "mcp" | "editor" {
   if (state.question !== null) return "question";
+  if (state.mcpPanelVisible) return "mcp";
   return state.kanban.view === "panel" && state.kanban.edit === null ? "kanban" : "editor";
 }
 

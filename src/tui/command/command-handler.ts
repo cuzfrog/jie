@@ -1,4 +1,4 @@
-import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type KanbanCard, type TeamInfo } from "../../platform";
+import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type KanbanCard, type McpServerSummary, type TeamInfo } from "../../platform";
 import { Actions, TuiState, type AgentUiState, type StateStore } from "../state";
 import { bashDirective, parseBashCommand } from "../bash";
 import type { CommandResolver } from "./command-resolver";
@@ -137,6 +137,11 @@ export class CommandHandlerImpl implements CommandHandler {
         const kanbanResult = result as { readonly board: ReadonlyArray<KanbanCard>; readonly card: KanbanCard };
         this.stateStore.dispatch(Actions.setKanbanBoard(kanbanResult.board));
         this.stateStore.dispatch(Actions.setTransientMessage(`handed off kanban card ${kanbanResult.card.id}`));
+        return;
+      }
+      case "listMcpServers": {
+        this.stateStore.dispatch(Actions.setMcpServers(result as ReadonlyArray<McpServerSummary>));
+        this.stateStore.dispatch(Actions.toggleMcpPanel());
         return;
       }
       default:

@@ -9,6 +9,7 @@ export {
 
 export type { TeamInfo, ModelInfo, AgentInfo, SkillInfo, AgentHistory, EffortLevel, UserIngressMessage, QuestionOption, QuestionItem, QuestionAnswer } from "./types";
 export { EFFORT_LEVELS, isEffortLevel, parseModelRef, type KanbanCard, type KanbanStatus } from "./types";
+export type { McpServerSummary, McpServerStatus, McpToolSummary } from "./mcp";
 export { BUILTIN_SETUP_ASSISTANT_TEAM_ID } from "./team";
 export type { TeamBlueprintLocation } from "./team";
 export { isDiffDetails, type KanbanDetails, type ToolResultDetails } from "./tools";

@@ -49,6 +49,7 @@ const teamManager = vi.mocked<TeamManager>({
 const mcpManager = vi.mocked<McpManager>({
   connectAll: vi.fn(),
   dispose: vi.fn(),
+  listServers: vi.fn(),
 });
 
 const DEFAULT_SETTINGS: Settings = {

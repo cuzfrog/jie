@@ -3,6 +3,7 @@ import { teamLoadReducer } from "./team-load-reducer";
 import { TuiState } from "./state";
 import { kanbanReducer } from "./kanban-reducer";
 import { reduceQuestionAction } from "./question-reducer";
+import type { McpServerSummary } from "../../platform";
 
 export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
@@ -67,6 +68,14 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       };
     case ActionTypes.SHOW_HELP:
       return reduceHelpPanelToggle(state);
+    case ActionTypes.TOGGLE_MCP_PANEL:
+      return reduceMcpPanelToggle(state);
+    case ActionTypes.SET_MCP_SERVERS:
+      return reduceMcpServers(state, action.payload.servers);
+    case ActionTypes.MOVE_MCP_CURSOR:
+      return reduceMcpCursor(state, action.payload.direction);
+    case ActionTypes.TOGGLE_MCP_EXPAND:
+      return reduceMcpExpand(state);
     case ActionTypes.SET_KANBAN_BOARD:
     case ActionTypes.MOVE_KANBAN_CURSOR:
     case ActionTypes.MOVE_KANBAN_EDIT_FIELD:
@@ -87,18 +96,48 @@ function reduceTeamPanelToggle(state: TuiState): TuiState {
   if (roster.length === 0) return state;
   if (state.teamPanelVisible) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
   const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[0]!.agentId;
-  const withoutOtherPanels: TuiState = state.kanban.view === "panel" || state.helpPanelVisible
-    ? { ...state, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false }, helpPanelVisible: false }
+  const withoutOtherPanels: TuiState = state.kanban.view === "panel" || state.helpPanelVisible || state.mcpPanelVisible
+    ? { ...state, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false }, helpPanelVisible: false, mcpPanelVisible: false, mcpCursorIndex: null, mcpExpanded: new Set<string>() }
     : state;
   return { ...withoutOtherPanels, teamPanelVisible: true, teamCursorAgentId: cursor };
 }
 
 function reduceHelpPanelToggle(state: TuiState): TuiState {
   if (state.helpPanelVisible) return { ...state, helpPanelVisible: false };
-  const withoutOtherPanels: TuiState = state.teamPanelVisible || state.kanban.view === "panel"
-    ? { ...state, teamPanelVisible: false, teamCursorAgentId: null, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false } }
+  const withoutOtherPanels: TuiState = state.teamPanelVisible || state.mcpPanelVisible || state.kanban.view === "panel"
+    ? { ...state, teamPanelVisible: false, teamCursorAgentId: null, mcpPanelVisible: false, mcpCursorIndex: null, mcpExpanded: new Set<string>(), kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false } }
     : state;
   return { ...withoutOtherPanels, helpPanelVisible: true };
+}
+
+function reduceMcpPanelToggle(state: TuiState): TuiState {
+  if (state.mcpPanelVisible) return { ...state, mcpPanelVisible: false, mcpCursorIndex: null, mcpExpanded: new Set<string>() };
+  const withoutOtherPanels: TuiState = state.teamPanelVisible || state.helpPanelVisible || state.kanban.view === "panel"
+    ? { ...state, teamPanelVisible: false, teamCursorAgentId: null, helpPanelVisible: false, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false } }
+    : state;
+  return { ...withoutOtherPanels, mcpPanelVisible: true, mcpCursorIndex: withoutOtherPanels.mcpServers.length > 0 ? 0 : null, mcpExpanded: new Set<string>() };
+}
+
+function reduceMcpServers(state: TuiState, servers: ReadonlyArray<McpServerSummary>): TuiState {
+  return { ...state, mcpServers: servers, mcpCursorIndex: servers.length > 0 ? 0 : null, mcpExpanded: new Set<string>() };
+}
+
+function reduceMcpCursor(state: TuiState, direction: 1 | -1): TuiState {
+  if (!state.mcpPanelVisible || state.mcpServers.length === 0) return state;
+  const current = state.mcpCursorIndex ?? -1;
+  const next = (current + direction + state.mcpServers.length) % state.mcpServers.length;
+  return { ...state, mcpCursorIndex: next };
+}
+
+function reduceMcpExpand(state: TuiState): TuiState {
+  if (!state.mcpPanelVisible || state.mcpCursorIndex === null) return state;
+  const server = state.mcpServers[state.mcpCursorIndex];
+  if (server === undefined) return state;
+  const expanded = new Set<string>(state.mcpExpanded);
+  if (state.mcpExpanded.has(server.name)) {
+    return { ...state, mcpExpanded: new Set([...expanded].filter((name) => name !== server.name)) };
+  }
+  return { ...state, mcpExpanded: new Set([...expanded, server.name]) };
 }
 
 function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {

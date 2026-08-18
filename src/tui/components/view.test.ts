@@ -166,6 +166,14 @@ describe("resolveFocusTarget", () => {
     const question = makeActiveQuestion();
     expect(_resolveFocusTarget(makeTuiState({ kanbanView: "panel", question }))).toBe("question");
   });
+
+  test("mcp when the mcp panel is visible", () => {
+    expect(_resolveFocusTarget(makeTuiState({ mcpPanelVisible: true }))).toBe("mcp");
+  });
+
+  test("mcp takes priority over a visible kanban panel", () => {
+    expect(_resolveFocusTarget(makeTuiState({ mcpPanelVisible: true, kanbanView: "panel" }))).toBe("mcp");
+  });
 });
 
 describe("TuiViewImpl", () => {
@@ -198,6 +206,7 @@ describe("TuiViewImpl", () => {
     const stateStore = makeStateStore(state);
     const editor = stubEditor(popupOpen);
     const kanbanPanel = stubComponent();
+    const mcpPanel = stubComponent();
     const questionPanel = stubQuestionPanel();
     const welcomeBanner = stubComponent();
     const kanbanList = stubComponent();
@@ -216,10 +225,11 @@ describe("TuiViewImpl", () => {
       stubComponent(),
       kanbanPanel,
       stubComponent(),
+      mcpPanel,
       questionPanel,
       workingSpinner,
     );
-    return { screen, stateStore, editor, kanbanPanel, questionPanel, welcomeBanner, kanbanList, queuedPrompts, workingSpinner, view };
+    return { screen, stateStore, editor, kanbanPanel, mcpPanel, questionPanel, welcomeBanner, kanbanList, queuedPrompts, workingSpinner, view };
   }
 
   test("constructor focuses the editor", () => {
@@ -254,6 +264,12 @@ describe("TuiViewImpl", () => {
     const { screen, view, kanbanPanel } = bootView(makeTuiState({ kanbanView: "panel" }));
     view.update();
     expect(screen.setFocus).toHaveBeenLastCalledWith(kanbanPanel);
+  });
+
+  test("update focuses the mcp panel over the kanban panel when both are visible", () => {
+    const { screen, view, mcpPanel } = bootView(makeTuiState({ mcpPanelVisible: true, kanbanView: "panel" }));
+    view.update();
+    expect(screen.setFocus).toHaveBeenLastCalledWith(mcpPanel);
   });
 
   test("update focuses the question panel when a question is active", () => {

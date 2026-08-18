@@ -1,6 +1,5 @@
 ---
 no-new-exports:
-  - index.ts
   - json.ts
   - load-config.test.ts
   - load-config.ts
@@ -14,7 +13,6 @@ no-new-exports:
   - subprocess.ts
   - tool-adapter.test.ts
   - tool-adapter.ts
-  - types.ts
 ---
 
 ## mcp

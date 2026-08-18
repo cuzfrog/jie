@@ -8,6 +8,7 @@ import { type KanbanStore } from "../storage";
 import { type AgentRegistry, type TeamManager } from "../team";
 import { type KanbanCard, type TeamInfo } from "../types";
 import type { QuestionBroker } from "../tools";
+import type { McpManager } from "../mcp";
 import { CommandExecutorImpl } from "./command-executor";
 
 const authStore = vi.mocked<AuthStore>({
@@ -97,6 +98,12 @@ const questionBroker = vi.mocked<QuestionBroker>({
   answer: vi.fn(),
 });
 
+const mcpManager = vi.mocked<McpManager>({
+  connectAll: vi.fn(),
+  dispose: vi.fn(),
+  listServers: vi.fn(),
+});
+
 const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "anthropic",
   defaultModel: "claude-sonnet-4-5",
@@ -122,7 +129,7 @@ function fakeModel(provider: "anthropic" | "openai", id: string, name: string): 
 let executor: CommandExecutorImpl;
 
 beforeEach(() => {
-  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, agentRegistry, gitService, eventManager, kanbanStore, llmService, questionBroker);
+  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, agentRegistry, gitService, eventManager, kanbanStore, llmService, questionBroker, mcpManager);
   settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   authStore.load.mockReturnValue({});
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
@@ -990,12 +997,25 @@ describe("CommandExecutorImpl", () => {
         { name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "content", text: "task" },
         { name: "kanbanHandoff", teamId: "alpha", cardId: "#1", targetTeamId: "beta" },
         { name: "kanbanToggleTodo", teamId: "alpha", cardId: "#1", todo: "one" },
+        { name: "listMcpServers" },
       ];
       for (const command of commands) {
         await executor.execute(command);
       }
       expect(teamManager.stop).toHaveBeenCalled();
       expect(authStore.setProvider).toHaveBeenCalled();
+    });
+  });
+
+  describe("listMcpServers", () => {
+    test("returns the manager's server list", async () => {
+      const servers = [
+        { name: "github", transport: "stdio" as const, status: "connected" as const, tools: [{ name: "create_issue", description: null }], detail: null },
+      ];
+      mcpManager.listServers.mockReturnValue(servers);
+      const result = await executor.execute({ name: "listMcpServers" });
+      expect(result).toEqual(servers);
+      expect(mcpManager.listServers).toHaveBeenCalled();
     });
   });
 
