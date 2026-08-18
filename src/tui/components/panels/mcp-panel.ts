@@ -9,7 +9,7 @@ const HINT = "esc close · tab expand · ↑↓ move";
 const HEADING = "MCP Servers";
 const NO_SERVERS = "no mcp servers configured (define servers in .jie/mcp.json)";
 const TOOL_INDENT = "    ";
-const SERVER_INDENT = "  ";
+const SERVER_INDENT = "";
 const CURSOR = "▸ ";
 const NO_CURSOR = "  ";
 

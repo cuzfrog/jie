@@ -172,6 +172,14 @@ describe("_mcpPanelLines", () => {
       expect(visibleWidth(line)).toBeLessThanOrEqual(40);
     }
   });
+
+  test("indents expanded tools further than their server", () => {
+    const servers = [connected("github", [{ name: "create_issue", description: "x" }])];
+    const lines = _mcpPanelLines(80, servers, 0, new Set(["github"])).map(stripAnsi);
+    const serverLine = lines.find((line) => line.includes("github"))!;
+    const toolLine = lines.find((line) => line.includes("create_issue"))!;
+    expect(serverLine.indexOf("github")).toBeLessThan(toolLine.indexOf("create_issue"));
+  });
 });
 
 function stripAnsi(text: string): string {
