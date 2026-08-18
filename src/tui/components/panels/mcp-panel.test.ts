@@ -7,6 +7,10 @@ import { style } from "../themes";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
+function makeEditorFallback() {
+  return { handleInput: vi.fn(), isShowingAutocomplete: vi.fn(() => false) };
+}
+
 function connected(name: string, tools: { name: string; description: string | null }[]): McpServerSummary {
   return { name, transport: "stdio", status: "connected", tools, detail: null };
 }
@@ -18,12 +22,12 @@ describe("McpPanel", () => {
   });
 
   test("renders nothing while the panel is hidden", () => {
-    expect(new McpPanel(stateStore).render(80)).toEqual([]);
+    expect(new McpPanel(stateStore, makeEditorFallback()).render(80)).toEqual([]);
   });
 
   test("renders a boxed panel when visible", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("github", [])] }));
-    const lines = new McpPanel(stateStore).render(80);
+    const lines = new McpPanel(stateStore, makeEditorFallback()).render(80);
     expect(lines[0]).toBe(style("borderMuted")(`┌${"─".repeat(78)}┐`));
     const text = lines.map(stripAnsi).join("\n");
     expect(text).toContain("MCP Servers");
@@ -32,7 +36,7 @@ describe("McpPanel", () => {
 
   test("renders the close hint below the box", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [] }));
-    const lines = new McpPanel(stateStore).render(80);
+    const lines = new McpPanel(stateStore, makeEditorFallback()).render(80);
     expect(lines[lines.length - 1]).toBe(style("dim")("esc close · tab expand · ↑↓ move"));
   });
 
@@ -46,7 +50,7 @@ describe("McpPanel", () => {
         { name: "get_file", description: "get a file's contents" },
       ])],
     }));
-    const panel = new McpPanel(stateStore);
+    const panel = new McpPanel(stateStore, makeEditorFallback());
     for (const width of [13, 40, 60, 80, 139]) {
       for (const line of panel.render(width)) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
@@ -56,40 +60,63 @@ describe("McpPanel", () => {
 });
 
 describe("McpPanel.handleInput", () => {
-  beforeEach(() => {
+  function handle(data: string, popupOpen = false) {
+    const editor = makeEditorFallback();
+    editor.isShowingAutocomplete.mockReturnValue(popupOpen);
     stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", []), connected("b", [])] }));
     stateStore.dispatch.mockClear();
-  });
+    editor.handleInput.mockClear();
+    new McpPanel(stateStore, editor).handleInput(data);
+    return editor;
+  }
+
+  function assertDispatch(data: string, action: unknown) {
+    const editor = handle(data);
+    expect(stateStore.dispatch).toHaveBeenCalledWith(action);
+    expect(editor.handleInput).not.toHaveBeenCalled();
+  }
 
   test("esc toggles the panel", () => {
-    const panel = new McpPanel(stateStore);
-    panel.handleInput("\x1b");
-    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.toggleMcpPanel());
+    assertDispatch("\x1b", Actions.toggleMcpPanel());
   });
 
   test("down moves the cursor forward", () => {
-    const panel = new McpPanel(stateStore);
-    panel.handleInput("\x1b[B");
-    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.moveMcpCursor(1));
+    assertDispatch("\x1b[B", Actions.moveMcpCursor(1));
   });
 
   test("up moves the cursor backward", () => {
-    const panel = new McpPanel(stateStore);
-    panel.handleInput("\x1b[A");
-    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.moveMcpCursor(-1));
+    assertDispatch("\x1b[A", Actions.moveMcpCursor(-1));
   });
 
   test("tab toggles expand for the pointed server", () => {
-    const panel = new McpPanel(stateStore);
-    panel.handleInput("\t");
-    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.toggleMcpExpand());
+    assertDispatch("\t", Actions.toggleMcpExpand());
+  });
+
+  test("forwards ctrl+c to the editor", () => {
+    const editor = handle("\x03");
+    expect(stateStore.dispatch).not.toHaveBeenCalled();
+    expect(editor.handleInput).toHaveBeenCalledWith("\x03");
+  });
+
+  test("forwards plain typing to the editor", () => {
+    const editor = handle("a");
+    expect(stateStore.dispatch).not.toHaveBeenCalled();
+    expect(editor.handleInput).toHaveBeenCalledWith("a");
+  });
+
+  test("forwards all input when the autocomplete popup is open", () => {
+    const state = makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])] });
+    stateStore.getState.mockReturnValue(state);
+    const editor = handle("\t", true);
+    expect(stateStore.dispatch).not.toHaveBeenCalled();
+    expect(editor.handleInput).toHaveBeenCalledWith("\t");
   });
 });
 
 describe("McpPanel.update", () => {
   test("reports dirty when the cursor moves", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])], mcpCursorIndex: 0 }));
-    const panel = new McpPanel(stateStore);
+    const panel = new McpPanel(stateStore, makeEditorFallback());
     panel.update();
     stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])], mcpCursorIndex: 1 }));
     expect(panel.update()).toBe(true);
@@ -97,7 +124,7 @@ describe("McpPanel.update", () => {
 
   test("reports dirty when the expanded set changes", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])], mcpCursorIndex: 0, mcpExpanded: new Set<string>() }));
-    const panel = new McpPanel(stateStore);
+    const panel = new McpPanel(stateStore, makeEditorFallback());
     panel.update();
     stateStore.getState.mockReturnValue(makeTuiState({ mcpPanelVisible: true, mcpServers: [connected("a", [])], mcpCursorIndex: 0, mcpExpanded: new Set(["a"]) }));
     expect(panel.update()).toBe(true);

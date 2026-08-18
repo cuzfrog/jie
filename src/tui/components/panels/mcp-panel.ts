@@ -13,6 +13,11 @@ const SERVER_INDENT = "";
 const CURSOR = "▸ ";
 const NO_CURSOR = "  ";
 
+interface KeyFallback {
+  handleInput(data: string): void;
+  isShowingAutocomplete(): boolean;
+}
+
 const STATUS_COLORS: { readonly [K in McpServerStatus]: "muted" | "warning" | "error" } = {
   connected: "muted",
   skipped: "warning",
@@ -24,9 +29,11 @@ export class McpPanel extends Panel implements TuiComponent {
   private mcpServers: ReadonlyArray<McpServerSummary> = [];
   private mcpCursorIndex: number | null = null;
   private mcpExpanded: ReadonlySet<string> = new Set<string>();
+  private readonly editor: KeyFallback;
 
-  constructor(stateStore: StateStore) {
+  constructor(stateStore: StateStore, editor: KeyFallback) {
     super(stateStore);
+    this.editor = editor;
   }
 
   update(): boolean {
@@ -45,21 +52,25 @@ export class McpPanel extends Panel implements TuiComponent {
   }
 
   handleInput(data: string): void {
-    if (matchesKey(data, "esc")) {
-      this.stateStore.dispatch(Actions.toggleMcpPanel());
-      return;
+    if (!this.editor.isShowingAutocomplete()) {
+      if (matchesKey(data, "esc")) {
+        this.stateStore.dispatch(Actions.toggleMcpPanel());
+        return;
+      }
+      if (matchesKey(data, "up")) {
+        this.stateStore.dispatch(Actions.moveMcpCursor(-1));
+        return;
+      }
+      if (matchesKey(data, "down")) {
+        this.stateStore.dispatch(Actions.moveMcpCursor(1));
+        return;
+      }
+      if (matchesKey(data, "tab")) {
+        this.stateStore.dispatch(Actions.toggleMcpExpand());
+        return;
+      }
     }
-    if (matchesKey(data, "up")) {
-      this.stateStore.dispatch(Actions.moveMcpCursor(-1));
-      return;
-    }
-    if (matchesKey(data, "down")) {
-      this.stateStore.dispatch(Actions.moveMcpCursor(1));
-      return;
-    }
-    if (matchesKey(data, "tab")) {
-      this.stateStore.dispatch(Actions.toggleMcpExpand());
-    }
+    this.editor.handleInput(data);
   }
 
   protected override isVisible(state: TuiState): boolean {
