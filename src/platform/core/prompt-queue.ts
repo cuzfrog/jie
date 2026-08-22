@@ -23,7 +23,7 @@ export interface PromptQueue {
   dispatchNext(): Promise<void>;
   settle(): Promise<void>;
   drainForFollowUp(isError: boolean): void;
-  consumeChained(message: AgentMessage): void;
+  consumeChained(message: AgentMessage): boolean;
   publishQueueUpdate(): void;
   isEmpty(): boolean;
   stop(): void;
@@ -141,12 +141,12 @@ export class PromptQueueImpl implements PromptQueue {
     this.publishQueueUpdate();
   }
 
-  consumeChained(message: AgentMessage): void {
+  consumeChained(message: AgentMessage): boolean {
     const index = this.chained.findIndex((entry) => entry.message === message);
-    if (index !== -1) {
-      this.chained.splice(index, 1);
-      this.publishQueueUpdate();
-    }
+    if (index === -1) return false;
+    this.chained.splice(index, 1);
+    this.publishQueueUpdate();
+    return true;
   }
 
   publishQueueUpdate(): void {

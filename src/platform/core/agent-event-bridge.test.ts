@@ -108,6 +108,7 @@ function envelopes<T extends EventType>(topic: T): EventEnvelope<T>[] {
 
 beforeEach(() => {
   persisted.length = 0;
+  promptQueue.consumeChained.mockReturnValue(true);
 });
 
 const TRUNCATION_MESSAGE = "Response truncated: the model spent the entire maxTokens budget before producing output (stopReason: length). Consider raising maxTokens for this model.";
@@ -284,7 +285,7 @@ describe("AgentEventBridge — turn-start deferral", () => {
     expect(envelopes("agent.turn.start")).toHaveLength(1);
   });
 
-  test("a turn with multiple chained user messages consumes each one and publishes one turn.start", () => {
+  test("a turn with multiple chained user messages consumes each one and publishes a turn.start per message", () => {
     const bridge = makeBridge();
     const first = { role: "user", content: "first", displayText: "first", timestamp: 0 } as AgentMessage;
     const second = { role: "user", content: "second", displayText: "second", timestamp: 0 } as AgentMessage;
@@ -296,8 +297,10 @@ describe("AgentEventBridge — turn-start deferral", () => {
     expect(promptQueue.consumeChained).toHaveBeenCalledTimes(2);
     expect(promptQueue.consumeChained).toHaveBeenCalledWith(first);
     expect(promptQueue.consumeChained).toHaveBeenCalledWith(second);
-    expect(envelopes("agent.turn.start")).toHaveLength(1);
-    expect(envelopes("agent.turn.start")[0]!.payload).toBe("first");
+    const turnStarts = envelopes("agent.turn.start");
+    expect(turnStarts).toHaveLength(2);
+    expect(turnStarts[0]!.payload).toBe("first");
+    expect(turnStarts[1]!.payload).toBe("second");
   });
 
   test("the deferred turn event precedes the turn's own stream events", () => {

@@ -1674,7 +1674,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     body.stop();
   });
 
-  test("multiple queued prompts released at a single turn_end share one turn_start and are consumed in order", async () => {
+  test("multiple queued prompts released at a single turn_end are consumed in order and each gets its own turn_start", async () => {
     const body = h.makeBody();
     await body.start();
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
@@ -1696,7 +1696,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[0]![0] as AgentMessage });
     h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[1]![0] as AgentMessage });
-    expect(turnStart.map((env) => env.payload)).toEqual(["first queued", "second queued"]);
+    expect(turnStart.map((env) => env.payload)).toEqual(["first queued", "second queued", "third queued"]);
     body.stop();
   });
 

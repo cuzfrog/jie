@@ -38,6 +38,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
   private readonly onRunEnd: () => void;
   private readonly stream: StreamPublisher;
   private turnStartPending = false;
+  private suppressNextChainedTurnStart = false;
   private lengthContinuations = 0;
   private sessionInputTokens = 0;
   private sessionOutputTokens = 0;
@@ -92,7 +93,14 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       }
       case "message_start":
         this.stream.beginStream();
-        if (event.message.role === "user") this.promptQueue.consumeChained(event.message);
+        if (event.message.role === "user") {
+          if (this.suppressNextChainedTurnStart) {
+            this.suppressNextChainedTurnStart = false;
+            this.promptQueue.consumeChained(event.message);
+          } else if (this.promptQueue.consumeChained(event.message)) {
+            this.eventManager.publish(Events.agentTurnStart(this.sender, userDisplayText(event.message)));
+          }
+        }
         if (event.message.role === "assistant") {
           this.lastPublishedPartial = null;
           this.partialUsage = event.message.usage !== undefined && this.hasUsageValues(event.message.usage) ? usageTotals(event.message.usage) : null;
@@ -138,6 +146,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
     }
     if (isUserIngressMessage(message)) this.lengthContinuations = 0;
     this.eventManager.publish(Events.agentTurnStart(this.sender, userDisplayText(message)));
+    this.suppressNextChainedTurnStart = true;
   }
 
   private updatePartialUsage(message: AgentMessage): void {

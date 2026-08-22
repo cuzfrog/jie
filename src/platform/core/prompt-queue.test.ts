@@ -73,7 +73,7 @@ describe("PromptQueue — steer by default", () => {
     queue.ingestUserPrompt("first", "first");
     const message = dispatcher.steer.mock.calls[0]![0];
     const countBefore = queueUpdates().length;
-    queue.consumeChained(message);
+    expect(queue.consumeChained(message)).toBe(true);
     expect(lastSnapshot()).toEqual([]);
     expect(queueUpdates().length).toBe(countBefore + 1);
   });
@@ -240,7 +240,7 @@ describe("PromptQueue — follow-up drain", () => {
     queue.drainForFollowUp(false);
     const message = dispatcher.followUp.mock.calls[0]![0];
     const countBefore = queueUpdates().length;
-    queue.consumeChained(message);
+    expect(queue.consumeChained(message)).toBe(true);
     expect(lastSnapshot()).toEqual([]);
     expect(queueUpdates().length).toBe(countBefore + 1);
     dispatcher.isStreaming.mockReturnValue(true);
@@ -254,7 +254,7 @@ describe("PromptQueue — follow-up drain", () => {
     queue.ingestUserPrompt("first", "first");
     queue.drainForFollowUp(false);
     const countBefore = queueUpdates().length;
-    queue.consumeChained({ role: "user", content: "other", timestamp: 0 });
+    expect(queue.consumeChained({ role: "user", content: "other", timestamp: 0 })).toBe(false);
     expect(lastSnapshot()).toEqual([{ text: "first", source: "user", chained: true }]);
     expect(queueUpdates().length).toBe(countBefore);
     dispatcher.isStreaming.mockReturnValue(true);
