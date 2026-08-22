@@ -33,7 +33,7 @@ type EventDefinitions = {
   // partial: true — input is the in-flight message's accumulated sent tokens (input+cacheRead+cacheWrite already folded); cacheRead and cacheWrite are 0. partial: false — fields carry the raw per-message pi usage.
   // session_input_tokens/session_output_tokens: cumulative session totals, excluding the in-flight message when partial is true and including it when false.
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; session_input_tokens: number; session_output_tokens: number; partial: boolean }>;
-  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }> }>;
+  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer" | "system"; chained: boolean }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null }>;
   "agent.compacted": EventDef<AgentSender, { summary: string; tokens_before: number; tokens_after: number; summarized_prompts: number }>;
   "agent.compaction.start": EventDef<AgentSender, null>;
@@ -89,7 +89,7 @@ export const Events = {
   agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number, thinking_durations: ReadonlyArray<number>): EventEnvelope<"agent.stream.end"> =>
     createEvent("agent.stream.end", sender, { stream_id, total_chunks, thinking_durations }),
   agentUsage: agentUsage,
-  agentPromptQueueUpdate: (sender: AgentSender, prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }>): EventEnvelope<"agent.prompt.queue.update"> =>
+  agentPromptQueueUpdate: (sender: AgentSender, prompts: Array<{ text: string; source: "user" | "peer" | "system"; chained: boolean }>): EventEnvelope<"agent.prompt.queue.update"> =>
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max", contextWindow: number | null): EventEnvelope<"agent.model.assigned"> =>
     createEvent("agent.model.assigned", sender, { provider, model, effort, contextWindow }),

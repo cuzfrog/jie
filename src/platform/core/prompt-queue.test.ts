@@ -34,7 +34,7 @@ function queueUpdates(): QueueUpdateEnvelope[] {
     .filter((env): env is QueueUpdateEnvelope => env.topic === "agent.prompt.queue.update");
 }
 
-function lastSnapshot(): ReadonlyArray<{ text: string; source: "user" | "peer"; chained: boolean }> {
+function lastSnapshot(): ReadonlyArray<{ text: string; source: "user" | "peer" | "system"; chained: boolean }> {
   const updates = queueUpdates();
   return updates[updates.length - 1]!.payload.prompts;
 }
