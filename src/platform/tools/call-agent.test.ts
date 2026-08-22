@@ -45,9 +45,10 @@ describe("call_agent tool", () => {
       prompt: "review this",
       reset: undefined,
     });
-    expect(result.content).toContain("reviewer-1");
+    expect(result.content).toContain("dispatched to 'reviewer-1'");
     expect(result.content).toContain("call-1");
     expect(result.content).toContain("callback.leader-1");
+    expect(result.content).toContain("mid-run");
     expect(result.details).toEqual({
       kind: "call-agent",
       agentKey: "reviewer-1",
@@ -64,7 +65,8 @@ describe("call_agent tool", () => {
     const tool = createCallAgentTool();
     const result = await tool.execute({ agent: "reviewer", prompt: "review this" }, ctx);
 
-    expect(result.content).toContain("queued");
+    expect(result.content).toContain("queued for 'reviewer-1'");
+    expect(result.content).toContain("mid-run");
     expect((result.details as CallAgentResultDetails).queued).toBe(true);
   });
 

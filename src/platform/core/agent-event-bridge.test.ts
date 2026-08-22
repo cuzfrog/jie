@@ -274,7 +274,7 @@ describe("AgentEventBridge — turn-start deferral", () => {
     expect(promptQueue.consumeChained).not.toHaveBeenCalled();
   });
 
-  test("a user flushing event consumes the chained prompt before publishing agent.turn.start", () => {
+  test("a user flushing event consumes the chained prompt and publishes agent.turn.start", () => {
     const bridge = makeBridge();
     const userMessage: AgentMessage = { role: "user", content: "hi", timestamp: 0 };
     bridge.handleEvent({ type: "turn_start" });
@@ -282,6 +282,22 @@ describe("AgentEventBridge — turn-start deferral", () => {
     expect(promptQueue.consumeChained).toHaveBeenCalledTimes(1);
     expect(promptQueue.consumeChained).toHaveBeenCalledWith(userMessage);
     expect(envelopes("agent.turn.start")).toHaveLength(1);
+  });
+
+  test("a turn with multiple chained user messages consumes each one and publishes one turn.start", () => {
+    const bridge = makeBridge();
+    const first = { role: "user", content: "first", displayText: "first", timestamp: 0 } as AgentMessage;
+    const second = { role: "user", content: "second", displayText: "second", timestamp: 0 } as AgentMessage;
+    bridge.handleEvent({ type: "turn_start" });
+    bridge.handleEvent({ type: "message_start", message: first });
+    bridge.handleEvent({ type: "message_end", message: first });
+    bridge.handleEvent({ type: "message_start", message: second });
+    bridge.handleEvent({ type: "message_end", message: second });
+    expect(promptQueue.consumeChained).toHaveBeenCalledTimes(2);
+    expect(promptQueue.consumeChained).toHaveBeenCalledWith(first);
+    expect(promptQueue.consumeChained).toHaveBeenCalledWith(second);
+    expect(envelopes("agent.turn.start")).toHaveLength(1);
+    expect(envelopes("agent.turn.start")[0]!.payload).toBe("first");
   });
 
   test("the deferred turn event precedes the turn's own stream events", () => {

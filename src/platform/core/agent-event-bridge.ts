@@ -92,6 +92,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       }
       case "message_start":
         this.stream.beginStream();
+        if (event.message.role === "user") this.promptQueue.consumeChained(event.message);
         if (event.message.role === "assistant") {
           this.lastPublishedPartial = null;
           this.partialUsage = event.message.usage !== undefined && this.hasUsageValues(event.message.usage) ? usageTotals(event.message.usage) : null;
@@ -136,7 +137,6 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       return;
     }
     if (isUserIngressMessage(message)) this.lengthContinuations = 0;
-    this.promptQueue.consumeChained(message);
     this.eventManager.publish(Events.agentTurnStart(this.sender, userDisplayText(message)));
   }
 
