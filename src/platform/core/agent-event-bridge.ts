@@ -82,7 +82,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
           this.eventManager.publish(Events.systemError({ kind: "system" }, TRUNCATION_MESSAGE));
           if (this.lengthContinuations < MAX_LENGTH_CONTINUATIONS) {
             this.lengthContinuations += 1;
-            this.promptQueue.steer({ role: "user", content: TRUNCATION_CONTINUATION_PROMPT, timestamp: Date.now() });
+            this.promptQueue.ingestSystemPrompt({ role: "user", content: TRUNCATION_CONTINUATION_PROMPT, timestamp: Date.now() });
           }
         }
         void this.hookRunner.stop({ identity: this.hookIdentity });
