@@ -14,6 +14,7 @@ const eventManager = vi.mocked<EventManager>({
 const promptQueue = vi.mocked<PromptQueue>({
   ingestUserPrompt: vi.fn(),
   ingestPeerNotification: vi.fn(),
+  ingestSystemPrompt: vi.fn(),
   consumeResubmitted: vi.fn(),
   dequeue: vi.fn(),
   requeue: vi.fn(),
@@ -22,7 +23,6 @@ const promptQueue = vi.mocked<PromptQueue>({
   drainForFollowUp: vi.fn(),
   consumeChained: vi.fn(),
   publishQueueUpdate: vi.fn(),
-  steer: vi.fn(),
   isEmpty: vi.fn(() => true),
   stop: vi.fn(),
 });
@@ -108,6 +108,7 @@ function envelopes<T extends EventType>(topic: T): EventEnvelope<T>[] {
 
 beforeEach(() => {
   persisted.length = 0;
+  promptQueue.consumeChained.mockReturnValue(true);
 });
 
 const TRUNCATION_MESSAGE = "Response truncated: the model spent the entire maxTokens budget before producing output (stopReason: length). Consider raising maxTokens for this model.";
@@ -127,8 +128,8 @@ describe("AgentEventBridge — budget truncation", () => {
     expect(envelopes("agent.idle")[0]!.payload).toBe("length");
     expect(systemErrors()).toHaveLength(1);
     expect(systemErrors()[0]!).toEqual({ error: TRUNCATION_MESSAGE });
-    expect(promptQueue.steer).toHaveBeenCalledTimes(1);
-    expect(promptQueue.steer.mock.calls[0]![0]).toMatchObject({
+    expect(promptQueue.ingestSystemPrompt).toHaveBeenCalledTimes(1);
+    expect(promptQueue.ingestSystemPrompt.mock.calls[0]![0]).toMatchObject({
       role: "user",
       content: expect.stringContaining("cut off"),
     });
@@ -143,7 +144,7 @@ describe("AgentEventBridge — budget truncation", () => {
       })],
     });
     expect(systemErrors()).toHaveLength(1);
-    expect(promptQueue.steer).toHaveBeenCalledTimes(1);
+    expect(promptQueue.ingestSystemPrompt).toHaveBeenCalledTimes(1);
   });
 
   test("length with a toolCall part is not published or steered (pi-agent-core already handles it)", () => {
@@ -155,7 +156,7 @@ describe("AgentEventBridge — budget truncation", () => {
       })],
     });
     expect(systemErrors()).toHaveLength(0);
-    expect(promptQueue.steer).not.toHaveBeenCalled();
+    expect(promptQueue.ingestSystemPrompt).not.toHaveBeenCalled();
   });
 
   test("length with non-whitespace text is not published or steered", () => {
@@ -167,7 +168,7 @@ describe("AgentEventBridge — budget truncation", () => {
       })],
     });
     expect(systemErrors()).toHaveLength(0);
-    expect(promptQueue.steer).not.toHaveBeenCalled();
+    expect(promptQueue.ingestSystemPrompt).not.toHaveBeenCalled();
   });
 
   test("length with whitespace-only text is treated as truncated", () => {
@@ -179,7 +180,7 @@ describe("AgentEventBridge — budget truncation", () => {
       })],
     });
     expect(systemErrors()).toHaveLength(1);
-    expect(promptQueue.steer).toHaveBeenCalledTimes(1);
+    expect(promptQueue.ingestSystemPrompt).toHaveBeenCalledTimes(1);
   });
 
   test("stop and toolUse empty messages are not published or steered", () => {
@@ -192,7 +193,7 @@ describe("AgentEventBridge — budget truncation", () => {
       messages: [makeAssistantMessage({ stopReason: "toolUse", content: [] })],
     });
     expect(systemErrors()).toHaveLength(0);
-    expect(promptQueue.steer).not.toHaveBeenCalled();
+    expect(promptQueue.ingestSystemPrompt).not.toHaveBeenCalled();
   });
 
   test("a second truncating agent_end in the same epoch publishes system.error but does not steer again", () => {
@@ -201,13 +202,13 @@ describe("AgentEventBridge — budget truncation", () => {
       type: "agent_end",
       messages: [makeAssistantMessage({ stopReason: "length", content: [] })],
     });
-    expect(promptQueue.steer).toHaveBeenCalledTimes(1);
+    expect(promptQueue.ingestSystemPrompt).toHaveBeenCalledTimes(1);
     bridge.handleEvent({
       type: "agent_end",
       messages: [makeAssistantMessage({ stopReason: "length", content: [] })],
     });
     expect(systemErrors()).toHaveLength(2);
-    expect(promptQueue.steer).toHaveBeenCalledTimes(1);
+    expect(promptQueue.ingestSystemPrompt).toHaveBeenCalledTimes(1);
   });
 
   test("a user-ingress turn_start flush resets the cap so a later truncation steers again", () => {
@@ -216,7 +217,7 @@ describe("AgentEventBridge — budget truncation", () => {
       type: "agent_end",
       messages: [makeAssistantMessage({ stopReason: "length", content: [] })],
     });
-    expect(promptQueue.steer).toHaveBeenCalledTimes(1);
+    expect(promptQueue.ingestSystemPrompt).toHaveBeenCalledTimes(1);
     bridge.handleEvent({ type: "turn_start" });
     bridge.handleEvent({
       type: "message_start",
@@ -226,7 +227,7 @@ describe("AgentEventBridge — budget truncation", () => {
       type: "agent_end",
       messages: [makeAssistantMessage({ stopReason: "length", content: [] })],
     });
-    expect(promptQueue.steer).toHaveBeenCalledTimes(2);
+    expect(promptQueue.ingestSystemPrompt).toHaveBeenCalledTimes(2);
   });
 
   test("system.error is published before onRunEnd so the queued steer is drained by continue()", () => {
@@ -274,7 +275,7 @@ describe("AgentEventBridge — turn-start deferral", () => {
     expect(promptQueue.consumeChained).not.toHaveBeenCalled();
   });
 
-  test("a user flushing event consumes the chained prompt before publishing agent.turn.start", () => {
+  test("a user flushing event consumes the chained prompt and publishes agent.turn.start", () => {
     const bridge = makeBridge();
     const userMessage: AgentMessage = { role: "user", content: "hi", timestamp: 0 };
     bridge.handleEvent({ type: "turn_start" });
@@ -282,6 +283,24 @@ describe("AgentEventBridge — turn-start deferral", () => {
     expect(promptQueue.consumeChained).toHaveBeenCalledTimes(1);
     expect(promptQueue.consumeChained).toHaveBeenCalledWith(userMessage);
     expect(envelopes("agent.turn.start")).toHaveLength(1);
+  });
+
+  test("a turn with multiple chained user messages consumes each one and publishes a turn.start per message", () => {
+    const bridge = makeBridge();
+    const first = { role: "user", content: "first", displayText: "first", timestamp: 0 } as AgentMessage;
+    const second = { role: "user", content: "second", displayText: "second", timestamp: 0 } as AgentMessage;
+    bridge.handleEvent({ type: "turn_start" });
+    bridge.handleEvent({ type: "message_start", message: first });
+    bridge.handleEvent({ type: "message_end", message: first });
+    bridge.handleEvent({ type: "message_start", message: second });
+    bridge.handleEvent({ type: "message_end", message: second });
+    expect(promptQueue.consumeChained).toHaveBeenCalledTimes(2);
+    expect(promptQueue.consumeChained).toHaveBeenCalledWith(first);
+    expect(promptQueue.consumeChained).toHaveBeenCalledWith(second);
+    const turnStarts = envelopes("agent.turn.start");
+    expect(turnStarts).toHaveLength(2);
+    expect(turnStarts[0]!.payload).toBe("first");
+    expect(turnStarts[1]!.payload).toBe("second");
   });
 
   test("the deferred turn event precedes the turn's own stream events", () => {

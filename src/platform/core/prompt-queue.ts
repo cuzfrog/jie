@@ -4,6 +4,8 @@ import type { UserIngressMessage } from "../types";
 
 const DEQUEUED_PROMPT_CAP = 32;
 
+type PromptQueueSource = "user" | "peer" | "system";
+
 export interface PromptDispatcher {
   prompt(message: AgentMessage): void;
   followUp(message: AgentMessage): void;
@@ -14,15 +16,15 @@ export interface PromptDispatcher {
 export interface PromptQueue {
   ingestUserPrompt(prompt: string, userText: string): void;
   ingestPeerNotification(topic: string, source: string, prompt: string): void;
+  ingestSystemPrompt(message: AgentMessage): void;
   consumeResubmitted(prompt: string): void;
   dequeue(prompt: string): void;
   requeue(prompt: string): void;
   dispatchNext(): Promise<void>;
   settle(): Promise<void>;
   drainForFollowUp(isError: boolean): void;
-  consumeChained(message: AgentMessage): void;
+  consumeChained(message: AgentMessage): boolean;
   publishQueueUpdate(): void;
-  steer(message: AgentMessage): void;
   isEmpty(): boolean;
   stop(): void;
 }
@@ -37,6 +39,7 @@ interface PromptQueueDeps {
 interface QueuedPrompt {
   readonly message: AgentMessage;
   readonly userText: string | null;
+  readonly source: PromptQueueSource;
 }
 
 export class PromptQueueImpl implements PromptQueue {
@@ -59,7 +62,7 @@ export class PromptQueueImpl implements PromptQueue {
 
   ingestUserPrompt(prompt: string, userText: string): void {
     const message: UserIngressMessage = { role: "user", content: prompt, timestamp: Date.now(), displayText: userText };
-    this.ingest(message, userText);
+    this.ingest(message, userText, "user");
   }
 
   ingestPeerNotification(topic: string, source: string, prompt: string): void {
@@ -69,7 +72,11 @@ export class PromptQueueImpl implements PromptQueue {
       timestamp: Date.now(),
       displayText: prompt,
     };
-    this.ingest(message, null);
+    this.ingest(message, null, "peer");
+  }
+
+  ingestSystemPrompt(message: AgentMessage): void {
+    this.ingest(message, null, "system");
   }
 
   consumeResubmitted(prompt: string): void {
@@ -104,7 +111,11 @@ export class PromptQueueImpl implements PromptQueue {
   }
 
   async dispatchNext(): Promise<void> {
-    if (this.dispatching || this.stopped || this.dispatcher.isStreaming() || this.queue.length === 0) return;
+    if (this.dispatching || this.stopped || this.queue.length === 0) return;
+    if (this.dispatcher.isStreaming()) {
+      this.releaseAllViaSteer();
+      return;
+    }
     this.dispatching = true;
     try {
       await this.beforeDispatch();
@@ -120,33 +131,35 @@ export class PromptQueueImpl implements PromptQueue {
   }
 
   drainForFollowUp(isError: boolean): void {
-    if (!isError && this.queue.length > 0) {
-      const next = this.queue.shift()!;
-      this.chained.push(next);
-      this.dispatcher.followUp(next.message);
+    if (!isError) {
+      while (this.queue.length > 0) {
+        const entry = this.queue.shift()!;
+        this.chained.push(entry);
+        this.dispatcher.followUp(entry.message);
+      }
     }
     this.publishQueueUpdate();
   }
 
-  consumeChained(message: AgentMessage): void {
+  consumeChained(message: AgentMessage): boolean {
     const index = this.chained.findIndex((entry) => entry.message === message);
-    if (index !== -1) {
-      this.chained.splice(index, 1);
-      this.publishQueueUpdate();
-    }
-  }
-
-  steer(message: AgentMessage): void {
-    this.dispatcher.steer(message);
+    if (index === -1) return false;
+    this.chained.splice(index, 1);
+    this.publishQueueUpdate();
+    return true;
   }
 
   publishQueueUpdate(): void {
-    const chainedPrompts = this.chained.map((entry) => entry.userText !== null
-      ? { text: entry.userText, source: "user" as const, chained: true as const }
-      : { text: userPromptText(entry.message), source: "peer" as const, chained: true as const });
-    const queuedPrompts = this.queue.map((entry) => entry.userText !== null
-      ? { text: entry.userText, source: "user" as const, chained: false as const }
-      : { text: userPromptText(entry.message), source: "peer" as const, chained: false as const });
+    const chainedPrompts = this.chained.map((entry) => ({
+      text: entry.userText ?? userPromptText(entry.message),
+      source: entry.source,
+      chained: true as const,
+    }));
+    const queuedPrompts = this.queue.map((entry) => ({
+      text: entry.userText ?? userPromptText(entry.message),
+      source: entry.source,
+      chained: false as const,
+    }));
     this.eventManager.publish(Events.agentPromptQueueUpdate(this.sender, [...chainedPrompts, ...queuedPrompts]));
   }
 
@@ -158,8 +171,8 @@ export class PromptQueueImpl implements PromptQueue {
     this.stopped = true;
   }
 
-  private ingest(message: UserIngressMessage, userText: string | null): void {
-    this.queue.push({ message, userText });
+  private ingest(message: AgentMessage, userText: string | null, source: PromptQueueSource): void {
+    this.queue.push({ message, userText, source });
     this.publishQueueUpdate();
     void this.dispatchNext();
   }
@@ -169,6 +182,15 @@ export class PromptQueueImpl implements PromptQueue {
     const next = this.queue.shift()!;
     this.publishQueueUpdate();
     this.dispatcher.prompt(next.message);
+  }
+
+  private releaseAllViaSteer(): void {
+    while (this.queue.length > 0) {
+      const entry = this.queue.shift()!;
+      this.chained.push(entry);
+      this.dispatcher.steer(entry.message);
+    }
+    this.publishQueueUpdate();
   }
 }
 

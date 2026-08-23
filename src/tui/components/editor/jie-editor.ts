@@ -50,7 +50,7 @@ export class JieEditor extends Editor {
   private popupFilteredOut: number | null = null;
   private readonly historyMirror: string[] = [];
   private browse: QueueBrowse | null = null;
-  private lastSeenQueue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer"; readonly chained: boolean }> | null = null;
+  private lastSeenQueue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" | "system"; readonly chained: boolean }> | null = null;
   private pendingDequeues = 0;
   private programmaticChange = false;
   private kanbanEditId: string | null = null;

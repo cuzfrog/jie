@@ -13,10 +13,10 @@ import type { TranscriptStore } from "../storage";
 const BIG = "x".repeat(100_000);
 const HUGE = "y".repeat(200_000);
 const THRESHOLD_WINDOW = 30_000;
-const RESERVE_30K = Math.min(16384, Math.floor(THRESHOLD_WINDOW * 0.1));
+const RESERVE_30K = Math.min(24_000, Math.floor(THRESHOLD_WINDOW * 0.2));
 const BUDGET_30K = THRESHOLD_WINDOW - RESERVE_30K;
 const SUMMARY_MAX_30K = Math.floor(0.8 * RESERVE_30K);
-const RESERVE_20K = Math.min(16384, Math.floor(20_000 * 0.1));
+const RESERVE_20K = Math.min(24_000, Math.floor(20_000 * 0.2));
 const BUDGET_20K = 20_000 - RESERVE_20K;
 const SUMMARY_MAX_20K = Math.floor(0.8 * RESERVE_20K);
 
@@ -254,7 +254,7 @@ describe("CompactorImpl.compact", () => {
     transcriptStore.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages, model));
     expect(result?.firstKeptIndex).toBe(2);
-    expect(result?.tokensBefore).toBeGreaterThan(200_000 - 16384);
+    expect(result?.tokensBefore).toBeGreaterThan(200_000 * 0.8);
   });
 
   test("caps summary maxTokens at the model limit", async () => {
@@ -391,14 +391,42 @@ describe("CompactorImpl.compact", () => {
     expect(prompt).not.toContain(tail);
   });
 
-  test("scales reserveTokens to 10% of the window by default", async () => {
+  test("scales reserveTokens to 20% of the window capped at 24k by default", async () => {
     const transcriptStore = makeTranscriptStore();
     const compactor = makeCompactor(transcriptStore);
     const messages = [userMsg(HUGE), assistantMsg(HUGE)];
     transcriptStore.restore.mockResolvedValue([...messages]);
-    const result = await compactor.compact(makeInput(messages, makeModel(60_000, 8192)));
+    const result = await compactor.compact(makeInput(messages, makeModel(60_000, 20_000)));
     expect(result).not.toBeNull();
-    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 6000));
+    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * Math.min(24_000, 60_000 * 0.2)));
+  });
+
+  test("caps reserveTokens at 24k on large windows", async () => {
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    const messages = [userMsg(HUGE), assistantMsg(HUGE)];
+    transcriptStore.restore.mockResolvedValue([...messages]);
+    const result = await compactor.compact(makeInput(messages, makeModel(120_000, 50_000)));
+    expect(result).not.toBeNull();
+    expect(llmService.complete.mock.calls[llmService.complete.mock.calls.length - 1][0].maxTokens).toBe(Math.floor(0.8 * 24_000));
+  });
+
+  test("keeps at most a fixed 8k tail on a large window by default", async () => {
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    const messages = [
+      userMsg("x".repeat(1_000)),
+      assistantMsg("x".repeat(600_000)),
+      userMsg("x".repeat(1_000)),
+      assistantMsg("calling tool"),
+      toolResultMsg("x".repeat(120_000)),
+      userMsg("x".repeat(40_000)),
+      assistantMsg("done"),
+    ];
+    transcriptStore.restore.mockResolvedValue([...messages]);
+    const result = await compactor.compact(makeInput(messages, makeModel(200_000, 8192)));
+    expect(result).not.toBeNull();
+    expect(result!.firstKeptIndex).toBe(6);
   });
 });
 
@@ -476,7 +504,7 @@ describe("CompactorImpl.needsCompaction", () => {
 
   test("triggers earlier when overheadTokens is present", () => {
     const compactor = makeCompactor(makeTranscriptStore());
-    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    const messages = [userMsg("please do the thing"), assistantMsg("x".repeat(90_000))];
     expect(compactor.needsCompaction(messages, THRESHOLD_WINDOW)).toBe(false);
     expect(compactor.needsCompaction(messages, THRESHOLD_WINDOW, 3000)).toBe(true);
   });

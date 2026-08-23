@@ -181,8 +181,8 @@ export class JieAgentBody implements AgentBody {
         this.pendingSendModel = this.agent.state.model;
         return [...this.compactor.fitToWindow(stripped, this.agent.state.model, contextWindow, this.getOverheadTokens())];
       },
-      steeringMode: "one-at-a-time",
-      followUpMode: "one-at-a-time",
+      steeringMode: "all",
+      followUpMode: "all",
       toolExecution: "sequential",
       prepareNextTurnWithContext: (context) => this.compactBetweenTurns(context),
       beforeToolCall: (context) => toolCallObserver.beforeToolCall(context),
