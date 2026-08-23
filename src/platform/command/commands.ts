@@ -33,6 +33,7 @@ interface CommandTypeMap {
   getDefaultEffort: CommandDef<{}, EffortLevel>;
   listModels: CommandDef<{}, ReadonlyArray<ModelListRow>>;
   listFilteredModels: CommandDef<{}, FilteredModelList>;
+  refreshModels: CommandDef<{}, { readonly errors: ReadonlyArray<string> }>;
   listProviders: CommandDef<{}, ReadonlyArray<{ readonly id: string; readonly description?: string }>>;
   setModelFilters: CommandDef<{ filters: ReadonlyArray<string> }, null>;
   getModelFilters: CommandDef<{}, ReadonlyArray<string>>;
@@ -65,12 +66,14 @@ interface CommandTypeMap {
   listMcpServers: CommandDef<{}, ReadonlyArray<McpServerSummary>>;
 }
 
-interface KanbanBoardResult {
-  board: ReadonlyArray<KanbanCard>;
-}
+
 
 export type CommandName = keyof CommandTypeMap;
 export type CommandResult<T extends CommandName> = CommandTypeMap[T]["result"];
+
+interface KanbanBoardResult {
+  board: ReadonlyArray<KanbanCard>;
+}
 
 type CommandUnion = {
   [K in CommandName]: { name: K } & CommandTypeMap[K]["args"];

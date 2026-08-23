@@ -73,6 +73,10 @@ describe("parseFlags — model", () => {
   test("model with malformed arg -> error", () => {
     expect(parseFlags(["model", "no-slash"])).toEqual({ kind: "error", message: "invalid model string: no-slash" });
   });
+
+  test("model --update -> update action", () => {
+    expect(parseFlags(["model", "--update"])).toEqual({ kind: "model", action: "update" });
+  });
 });
 
 describe("parseFlags — team", () => {

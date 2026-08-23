@@ -5,14 +5,14 @@ import { asValue, createContainer, InjectionMode, type AwilixContainer } from "a
 import type { PlatformCradle } from "../container";
 import { registerConfigModule } from "./module";
 
-function bootedContainer(cwd: string, homeJieDir: string): AwilixContainer<PlatformCradle> {
+async function bootedContainer(cwd: string, homeJieDir: string): Promise<AwilixContainer<PlatformCradle>> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
     cwd: asValue(cwd),
     homeJieDir: asValue(homeJieDir),
     projectJieDir: asValue(null),
   });
-  registerConfigModule(container);
+  await registerConfigModule(container);
   return container;
 }
 
@@ -32,15 +32,15 @@ describe("registerConfigModule", () => {
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  test("registers authStore, modelRegistry, and settingsStore", () => {
-    const container = bootedContainer(cwd, homeJieDir);
+  test("registers authStore, modelRegistry, and settingsStore", async () => {
+    const container = await bootedContainer(cwd, homeJieDir);
     expect(container.hasRegistration("authStore")).toBe(true);
     expect(container.hasRegistration("modelRegistry")).toBe(true);
     expect(container.hasRegistration("settingsStore")).toBe(true);
   });
 
-  test("registers singletons", () => {
-    const container = bootedContainer(cwd, homeJieDir);
+  test("registers singletons", async () => {
+    const container = await bootedContainer(cwd, homeJieDir);
     expect(container.cradle.authStore).toBe(container.cradle.authStore);
     expect(container.cradle.modelRegistry).toBe(container.cradle.modelRegistry);
     expect(container.cradle.settingsStore).toBe(container.cradle.settingsStore);

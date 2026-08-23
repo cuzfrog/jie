@@ -155,6 +155,7 @@ Usage:
   jie login --provider <id> --api-key <key>
   jie logout [<provider>]
   jie model <provider>/<modelId>
+  jie model --update
   jie team [<id>]
   jie team add <source> [--project] [--force]
   jie team list

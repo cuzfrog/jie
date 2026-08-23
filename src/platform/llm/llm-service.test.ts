@@ -8,7 +8,8 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(),
   listModels: vi.fn(),
   getAuth: vi.fn(),
-  reload: vi.fn(),
+  reload: vi.fn(async () => undefined),
+  refresh: vi.fn(async () => ({ errors: [] })),
 });
 
 function makeModel(): Model<Api> {

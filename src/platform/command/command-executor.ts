@@ -45,6 +45,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       getDefaultEffort: this.getDefaultEffort.bind(this),
       listModels: this.listModels.bind(this),
       listFilteredModels: this.listFilteredModels.bind(this),
+      refreshModels: this.refreshModels.bind(this),
       listProviders: this.listProviders.bind(this),
       setModelFilters: this.setModelFilters.bind(this),
       getModelFilters: this.getModelFilters.bind(this),
@@ -180,6 +181,10 @@ export class CommandExecutorImpl implements CommandExecutor {
       const description = provider.envKeys[0] ?? (provider.configured ? "configured" : undefined);
       return description === undefined ? { id: provider.id } : { id: provider.id, description };
     });
+  }
+
+  private refreshModels(): Promise<CommandResult<"refreshModels">> {
+    return this.modelRegistry.refresh(true);
   }
 
   private setModelFilters(command: Command<"setModelFilters">): CommandResult<"setModelFilters"> {

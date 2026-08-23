@@ -104,7 +104,7 @@ describe("CommandResolverImpl", () => {
     const resolver = makeResolver(makeFakePlatform());
     expect(resolver.resolve(makeTuiState(), "model", ["claude"])).toEqual({
       kind: "error",
-      text: "/model: invalid 'claude' (expected <provider>/<modelId>)",
+      text: "/model: invalid 'claude' (expected <provider>/<modelId> or --update)",
     });
   });
 

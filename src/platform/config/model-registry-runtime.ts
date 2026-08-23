@@ -1,20 +1,15 @@
 import { join } from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
-import type { Api, Model, AuthResult } from "@earendil-works/pi-ai";
+import type { Api, AuthResult, Model } from "@earendil-works/pi-ai";
 import type { AuthStore } from "./auth-store";
 import { loadProjectProviderInputs } from "./project-models";
 import type { ModelRegistry, ProviderInfo } from "./model-registry";
 
-export interface ModelRefreshResult {
-  readonly refreshed: ReadonlyArray<string>;
-  readonly errors: ReadonlyArray<string>;
-}
-
 export class ModelRuntimeModelRegistry implements ModelRegistry {
   private readonly runtime: ModelRuntime;
 
-  constructor(runtime: ModelRuntime, private readonly homeJieDir: string, private readonly projectJieDir: string | null) {
+  constructor(runtime: ModelRuntime, private readonly projectJieDir: string | null) {
     this.runtime = runtime;
   }
 
@@ -24,14 +19,13 @@ export class ModelRuntimeModelRegistry implements ModelRegistry {
       modelsPath: join(homeJieDir, "models.json"),
       allowModelNetwork: false,
     });
-    const registry = new ModelRuntimeModelRegistry(runtime, homeJieDir, projectJieDir);
-    await registry.registerProjectProviders();
+    const registry = new ModelRuntimeModelRegistry(runtime, projectJieDir);
+    registry.registerProjectProviders();
     return registry;
   }
 
   providers(): ReadonlyArray<string> {
-    const ids = new Set<string>(this.runtime.getRegisteredProviderIds());
-    return Array.from(ids);
+    return this.runtime.getProviders().map((provider) => provider.id);
   }
 
   listProviders(): ReadonlyArray<ProviderInfo> {
@@ -54,26 +48,19 @@ export class ModelRuntimeModelRegistry implements ModelRegistry {
     return this.runtime.getAuth(provider);
   }
 
-  reload(): void {
-    this.registerProjectProvidersSync();
+  async reload(): Promise<void> {
+    await this.runtime.refresh({ allowNetwork: false });
+    this.registerProjectProviders();
   }
 
-  refresh(force: boolean): Promise<{ readonly refreshed: ReadonlyArray<string>; readonly errors: ReadonlyArray<string> }> {
+  async refresh(force: boolean): Promise<{ readonly errors: ReadonlyArray<string> }> {
     const offline = process.env.PI_OFFLINE === "1" || process.env.JIE_OFFLINE === "1";
-    const allowNetwork = force && !offline;
-    return this.runtime.refresh({ allowNetwork, force }).then((result) => ({
-      refreshed: result.refreshed,
-      errors: Object.entries(result.errors).map(([provider, msg]) => `${provider}: ${msg}`),
-    }));
+    const result = await this.runtime.refresh({ allowNetwork: force && !offline, force });
+    return { errors: Array.from(result.errors.entries()).map(([provider, error]) => `${provider}: ${error.message}`) };
   }
 
-  private async registerProjectProviders(): Promise<void> {
-    this.registerProjectProvidersSync();
-  }
-
-  private registerProjectProvidersSync(): void {
-    const inputs = loadProjectProviderInputs(this.projectJieDir);
-    for (const [id, cfg] of Object.entries(inputs)) {
+  private registerProjectProviders(): void {
+    for (const [id, cfg] of Object.entries(loadProjectProviderInputs(this.projectJieDir))) {
       this.runtime.unregisterProvider(id);
       this.runtime.registerProvider(id, cfg);
     }

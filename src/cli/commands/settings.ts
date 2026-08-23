@@ -8,6 +8,15 @@ export async function runModel(
   platform: JiePlatform,
   console: Console,
 ): Promise<number> {
+  if ("action" in parsed) {
+    const result = await platform.execute({ name: "refreshModels" });
+    if (result.errors.length > 0) {
+      for (const error of result.errors) console.error(`model catalog refresh failed: ${error}`);
+      return 1;
+    }
+    console.print("model catalogs updated");
+    return 0;
+  }
   try {
     await platform.execute({ name: "setDefaultModel", provider: parsed.provider, id: parsed.modelId });
   } catch (error) {

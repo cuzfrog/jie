@@ -16,7 +16,9 @@ export interface ParsedArgsMap {
   readonly help: { readonly kind: "help" };
   readonly login: { readonly kind: "login"; readonly provider?: string; readonly apiKey?: string };
   readonly logout: { readonly kind: "logout"; readonly provider?: string };
-  readonly model: { readonly kind: "model"; readonly provider: string; readonly modelId: string };
+  readonly model:
+    | { readonly kind: "model"; readonly provider: string; readonly modelId: string }
+    | { readonly kind: "model"; readonly action: "update" };
   readonly team:
     | { readonly kind: "team"; readonly action: "info" }
     | { readonly kind: "team"; readonly action: "setDefault"; readonly teamId: string }
@@ -275,6 +277,7 @@ function parseLogout(ctx: ParseContext): ParsedArgs {
 function parseModel(ctx: ParseContext): ParsedArgs {
   if (ctx.index >= ctx.args.length) return error("missing argument for model");
   const raw = ctx.args[ctx.index]!;
+  if (raw === "--update") return { kind: "model", action: "update" };
   const parsed = parseModelRef(raw);
   if (parsed === null) return error(`invalid model string: ${raw}`);
   return { kind: "model", provider: parsed.provider, modelId: parsed.modelId };

@@ -37,7 +37,8 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(),
   listModels: vi.fn(),
   getAuth: vi.fn(() => Promise.resolve(undefined)),
-  reload: vi.fn(),
+  reload: vi.fn(async () => undefined),
+  refresh: vi.fn(async () => ({ errors: [] })),
 });
 
 const teamManager = vi.mocked<TeamManager>({
@@ -82,6 +83,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   add: vi.fn(),
   remove: vi.fn(),
   clearSession: vi.fn(),
+  clearTeam: vi.fn(),
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),

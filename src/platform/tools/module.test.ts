@@ -35,6 +35,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   add: vi.fn(),
   remove: vi.fn(),
   clearSession: vi.fn(),
+  clearTeam: vi.fn(),
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),

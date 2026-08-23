@@ -106,6 +106,25 @@ describe("CommandHandlerImpl", () => {
     handler.handle("/help");
     expect(dispatch.mock.calls[0]?.[0]).toEqual(Actions.clearBanners());
   });
+
+  test("handle('/model --update') shows a completion transient when refresh succeeds", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ errors: [] });
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model --update");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("refreshing model catalogs…"));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("model catalogs updated"));
+  });
+
+  test("handle('/model --update') surfaces per-provider refresh errors", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ errors: ["openai: timeout"] });
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model --update");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("model catalog refresh failed: openai: timeout"));
+  });
 });
 
 describe("CommandHandlerImpl — /setting", () => {

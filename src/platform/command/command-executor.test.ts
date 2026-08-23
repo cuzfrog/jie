@@ -38,7 +38,8 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(),
   listModels: vi.fn(),
   getAuth: vi.fn(() => Promise.resolve(undefined)),
-  reload: vi.fn(),
+  reload: vi.fn(async () => undefined),
+  refresh: vi.fn(async () => ({ errors: [] })),
 });
 
 const teamManager = vi.mocked<TeamManager>({
@@ -351,6 +352,15 @@ describe("CommandExecutorImpl", () => {
       modelRegistry.listModels.mockReturnValue([]);
       const result = await executor.execute({ name: "listModels" });
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("refreshModels", () => {
+    test("forces a registry refresh and returns its errors", async () => {
+      modelRegistry.refresh.mockResolvedValueOnce({ errors: ["openai: timeout"] });
+      const result = await executor.execute({ name: "refreshModels" });
+      expect(result).toEqual({ errors: ["openai: timeout"] });
+      expect(modelRegistry.refresh).toHaveBeenCalledWith(true);
     });
   });
 

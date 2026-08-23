@@ -87,6 +87,25 @@ describe("runModel", () => {
       runModel({ kind: "model", provider: "anthropic", modelId: "x" }, platform, makeConsoleMock()),
     ).rejects.toThrow(/disk full/);
   });
+
+  test("--update dispatches refreshModels and prints success", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ({ errors: [] }));
+    const consoleMock = makeConsoleMock();
+    const code = await runModel({ kind: "model", action: "update" }, platform, consoleMock);
+    expect(code).toBe(0);
+    expect(execute).toHaveBeenCalledWith({ name: "refreshModels" });
+    expect(consoleMock.print).toHaveBeenCalledWith("model catalogs updated");
+  });
+
+  test("--update reports per-provider failures and exits non-zero", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ({ errors: ["openai: timeout"] }));
+    const consoleMock = makeConsoleMock();
+    const code = await runModel({ kind: "model", action: "update" }, platform, consoleMock);
+    expect(code).toBe(1);
+    expect(consoleMock.error).toHaveBeenCalledWith("model catalog refresh failed: openai: timeout");
+  });
 });
 
 describe("runTeam", () => {

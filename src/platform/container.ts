@@ -76,7 +76,7 @@ export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixC
   }
   registerEventModule(container);
   registerStorageModule(container);
-  registerConfigModule(container);
+  await registerConfigModule(container);
   registerLlmModule(container);
   registerMemoryModule(container);
   registerServicesModule(container);

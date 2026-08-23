@@ -144,6 +144,15 @@ export class CommandHandlerImpl implements CommandHandler {
         this.stateStore.dispatch(Actions.toggleMcpPanel());
         return;
       }
+      case "refreshModels": {
+        const refreshResult = result as { readonly errors: ReadonlyArray<string> };
+        if (refreshResult.errors.length > 0) {
+          this.stateStore.dispatch(Actions.setErrorMessage(`model catalog refresh failed: ${refreshResult.errors.join("; ")}`));
+        } else {
+          this.stateStore.dispatch(Actions.setTransientMessage("model catalogs updated"));
+        }
+        return;
+      }
       default:
         return;
     }

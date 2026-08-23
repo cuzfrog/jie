@@ -58,7 +58,7 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   async reload(): Promise<ReadonlyArray<TeamInfo>> {
-    this.modelRegistry.reload();
+    await this.modelRegistry.reload();
     this.skillManager.reload();
     const infos: TeamInfo[] = [];
     const failures: string[] = [];

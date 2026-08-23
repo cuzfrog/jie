@@ -80,7 +80,7 @@ function teamInfo(overrides: { history?: AgentHistory[]; agents?: AgentInfo[]; l
 function makeTeamManager() {
   return vi.mocked<TeamManager>({
     load: vi.fn(),
-    reload: vi.fn(),
+  reload: vi.fn(),
     newSession: vi.fn(),
     resumeSession: vi.fn(),
     listInstalled: vi.fn(),
@@ -127,7 +127,8 @@ function makeSessionNamer() {
     resolve: vi.fn(),
     listModels: vi.fn(),
     getAuth: vi.fn(() => Promise.resolve(undefined)),
-    reload: vi.fn(),
+    reload: vi.fn(async () => undefined),
+    refresh: vi.fn(async () => ({ errors: [] })),
   });
   const namer = new SessionNamerImpl(eventManager, llmService, teamManager, transcriptStore, modelRegistry);
   return { namer, eventManager, llmService, teamManager, transcriptStore, modelRegistry };
