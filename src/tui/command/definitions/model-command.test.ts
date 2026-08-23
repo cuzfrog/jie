@@ -6,20 +6,20 @@ describe("ModelCommand", () => {
 
   test("meta", () => {
     expect(command.meta.name).toBe("model");
-    expect(command.meta.description).toBe("set the default model");
-    expect(command.meta.argumentHint).toBe("<provider>/<modelId>");
+    expect(command.meta.description).toBe("set the default model or refresh catalog");
+    expect(command.meta.argumentHint).toBe("<provider>/<modelId> | --update");
   });
 
   test("resolve requires a model reference", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
-    expect(command.resolve(context, [])).toEqual({ kind: "error", text: "/model <provider>/<modelId>" });
+    expect(command.resolve(context, [])).toEqual({ kind: "error", text: "/model <provider>/<modelId> | --update" });
   });
 
   test("resolve rejects an invalid model reference", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
-    expect(command.resolve(context, ["claude"])).toEqual({ kind: "error", text: "/model: invalid 'claude' (expected <provider>/<modelId>)" });
+    expect(command.resolve(context, ["claude"])).toEqual({ kind: "error", text: "/model: invalid 'claude' (expected <provider>/<modelId> or --update)" });
   });
 
   test("resolve builds the setDefaultModel command", () => {
@@ -30,6 +30,17 @@ describe("ModelCommand", () => {
       slashName: "model",
       command: { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" },
       transient: "default model set to anthropic/claude-sonnet-4-5",
+    });
+  });
+
+  test("resolve builds the refreshModels command for --update", () => {
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
+    expect(command.resolve(context, ["--update"])).toEqual({
+      kind: "platform",
+      slashName: "model",
+      command: { name: "refreshModels" },
+      transient: "refreshing model catalogs…",
     });
   });
 

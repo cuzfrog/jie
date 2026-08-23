@@ -2,7 +2,7 @@ import { parseModelRef } from "../../../platform";
 import { PositionalSlashCommand } from "../positional-slash-command";
 import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext } from "../slash-command";
 
-const META = { name: "model", description: "set the default model", argumentHint: "<provider>/<modelId>", arguments: [{ name: "modelRef" }] } as const;
+const META = { name: "model", description: "set the default model or refresh catalog", argumentHint: "<provider>/<modelId> | --update", arguments: [{ name: "modelRef" }] } as const;
 
 export class ModelCommand extends PositionalSlashCommand {
   constructor() {
@@ -12,8 +12,16 @@ export class ModelCommand extends PositionalSlashCommand {
   protected override executeParsed(_context: SlashContext, parsed: Record<string, string | undefined>): ResolvedCommand {
     const modelRef = parsed.modelRef;
     if (modelRef === undefined) return this.usageError();
+    if (modelRef === "--update") {
+      return {
+        kind: "platform",
+        slashName: "model",
+        command: { name: "refreshModels" },
+        transient: "refreshing model catalogs…",
+      };
+    }
     const parsedModel = parseModelRef(modelRef);
-    if (parsedModel === null) return { kind: "error", text: `/model: invalid '${modelRef}' (expected <provider>/<modelId>)` };
+    if (parsedModel === null) return { kind: "error", text: `/model: invalid '${modelRef}' (expected <provider>/<modelId> or --update)` };
     return {
       kind: "platform",
       slashName: "model",
