@@ -30,6 +30,7 @@ export interface ModelRegistry {
   listModels(provider: string): ReadonlyArray<Model<Api>>;
   getAuth(provider: string): Promise<AuthResult | undefined>;
   reload(): void;
+  refresh(force: boolean): Promise<{ readonly refreshed: ReadonlyArray<string>; readonly errors: ReadonlyArray<string> }>;
 }
 
 export class PiModelRegistry implements ModelRegistry {
@@ -91,6 +92,10 @@ export class PiModelRegistry implements ModelRegistry {
 
   getAuth(provider: string): Promise<AuthResult | undefined> {
     return this.models.getAuth(provider);
+  }
+
+  refresh(force: boolean): Promise<{ readonly refreshed: ReadonlyArray<string>; readonly errors: ReadonlyArray<string> }> {
+    return Promise.resolve({ refreshed: [], errors: [] });
   }
 
   private applyCustomProviders(): void {
