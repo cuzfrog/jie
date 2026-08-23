@@ -187,12 +187,22 @@ describe("KanbanCommand", () => {
     });
   });
 
+  test("resolve clear with --team sets the team scope", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["clear", "--team"])).toEqual({
+      kind: "platform",
+      slashName: "kanban clear",
+      command: { name: "kanbanClear", teamId: "t1", scope: "team" },
+    });
+  });
+
   test("resolve clear with extra arguments reports usage", () => {
     const { platform } = makePlatform();
     const context = { state: teamState(), platform };
     expect(command.resolve(context, ["clear", "junk"])).toEqual({
       kind: "error",
-      text: "/kanban clear takes no arguments",
+      text: "/kanban clear [--team]",
     });
   });
 
@@ -209,7 +219,7 @@ describe("KanbanCommand", () => {
     expect(result).toEqual({
       items: [
         { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
-        { value: "clear", label: "clear", description: "remove all session-scoped cards" },
+        { value: "clear", label: "clear", description: "remove all cards [--team]" },
         { value: "remove", label: "remove", description: "<cardId>" },
         { value: "complete", label: "complete", description: "<cardId>" },
         { value: "review", label: "review", description: "<cardId>" },
@@ -225,7 +235,7 @@ describe("KanbanCommand", () => {
     const result = await command.complete("c", context);
     expect(result).toEqual({
       items: [
-        { value: "clear", label: "clear", description: "remove all session-scoped cards" },
+        { value: "clear", label: "clear", description: "remove all cards [--team]" },
         { value: "complete", label: "complete", description: "<cardId>" },
       ],
     });

@@ -108,6 +108,18 @@ describe("SqliteKanbanStore", () => {
     expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
   });
 
+  test("clearTeam removes team-scoped cards and leaves session cards alone", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [
+      write("team-a", "pending", undefined, "team"),
+      write("s1-a", "pending", undefined, "session"),
+    ]);
+    store.add("t1", "s2", "s2-a", undefined, "session");
+    store.clearTeam("t1");
+    expect(ids(store.load("t1", "s1"))).toEqual(["#2"]);
+    expect(ids(store.load("t1", "s2"))).toEqual(["#3"]);
+  });
+
   test("add returns null when the content already exists and leaves the board unchanged", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first")]);

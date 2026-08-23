@@ -5,10 +5,9 @@ import type { ExecutionContext, Tool, ToolResult } from "./types";
 
 const CALL_AGENT_DESCRIPTION = `Ask another agent to perform work asynchronously. The platform picks an idle replica or
 queues, and returns the resolved agent key immediately without blocking you; continue other
-work in the meantime. The callee replies via
+work in the meantime, but do not proceed to work that depends on the answer. The callee replies via
 notify({ topic: "callback.<your_agent_key>", prompt: "call_id=<call_id> ..." }) and the reply is delivered straight into this conversation
-as soon as your current tool batch finishes. Prompts are capped at 4KB; use artifacts for
-bigger data.`;
+as soon as the delegate finishes their work. Prompts are capped at 4KB; use artifacts for bigger data.`;
 
 interface CallAgentInput {
   agent: string;

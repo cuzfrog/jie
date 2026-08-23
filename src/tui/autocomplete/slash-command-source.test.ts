@@ -574,7 +574,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
     expect(suggestions!.prefix).toBe("/kanb");
     expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban clear", "kanban remove", "kanban complete", "kanban review", "kanban handoff", "kanban toggle"]);
     expect(suggestions!.items[0]!.description).toBe("[--team] [--title <title>] <description>");
-    expect(suggestions!.items[1]!.description).toBe("remove all session-scoped cards");
+    expect(suggestions!.items[1]!.description).toBe("remove all cards [--team]");
   });
 
   test("suggests subcommands after '/kanban ' with their argument hints", async () => {
@@ -582,7 +582,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
       .getSuggestions(["/kanban "], 0, 8, { signal: signal() });
     expect(suggestions!.items).toEqual([
       { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
-      { value: "clear", label: "clear", description: "remove all session-scoped cards" },
+      { value: "clear", label: "clear", description: "remove all cards [--team]" },
       { value: "remove", label: "remove", description: "<cardId>" },
       { value: "complete", label: "complete", description: "<cardId>" },
       { value: "review", label: "review", description: "<cardId>" },

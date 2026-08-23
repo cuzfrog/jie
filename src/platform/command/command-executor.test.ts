@@ -83,6 +83,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   add: vi.fn(),
   remove: vi.fn(),
   clearSession: vi.fn(),
+  clearTeam: vi.fn(),
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
@@ -766,6 +767,15 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.load.mockReturnValueOnce(board);
       const result = await executor.execute({ name: "kanbanClear", teamId: "alpha" });
       expect(kanbanStore.clearSession).toHaveBeenCalledWith("alpha", "session-1");
+      expect(result).toEqual({ board });
+    });
+
+    test("clears team scope when scope is team", async () => {
+      const board: KanbanCard[] = [{ id: "#1", content: "team task", status: "pending" }];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanClear", teamId: "alpha", scope: "team" });
+      expect(kanbanStore.clearTeam).toHaveBeenCalledWith("alpha");
+      expect(kanbanStore.clearSession).not.toHaveBeenCalled();
       expect(result).toEqual({ board });
     });
 

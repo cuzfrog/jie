@@ -11,7 +11,7 @@ const META = {
 
 const SUBCOMMAND_ITEMS = [
   { value: "add", label: "add", description: "[--team] [--title <title>] <description>" },
-  { value: "clear", label: "clear", description: "remove all session-scoped cards" },
+  { value: "clear", label: "clear", description: "remove all cards [--team]" },
   { value: "remove", label: "remove", description: "<cardId>" },
   { value: "complete", label: "complete", description: "<cardId>" },
   { value: "review", label: "review", description: "<cardId>" },
@@ -99,8 +99,9 @@ export class KanbanCommand extends PositionalSlashCommand {
   }
 
   private resolveKanbanClear(teamId: string, rest: string): ResolvedCommand {
-    if (rest.trim() !== "") return { kind: "error", text: "/kanban clear takes no arguments" };
-    return { kind: "platform", slashName: "kanban clear", command: { name: "kanbanClear", teamId } };
+    const parsed = parseKanbanClearArgs(rest);
+    if (parsed.kind === "error") return { kind: "error", text: parsed.text };
+    return { kind: "platform", slashName: "kanban clear", command: { name: "kanbanClear", teamId, ...(parsed.scope ? { scope: parsed.scope } : {}) } };
   }
 
   private resolveKanbanRemove(teamId: string, rest: string): ResolvedCommand {
@@ -163,4 +164,19 @@ function parseKanbanAddArgs(args: string):
   const description = words.slice(index).join(" ");
   if (description.trim() === "") return { kind: "error", text: "/kanban add [--team] [--title <title>] <description>" };
   return { kind: "ok", title: flags.title, description, ...(flags.team ? { scope: "team" as const } : {}) };
+}
+
+function parseKanbanClearArgs(args: string):
+  | { kind: "ok"; scope?: "team" }
+  | { kind: "error"; text: string } {
+  const words = args.split(/\s+/).filter((s) => s !== "");
+  let team = false;
+  for (const word of words) {
+    if (word === "--team") {
+      team = true;
+    } else {
+      return { kind: "error", text: "/kanban clear [--team]" };
+    }
+  }
+  return { kind: "ok", ...(team ? { scope: "team" as const } : {}) };
 }

@@ -303,7 +303,11 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private kanbanClear(command: Command<"kanbanClear">): CommandResult<"kanbanClear"> {
     const sessionId = this.sessionIdFor(command.teamId);
-    this.kanbanStore.clearSession(command.teamId, sessionId);
+    if (command.scope === "team") {
+      this.kanbanStore.clearTeam(command.teamId);
+    } else {
+      this.kanbanStore.clearSession(command.teamId, sessionId);
+    }
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
   }
 

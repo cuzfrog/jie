@@ -14,6 +14,7 @@ export interface KanbanStore {
   add(teamId: string, sessionId: string, content: string, description: string | undefined, scope?: "team" | "session"): KanbanCard | null;
   remove(teamId: string, sessionId: string, cardId: string): boolean;
   clearSession(teamId: string, sessionId: string): void;
+  clearTeam(teamId: string): void;
   setStatus(teamId: string, sessionId: string, cardId: string, status: KanbanStatus): boolean;
   editContent(teamId: string, sessionId: string, cardId: string, content: string): KanbanCard | null;
   editDescription(teamId: string, sessionId: string, cardId: string, description: string | undefined): KanbanCard | null;
@@ -73,6 +74,13 @@ export class SqliteKanbanStore implements KanbanStore {
     this.storage.exec(
       `DELETE FROM kanban_tasks WHERE team_id = ? AND session_id = ? AND scope = 'session'`,
       [teamId, sessionId],
+    );
+  }
+
+  clearTeam(teamId: string): void {
+    this.storage.exec(
+      `DELETE FROM kanban_tasks WHERE team_id = ? AND session_id = ? AND scope = 'team'`,
+      [teamId, TEAM_SESSION],
     );
   }
 
