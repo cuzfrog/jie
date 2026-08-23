@@ -105,8 +105,8 @@ export class CompactorImpl implements Compactor {
 function resolveSettings(overrides: CompactionOverrides | undefined, contextWindow: number): typeof DEFAULT_COMPACTION_SETTINGS {
   return {
     enabled: overrides?.enabled ?? DEFAULT_COMPACTION_SETTINGS.enabled,
-    reserveTokens: overrides?.reserveTokens ?? Math.min(DEFAULT_COMPACTION_SETTINGS.reserveTokens, Math.floor(contextWindow * 0.1)),
-    keepRecentTokens: overrides?.keepRecentTokens ?? Math.floor(contextWindow * 0.2),
+    reserveTokens: overrides?.reserveTokens ?? Math.min(DEFAULT_COMPACTION_MAX_RESERVE_TOKENS, Math.floor(contextWindow * 0.2)),
+    keepRecentTokens: overrides?.keepRecentTokens ?? DEFAULT_KEEP_RECENT_TOKENS,
   };
 }
 
@@ -321,6 +321,9 @@ function truncateText(text: string, allowance: number): string {
 }
 
 const SUMMARY_PROMPT_SLACK = 2048;
+
+const DEFAULT_KEEP_RECENT_TOKENS = 8192;
+const DEFAULT_COMPACTION_MAX_RESERVE_TOKENS = 24_000;
 
 const TRUNCATION_MARKER = "[content truncated to fit the context window]";
 
